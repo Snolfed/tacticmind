@@ -1,0 +1,160 @@
+"""Górny pasek: logo, nawigacja, język, dźwięk, duży ranking z animowaną zmianą i seria z płomieniem."""
+
+from __future__ import annotations
+
+from functools import partial
+from typing import TYPE_CHECKING
+
+import pygame
+
+from ..i18n import LANGUAGES, get_language, t
+from ..rating.profile import RatingChange
+from . import fonts, gfx, theme
+from .anim import approach, ease_out_back, ease_out_cubic, now
+from .scale import fs, px
+from .widgets import Button, Segmented, draw_text, icon_flame
+
+if TYPE_CHECKING:
+    from .app import App
+
+BASE_HEIGHT = 68
+_NAV = (("play", "nav.play"), ("stats", "nav.stats"), ("howto", "nav.howto"))
+
+
+def height() -> int:
+    return px(BASE_HEIGHT)
+
+
+class TopBar:
+    def __init__(self, app: App) -> None:
+        self.app = app
+        self.rect = pygame.Rect(0, 0, 0, height())
+        self.nav = [Button(t(key), partial(app.go, name), size=14, pill=True, style="ghost") for name, key in _NAV]
+        self.sound = Button("", self._toggle_sound, style="ghost", pill=True)
+        options: list[tuple[str, str]] = [(code, code.upper()) for code in LANGUAGES]
+        self.language = Segmented(list(options), get_language(), app.set_language, size=12, accent=theme.VIOLET)
+        self.logo_rect = pygame.Rect(0, 0, 0, 0)
+        self.shown_rating = app.profile.rating
+        self.delta: float | None = None
+        self.delta_at = -10.0
+        self.two_rows = False
+        self.row_h = height()
+
+    def _toggle_sound(self) -> None:
+        self.app.profile.sound = not self.app.profile.sound
+        self.app.sounds.enabled = self.app.profile.sound
+        self.app.save()
+
+    def on_rating_change(self, change: RatingChange) -> None:
+        self.delta = change.delta
+        self.delta_at = now()
+
+    def layout(self, width: int) -> None:
+        """Rozmieszcza elementy w jednym wierszu, a gdy okno jest wąskie — w dwóch
+        (logo i ranking u góry, nawigacja, język i dźwięk pod spodem)."""
+        logo_w = fonts.text_size("TaktykAI", fs(26), "bold")[0]
+        controls_w = px(84) + px(8) + px(40)
+        labels = [t(key) for _, key in _NAV]
+        widths = [fonts.text_size(label, fs(14), "bold")[0] + px(30) for label in labels]
+        nav_w = sum(widths) + 2 * px(6)
+        single_row = px(22) + logo_w + px(22) + nav_w + px(8) + controls_w + px(20) + px(200) <= width
+        self.two_rows = not single_row
+        if single_row:
+            self.rect = pygame.Rect(0, 0, width, height())
+            self.row_h = self.rect.height
+            x, row_y, row_h = px(22) + logo_w + px(22), 0, self.rect.height
+        else:
+            self.row_h = px(60)
+            self.rect = pygame.Rect(0, 0, width, self.row_h + px(52))
+            x, row_y, row_h = px(14), self.row_h, px(52)
+            available = width - x - controls_w - px(30)
+            if nav_w > available:
+                labels[2] = t("nav.howto_short")
+                widths = [fonts.text_size(label, fs(13), "bold")[0] + px(22) for label in labels]
+            factor = min(1.0, available / max(1, sum(widths) + 2 * px(6)))
+            widths = [int(w * factor) for w in widths]
+        button_h = px(38)
+        for button, label, w in zip(self.nav, labels, widths):
+            button.label = label
+            button.rect = pygame.Rect(x, row_y + (row_h - button_h) // 2, w, button_h)
+            x += w + px(6)
+        if self.two_rows:
+            x = width - px(14) - controls_w
+        self.language.rect = pygame.Rect(x + px(8), row_y + (row_h - px(32)) // 2, px(84), px(32))
+        self.sound.rect = pygame.Rect(self.language.rect.right + px(8), row_y + (row_h - px(38)) // 2, px(40), px(38))
+
+    def handle(self, event: pygame.event.Event) -> bool:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.logo_rect.collidepoint(event.pos):
+            self.app.go("home")
+            return True
+        if self.language.handle(event):
+            return True
+        return any(button.handle(event) for button in [*self.nav, self.sound])
+
+    def update(self, dt: float) -> None:
+        target = self.app.profile.rating
+        self.shown_rating = approach(self.shown_rating, target, dt, 5)
+        if abs(target - self.shown_rating) < 0.5:
+            self.shown_rating = target
+
+    def draw(self, surface: pygame.Surface) -> None:
+        h = self.row_h
+        surface.blit(gfx.vertical_gradient(self.rect.size, (22, 25, 38), (17, 19, 30)), (0, 0))
+        pygame.draw.line(surface, theme.BORDER_SOFT, (0, self.rect.height - 1), (self.rect.width, self.rect.height - 1))
+        if self.two_rows:
+            pygame.draw.line(surface, (*theme.BORDER_SOFT[:3],), (px(14), h), (self.rect.width - px(14), h))
+        # Logo: „Taktyk” + „AI” w gradiencie turkus → fiolet
+        logo = draw_text(surface, "Taktyk", (px(22), h // 2), fs(26), theme.TEXT, "bold", "midleft")
+        ai_surface = gfx.gradient_text(fonts.render("AI", fs(26), (255, 255, 255), "bold"), theme.ACCENT, theme.VIOLET)
+        ai_rect = ai_surface.get_rect(midleft=(logo.right, h // 2))
+        surface.blit(ai_surface, ai_rect)
+        self.logo_rect = logo.union(ai_rect)
+        for button, (name, _) in zip(self.nav, _NAV):
+            button.active = self.app.current_name == name
+            button.draw(surface)
+        self.language.value = get_language()
+        self.language.draw(surface)
+        self.sound.icon = "sound_on" if self.app.profile.sound else "sound_off"
+        self.sound.draw(surface)
+        self._draw_rating(surface)
+
+    def _draw_rating(self, surface: pygame.Surface) -> None:
+        profile = self.app.profile
+        h = self.row_h
+        right = self.rect.right - px(22)
+        clock = now()
+        streak_w = 0
+        if profile.streak > 0:
+            label = draw_text(surface, str(profile.streak), (right, h // 2), fs(22), theme.ORANGE, "bold", "midright")
+            icon_flame(surface, (label.x - px(14), h // 2), px(26), clock)
+            streak_w = label.width + px(36)
+        rx = right - streak_w
+        if profile.rd is not None:
+            rd_rect = draw_text(surface, f"± {round(profile.rd)}", (rx, h // 2 + px(6)), fs(14), theme.MUTED, "bold", "midright")
+            rx = rd_rect.x - px(6)
+        # Liczba lekko „podskakuje” tuż po zmianie rankingu.
+        age = clock - self.delta_at
+        value_surf = fonts.render(str(round(self.shown_rating)), fs(30), theme.TEXT, "bold")
+        if age < 0.6:
+            value_surf = pygame.transform.smoothscale_by(value_surf, 1.0 + 0.12 * (1 - ease_out_cubic(age / 0.6)))
+        value = value_surf.get_rect(midright=(rx, h // 2 + px(4)))
+        surface.blit(value_surf, value)
+        system = "Glicko-2" if profile.system == "glicko" else "Elo"
+        caption = t("rating.caption", system=system)
+        if profile.calibrating:
+            caption += " · " + t("rating.calibration", n=profile.games)
+        draw_text(surface, caption, (right - streak_w, px(5)), fs(11), theme.MUTED, "regular", "topright", max_width=px(240))
+        # Animowana zmiana: +12 turkusowo, −9 czerwono — wyskakuje, unosi się i znika.
+        if self.delta is not None and age < 2.6:
+            pop = ease_out_back(age / 0.35, 2.0)
+            fade = 1.0 if age < 1.8 else max(0.0, 1 - (age - 1.8) / 0.8)
+            delta = round(self.delta)
+            text = f"+{delta}" if delta >= 0 else f"−{abs(delta)}"
+            color = theme.ACCENT if delta >= 0 else theme.RED
+            surf = fonts.render(text, fs(18), color, "bold")
+            surf = pygame.transform.smoothscale_by(surf, max(0.05, pop)) if pop < 0.999 or pop > 1.001 else surf.copy()
+            surf.set_alpha(int(255 * fade))
+            pill = surf.get_rect(midright=(value.x - px(12), h // 2 + px(8)))
+            bg = pill.inflate(px(14), px(6))
+            gfx.rrect(surface, (*color[:3], int(40 * fade)), bg, bg.height // 2)
+            surface.blit(surf, pill)

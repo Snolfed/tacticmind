@@ -1,0 +1,19 @@
+[project]
+name = "taktykai"
+version = "1.0.0"
+description = "TaktykAI — trener taktyki szachowej z własnym silnikiem AI, który myśli na głos"
+requires-python = ">=3.11"
+dependencies = ["pygame-ce>=2.5", "chess>=1.10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "I"]
+# SIM109/SIM110: w gorących pętlach silnika jawne porównania i pętle są szybsze niż any()/krotki.
+ignore = ["E501", "SIM108", "SIM109", "SIM110", "B023", "B905"]
