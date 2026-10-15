@@ -289,7 +289,9 @@ static int qsearch(Engine *e, int alpha, int beta, int ply) {
 static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_node) {
     Position *pos = &e->pos;
     int pv_node = beta - alpha > 1;
-    int recording = e->record_tree && ply == 1;
+    /* Mini-drzewo zapisujemy w węzłach poziomu 1 (odpowiedzi przeciwnika), ale nie w pomocniczym
+       wyszukiwaniu „singular extension”, które odwiedza ten sam węzeł jeszcze raz. */
+    int recording = e->record_tree && ply == 1 && !e->excluded[ply];
     e->pv_len[ply] = 0;
     if (recording) {
         e->root[e->current_root].n_children = 0;
@@ -552,7 +554,23 @@ int engine_iterate(Engine *e, int depth) {
         pos_make(pos, rm->move);
         e->searched++;
         int score;
-        if (alpha == -INF) {
+        if (i == 0 && k == 1 && depth >= 5 && abs(rm->score) < MATE_BOUND) {
+            /* Okno aspiracyjne: zakładamy, że wynik będzie blisko poprzedniego; gdy nie — poszerzamy. */
+            int delta = 20, a = rm->score - delta, b = rm->score + delta;
+            for (;;) {
+                score = -negamax(e, depth - 1, -b, -a, 1, 0);
+                if (e->stop) break;
+                if (score <= a) {
+                    a = score - delta > -INF ? score - delta : -INF;
+                } else if (score >= b) {
+                    b = score + delta < INF ? score + delta : INF;
+                } else {
+                    break;
+                }
+                delta *= 2;
+                if (delta > 800) a = -INF, b = INF;
+            }
+        } else if (alpha == -INF) {
             score = -negamax(e, depth - 1, -INF, INF, 1, 0);
         } else {
             score = -negamax(e, depth - 1, -alpha - 1, -alpha, 1, 1);

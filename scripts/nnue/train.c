@@ -10,7 +10,7 @@
  *
  * Kompilacja i użycie (patrz scripts/nnue/README.md):
  *   gcc -O3 -march=native -fopenmp scripts/nnue/train.c -o train -lm
- *   ./train -o tacticmind.nnue -e 30 -l 0.75 dane1.bin dane2.bin …
+ *   ./train -o tacticmind.nnue -e 30 -l 1.0 dane1.bin dane2.bin …
  */
 #include <math.h>
 #include <stdint.h>
@@ -23,7 +23,9 @@
 #endif
 
 #define INPUTS 768
+#ifndef HIDDEN
 #define HIDDEN 256
+#endif
 #define QA 255
 #define QB 64
 #define SCALE 400.0f
@@ -49,7 +51,7 @@ typedef struct {
 #define NPARAMS (INPUTS * HIDDEN + HIDDEN + 2 * HIDDEN + 1)
 
 static Params P, M1, M2;
-static float lambda_eval = 0.75f;
+static float lambda_eval = 1.0f;
 
 static uint64_t rs = 88172645463325252ULL;
 static uint64_t rnd(void) {

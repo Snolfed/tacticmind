@@ -85,7 +85,9 @@ static inline int pop_lsb(Bitboard *b) {
 /* ------------------------------------------------------------- NNUE */
 /* Architektura: (768 → HIDDEN) × 2 perspektywy → 1, aktywacja SCReLU. */
 #define NNUE_INPUTS 768
+#ifndef NNUE_HIDDEN
 #define NNUE_HIDDEN 256
+#endif
 #define NNUE_QA 255
 #define NNUE_QB 64
 #define NNUE_SCALE 400

@@ -374,7 +374,8 @@ STRINGS: dict[str, str] = {
     "howto.intro": (
         "TacticMind has two artificial-intelligence parts: its own chess engine (a game-tree search with the "
         "alpha-beta algorithm) and adaptive puzzle selection (an Elo/Glicko-2 rating plus a player model). The engine "
-        "is written from scratch in Python — it does not use Stockfish or any other ready-made engine."
+        "is written from scratch in C and evaluates positions with an NNUE neural network trained on its own games. "
+        "It does not use Stockfish or any other ready-made engine. The comparison below runs a simpler Python version."
     ),
     "compare.title": "Live comparison: minimax vs alpha-beta",
     "compare.subtitle": "Same position, same depth, same evaluation — only the number of visited nodes differs.",

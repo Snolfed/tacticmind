@@ -1,7 +1,8 @@
 """Ładowanie silnika w C (``engine/native/``) przez ctypes.
 
 Biblioteka jest kompilowana przy pierwszym uruchomieniu, jeśli w systemie jest kompilator C
-(gcc, clang albo cc; na Windowsie MinGW-w64), i trafia do ``engine/native/build/``. Kompilację
+(gcc, clang albo cc; na Windowsie MinGW-w64), i trafia do ``engine/native/build/``. Na Windowsie
+bez kompilatora używana jest gotowa biblioteka z ``engine/native/prebuilt/windows-x64/``. Kompilację
 można też uruchomić ręcznie: ``python scripts/build_engine.py``. Gdy kompilacja się nie uda,
 gra używa silnika w Pythonie (``search.py``) — działa wolniej, ale identycznie od strony interfejsu.
 
@@ -13,8 +14,10 @@ Zmienne środowiskowe:
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -141,14 +144,28 @@ def load(auto_build: bool = True) -> NativeLib | None:
     if os.environ.get("TACTICMIND_ENGINE", "").lower() == "python":
         return None
     target = BUILD_DIR / library_name()
-    try:
-        if auto_build and _needs_build(target):
+    candidates = [target]
+    prebuilt = prebuilt_library()
+    if prebuilt is not None:
+        candidates.append(prebuilt)
+    if auto_build and _needs_build(target):
+        with contextlib.suppress(OSError):
             build()
-        if target.exists():
-            _LIB = NativeLib(target)
-    except OSError:
-        _LIB = None
+    for path in candidates:
+        if path.exists():
+            try:
+                _LIB = NativeLib(path)
+                break
+            except OSError:
+                continue
     return _LIB
+
+
+def prebuilt_library() -> Path | None:
+    """Gotowa biblioteka dołączona do repozytorium (Windows x64 — tam rzadko jest kompilator C)."""
+    if sys.platform == "win32" and platform.machine().lower() in ("amd64", "x86_64"):
+        return NATIVE_DIR / "prebuilt" / "windows-x64" / "tmengine.dll"
+    return None
 
 
 def available() -> bool:
