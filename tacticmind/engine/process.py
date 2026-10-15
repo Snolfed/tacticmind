@@ -30,7 +30,8 @@ from multiprocessing.synchronize import Event
 
 from .board import Board
 from .compare import compare_algorithms
-from .search import Searcher, SearchLimits
+from .csearch import AnySearcher, make_searcher
+from .search import SearchLimits
 from .types import CompareResult, SearchInfo, SearchProgress
 
 # ----------------------------------------------------------------- zapytania
@@ -107,7 +108,7 @@ EngineEvent = InfoEvent | ProgressEvent | DoneEvent | CompareEvent | ErrorEvent
 
 def _engine_main(requests: Queue[Request], responses: Queue[EngineEvent], stop_event: Event) -> None:
     """Pętla procesu silnika."""
-    searcher = Searcher()
+    searcher = make_searcher()  # silnik w C (NNUE), a bez kompilatora — w Pythonie
     while True:
         message = requests.get()
         # Jeśli w kolejce czeka więcej zapytań, ważne jest tylko najnowsze (chyba że to „quit”).
@@ -132,7 +133,7 @@ def _engine_main(requests: Queue[Request], responses: Queue[EngineEvent], stop_e
 
 
 def _analyze(
-    searcher: Searcher, request: AnalyzeRequest, requests: Queue[Request], responses: Queue[EngineEvent], stop_event: Event
+    searcher: AnySearcher, request: AnalyzeRequest, requests: Queue[Request], responses: Queue[EngineEvent], stop_event: Event
 ) -> None:
     try:
         board = Board(request.fen)
