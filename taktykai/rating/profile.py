@@ -82,6 +82,8 @@ class PlayerProfile:
     history: list[PuzzleRecord] = field(default_factory=list)
     seen: list[str] = field(default_factory=list)
     sound: bool = True
+    #: Głośność dźwięków 0..1 (suwak w górnym pasku).
+    volume: float = 0.7
     language: str = "pl"
 
     # ------------------------------------------------------------ ranking
@@ -160,6 +162,7 @@ class PlayerProfile:
             "history": [asdict(r) for r in self.history],
             "seen": self.seen,
             "sound": self.sound,
+            "volume": self.volume,
             "language": self.language,
         }
 
@@ -185,6 +188,7 @@ class PlayerProfile:
             history=[PuzzleRecord(**r) for r in history if isinstance(r, dict)] if isinstance(history, list) else [],
             seen=[str(s) for s in seen] if isinstance(seen, list) else [],
             sound=bool(data.get("sound", True)),
+            volume=min(1.0, max(0.0, as_float(data.get("volume"), 0.7))),
             language=str(data.get("language", "pl")),
         )
 

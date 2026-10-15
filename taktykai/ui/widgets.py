@@ -183,7 +183,7 @@ class Button:
     enabled: bool = True
     visible: bool = True
     size: int = 15  # bazowy rozmiar czcionki (skalowany przez fs)
-    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off"
+    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit"
     pill: bool = False
     active: bool = False  # np. aktywna zakładka nawigacji
     hovered: bool = False
@@ -231,6 +231,9 @@ class Button:
             return
         if self.icon in ("sound_on", "sound_off"):
             icon_speaker(surface, rect.center, rect.height * 0.62, text_color, self.icon == "sound_on")
+            return
+        if self.icon in ("fullscreen", "fullscreen_exit"):
+            icon_fullscreen(surface, rect.center, rect.height * 0.62, text_color, self.icon == "fullscreen_exit")
             return
         draw_text(surface, label_text(self.label), rect.center, fs(self.size), text_color, "bold", "center", max_width=rect.width - px(14))
 
@@ -343,3 +346,87 @@ class ScrollArea:
 def fade_in(age: float, duration: float = 0.35) -> float:
     """Współczynnik 0..1 do płynnego pojawiania się nowych elementów."""
     return ease_out_cubic(age / duration)
+
+
+def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color, active: bool) -> None:
+    """Ikona pełnego ekranu: narożniki skierowane na zewnątrz (włącz) albo do środka (wyłącz)."""
+    cx, cy = center
+    d = size * 0.3
+    arm = size * 0.16
+    w = max(1.5, size * 0.09)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            corner = (cx + sx * d, cy + sy * d)
+            if active:  # narożniki do środka = wyjście z pełnego ekranu
+                tip = (cx + sx * (d - arm), cy + sy * (d - arm))
+                gfx.thick_line(surface, color, (tip[0], corner[1]), tip, w)
+                gfx.thick_line(surface, color, (corner[0], tip[1]), tip, w)
+            else:
+                gfx.thick_line(surface, color, corner, (corner[0] - sx * arm, corner[1]), w)
+                gfx.thick_line(surface, color, corner, (corner[0], corner[1] - sy * arm), w)
+
+
+@dataclass
+class Slider:
+    """Poziomy suwak 0..1 (np. głośność): przeciąganie, kliknięcie w pasek albo kółko myszy."""
+
+    value: float
+    on_change: Callable[[float], None]
+    on_release: Callable[[], None] | None = None
+    rect: pygame.Rect = field(default_factory=lambda: pygame.Rect(0, 0, 0, 0))
+    visible: bool = True
+    dragging: bool = False
+    hovered: bool = False
+    _fader: Fader = field(default_factory=Fader)
+
+    def _hit(self) -> pygame.Rect:
+        return self.rect.inflate(px(10), px(16))
+
+    def _set_from_x(self, x: int) -> None:
+        value = min(1.0, max(0.0, (x - self.rect.x) / max(1, self.rect.width)))
+        if abs(value - self.value) > 1e-3:
+            self.value = value
+            self.on_change(value)
+
+    def handle(self, event: pygame.event.Event) -> bool:
+        if not self.visible:
+            return False
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self._hit().collidepoint(event.pos):
+            self.dragging = True
+            self._set_from_x(event.pos[0])
+            return True
+        if event.type == pygame.MOUSEMOTION:
+            self.hovered = self._hit().collidepoint(event.pos)
+            if self.dragging:
+                self._set_from_x(event.pos[0])
+                return True
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.dragging:
+            self.dragging = False
+            if self.on_release:
+                self.on_release()
+            return True
+        if event.type == pygame.MOUSEWHEEL and self._hit().collidepoint(pygame.mouse.get_pos()):
+            value = min(1.0, max(0.0, round((self.value + event.y * 0.05) * 20) / 20))
+            if value != self.value:
+                self.value = value
+                self.on_change(value)
+                if self.on_release:
+                    self.on_release()
+            return True
+        return False
+
+    def draw(self, surface: pygame.Surface) -> None:
+        if not self.visible or self.rect.width <= 0:
+            return
+        active = self._fader.step(self.hovered or self.dragging)
+        track_h = max(4, px(6))
+        track = pygame.Rect(self.rect.x, self.rect.centery - track_h // 2, self.rect.width, track_h)
+        gfx.rrect(surface, theme.SURFACE_3, track, track_h // 2)
+        filled = track.copy()
+        filled.width = max(track_h, round(track.width * self.value))
+        if self.value > 0:
+            gfx.rrect_gradient(surface, theme.ACCENT, theme.ACCENT_2, filled, track_h // 2)
+        knob = (track.x + track.width * self.value, track.centery)
+        radius = px(7) + px(2) * active
+        gfx.circle(surface, (*theme.SHADOW, 140), (knob[0], knob[1] + px(1)), radius + px(1))
+        gfx.circle(surface, (245, 248, 252), knob, radius)

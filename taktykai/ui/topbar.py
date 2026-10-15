@@ -12,7 +12,7 @@ from ..rating.profile import RatingChange
 from . import fonts, gfx, theme
 from .anim import approach, ease_out_back, ease_out_cubic, now
 from .scale import fs, px
-from .widgets import Button, Segmented, draw_text, icon_flame
+from .widgets import Button, Segmented, Slider, draw_text, icon_flame
 
 if TYPE_CHECKING:
     from .app import App
@@ -31,6 +31,8 @@ class TopBar:
         self.rect = pygame.Rect(0, 0, 0, height())
         self.nav = [Button(t(key), partial(app.go, name), size=14, pill=True, style="ghost") for name, key in _NAV]
         self.sound = Button("", self._toggle_sound, style="ghost", pill=True)
+        self.volume = Slider(app.profile.volume, self._volume_changed, self._volume_released)
+        self.fullscreen = Button("", app.toggle_fullscreen, style="ghost", pill=True, icon="fullscreen")
         options: list[tuple[str, str]] = [(code, code.upper()) for code in LANGUAGES]
         self.language = Segmented(list(options), get_language(), app.set_language, size=12, accent=theme.VIOLET)
         self.logo_rect = pygame.Rect(0, 0, 0, 0)
@@ -41,9 +43,25 @@ class TopBar:
         self.row_h = height()
 
     def _toggle_sound(self) -> None:
-        self.app.profile.sound = not self.app.profile.sound
-        self.app.sounds.enabled = self.app.profile.sound
+        profile = self.app.profile
+        profile.sound = not profile.sound
+        if profile.sound and profile.volume < 0.02:
+            profile.volume = self.volume.value = 0.5  # włączenie dźwięku przy suwaku na zerze
+            self.app.sounds.set_volume(profile.volume)
+        self.app.sounds.enabled = profile.sound
         self.app.save()
+
+    def _volume_changed(self, value: float) -> None:
+        profile = self.app.profile
+        profile.volume = value
+        self.app.sounds.set_volume(value)
+        if value > 0.02 and not profile.sound:
+            profile.sound = True
+            self.app.sounds.enabled = True
+
+    def _volume_released(self) -> None:
+        self.app.save()
+        self.app.sounds.play("move")  # próbka: od razu słychać nową głośność
 
     def on_rating_change(self, change: RatingChange) -> None:
         self.delta = change.delta
@@ -53,7 +71,10 @@ class TopBar:
         """Rozmieszcza elementy w jednym wierszu, a gdy okno jest wąskie — w dwóch
         (logo i ranking u góry, nawigacja, język i dźwięk pod spodem)."""
         logo_w = fonts.text_size("TaktykAI", fs(26), "bold")[0]
-        controls_w = px(84) + px(8) + px(40)
+        narrow = width < px(560)
+        slider_w = px(56) if narrow else px(90)
+        self.fullscreen.visible = not narrow  # w bardzo wąskim oknie pełny ekran zostaje pod F11
+        controls_w = px(84) + px(8) + px(40) + px(6) + slider_w + (px(12) + px(40) if self.fullscreen.visible else 0)
         labels = [t(key) for _, key in _NAV]
         widths = [fonts.text_size(label, fs(14), "bold")[0] + px(30) for label in labels]
         nav_w = sum(widths) + 2 * px(6)
@@ -82,14 +103,16 @@ class TopBar:
             x = width - px(14) - controls_w
         self.language.rect = pygame.Rect(x + px(8), row_y + (row_h - px(32)) // 2, px(84), px(32))
         self.sound.rect = pygame.Rect(self.language.rect.right + px(8), row_y + (row_h - px(38)) // 2, px(40), px(38))
+        self.volume.rect = pygame.Rect(self.sound.rect.right + px(6), row_y + (row_h - px(20)) // 2, slider_w, px(20))
+        self.fullscreen.rect = pygame.Rect(self.volume.rect.right + px(12), row_y + (row_h - px(38)) // 2, px(40), px(38))
 
     def handle(self, event: pygame.event.Event) -> bool:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.logo_rect.collidepoint(event.pos):
             self.app.go("home")
             return True
-        if self.language.handle(event):
+        if self.volume.handle(event) or self.language.handle(event):
             return True
-        return any(button.handle(event) for button in [*self.nav, self.sound])
+        return any(button.handle(event) for button in [*self.nav, self.sound, self.fullscreen])
 
     def update(self, dt: float) -> None:
         target = self.app.profile.rating
@@ -114,8 +137,13 @@ class TopBar:
             button.draw(surface)
         self.language.value = get_language()
         self.language.draw(surface)
-        self.sound.icon = "sound_on" if self.app.profile.sound else "sound_off"
+        audible = self.app.profile.sound and self.app.profile.volume > 0.02
+        self.sound.icon = "sound_on" if audible else "sound_off"
         self.sound.draw(surface)
+        self.volume.value = self.app.profile.volume if self.app.profile.sound else 0.0
+        self.volume.draw(surface)
+        self.fullscreen.icon = "fullscreen_exit" if self.app.fullscreen else "fullscreen"
+        self.fullscreen.draw(surface)
         self._draw_rating(surface)
 
     def _draw_rating(self, surface: pygame.Surface) -> None:

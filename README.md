@@ -59,8 +59,10 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
   np. wieżę za piona), zamiast ✓ pojawia się cyjanowe „!!” z poświatą, iskrami i komunikatem „Genialny ruch!!” —
   jak na chess.com (`puzzles/validator.py: is_sacrifice`).
 - **Cofanie się po ruchach**: przyciski ◀ ▶ pod szachownicą (albo klawisze ← →) działają przez całe zadanie —
-  można wrócić do pozycji przed ruchem przeciwnika i zobaczyć, co się stało. Na wcześniejszej pozycji nie da się
-  ruszyć ani zobaczyć podpowiedzi; ▶ do końca (albo kolejny ruch przeciwnika) wraca do bieżącej pozycji.
+  można wrócić do pozycji przed ruchem przeciwnika i zobaczyć, co się stało. Cofnięcie też jest animowane: figura
+  płynnie wraca na swoje pole, zbita figura pojawia się z powrotem, a dźwięk odpowiada cofanemu ruchowi (bicie,
+  szach, roszada…). Na wcześniejszej pozycji nie da się ruszyć ani zobaczyć podpowiedzi; ▶ do końca (albo kolejny
+  ruch przeciwnika) wraca do bieżącej pozycji.
 - **Przyciski**: w trakcie zadania widać „Podpowiedź” i „Pokaż rozwiązanie” (po błędzie także „Spróbuj ponownie”);
   „Następne zadanie” pojawia się dopiero po rozwiązaniu albo pokazaniu rozwiązania.
 - **Alternatywne rozwiązania**: ruch inny niż wzorcowy, który daje mata, rozwiązuje zadanie. Ruch, który według
@@ -90,7 +92,11 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
 - **Dźwięki (w stylu chess.com)**: drewniane „puknięcie” przy ruchu, podwójne „klaśnięcie” przy biciu, dzwoneczek
   przy szachu, dwa puknięcia przy roszadzie, rosnący ton przy promocji, dzwonkowe arpeggio po rozwiązaniu zadania
   (jaśniejsze przy genialnym ruchu) i miękkie „bonk” po błędzie. Wszystkie są syntezowane w kodzie
-  (`ui/sounds.py`), więc nie ma plików z cudzą licencją; włącza/wyłącza je ikona głośnika w górnym pasku.
+  (`ui/sounds.py`), więc nie ma plików z cudzą licencją. Brzmią miękko: niskie, „ciepłe” tony drewna, filtr
+  dolnoprzepustowy i lekkie echo, bez ostrych wysokich częstotliwości.
+- **Głośność**: w górnym pasku jest suwak głośności (przeciągnij, kliknij albo kręć kółkiem myszy nad nim);
+  ikona głośnika wycisza/włącza dźwięk. Głośność jest zapamiętywana w profilu.
+- **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy; Esc z niego wychodzi.
 - **Przeciąganie z „martwą strefą”**: figura zaczyna się przeciągać dopiero, gdy mysz odjedzie od miejsca kliknięcia
   o ok. 1/5 pola — drobne drgnięcie przy kliknięciu nie „łapie” figury, tylko ją zaznacza (klik-klik).
 - **Wygląd i animacje**: własny ciemny motyw (granat + turkus dla gracza + fiolet dla AI) i szachownica w stalowych
@@ -409,7 +415,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 92 testy, m.in.:
+`python -m pytest` — 94 testy, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|
@@ -420,7 +426,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 | `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
 | `test_puzzles.py` | dane Lichess (każdy ruch legalny w naszym generatorze i w python-chess), przebieg zadania, inny mat, „dobry ruch, ale jest lepszy”, notacja polska, strumień myśli |
 | `test_i18n.py` | każdy język ma komplet kluczy i te same pola `{…}`, liczba mnoga (polska: 1/2–4/5+), formaty liczb, litery figur |
-| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, zmiana języka w trakcie zadania, wszystkie ekrany w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; demonstracja alfa-bety |
+| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, zmiana języka w trakcie zadania, wszystkie ekrany w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; demonstracja alfa-bety |
 
 Kod jest sprawdzany także narzędziami `ruff` i `mypy` (typy we wszystkich funkcjach, bez `type: ignore`
 w kodzie gry):
@@ -489,7 +495,9 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
     3× do 6× średniej (maks. −0,2).
 14. **Figury z symboli Unicode** (czcionka Noto Sans Symbols 2) i **dźwięki syntezowane w kodzie** — żadnych
     plików graficznych ani dźwiękowych z niejasną licencją. Dźwięki powstają w formacie, w jakim system otworzył
-    kartę dźwiękową (mono/stereo), w osobnym wątku przy starcie, z małym buforem (niskie opóźnienie). Symbole króla i hetmana są w tej czcionce wąskie,
+    kartę dźwiękową (mono/stereo), w osobnym wątku przy starcie, z małym buforem (niskie opóźnienie). Suwak
+    głośności działa z krzywą kwadratową (głośność = wartość²), bo ucho odbiera głośność logarytmicznie — dzięki
+    temu połowa suwaka to wyraźnie ciszej, a nie prawie tak samo głośno. Symbole króla i hetmana są w tej czcionce wąskie,
     więc poszerzamy je w poziomie (×1,22 i ×1,14) podczas zmniejszania z podwójnej rozdzielczości.
 15. **Notacja w języku interfejsu** (po polsku K, H, W, G, S; po angielsku K, Q, R, B, N) w panelu i komunikatach;
     silnik i protokół używają UCI.

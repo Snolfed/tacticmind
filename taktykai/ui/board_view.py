@@ -36,6 +36,8 @@ class _Anim:
     captured: tuple[chess.Piece, chess.Square] | None
     start: float
     duration: float
+    #: True przy cofaniu ruchu: zbita figura nie znika, tylko płynnie wraca na planszę.
+    restore: bool = False
 
 
 @dataclass
@@ -131,17 +133,25 @@ class BoardView:
         return chess.square(file, rank)
 
     # ------------------------------------------------------------ stan
-    def set_position(self, board: chess.Board, move: chess.Move | None = None, animate: bool = True) -> None:
-        """Nowa pozycja; ``move`` = ruch, który do niej prowadził (podświetlenie i animacja)."""
+    def set_position(
+        self, board: chess.Board, move: chess.Move | None = None, animate: bool = True, undo: chess.Move | None = None
+    ) -> None:
+        """Nowa pozycja; ``move`` = ruch, który do niej prowadził (podświetlenie i animacja).
+
+        ``undo`` = ruch, który właśnie cofamy (◀): figura płynnie wraca na pole startowe,
+        a zbita figura pojawia się z powrotem.
+        """
         previous = self.board
         self.board = board.copy(stack=False)
         self.last_move = move
         self.selected = None
         self.drag_square = None
         self.promotion = None
-        if move is not None:
+        if move is not None or undo is not None:
             self.clear_drawings()
-        if move is not None and animate and not self._skip_next_animation:
+        if undo is not None and animate:
+            self.anim = self._undo_animation(previous, self.board, undo)
+        elif move is not None and animate and not self._skip_next_animation:
             moving = previous.piece_at(move.from_square)
             if moving is not None:
                 shown = chess.Piece(chess.PAWN, moving.color) if move.promotion else moving
@@ -162,6 +172,29 @@ class BoardView:
         else:
             self.anim = None
         self._skip_next_animation = False
+
+    def _undo_animation(self, after: chess.Board, before: chess.Board, move: chess.Move) -> _Anim | None:
+        """Animacja cofnięcia ruchu ``move``: z pozycji ``after`` z powrotem do ``before``."""
+        moving = before.piece_at(move.from_square)
+        if moving is None or after.piece_at(move.to_square) is None:
+            return None
+        pieces = [(moving, move.to_square, move.from_square)]
+        if before.is_castling(move):
+            rank = chess.square_rank(move.from_square)
+            kingside = chess.square_file(move.to_square) > chess.square_file(move.from_square)
+            rook_home, rook_after = chess.square(7 if kingside else 0, rank), chess.square(5 if kingside else 3, rank)
+            rook = before.piece_at(rook_home)
+            if rook is not None:
+                pieces.append((rook, rook_after, rook_home))
+        captured = None
+        if before.is_capture(move):
+            square = move.to_square
+            if before.is_en_passant(move):
+                square = move.to_square + (-8 if moving.color == chess.WHITE else 8)
+            victim = before.piece_at(square)
+            if victim is not None:
+                captured = (victim, square)
+        return _Anim(pieces, captured, self.clock, ANIMATION_TIME, restore=True)
 
     def show_feedback(self, square: chess.Square, ok: bool, brilliant: bool = False) -> None:
         """✓ (dobry ruch), ✗ (błąd) albo !! (genialny ruch — poświęcenie) w rogu pola docelowego."""
@@ -442,6 +475,8 @@ class BoardView:
         progress = ease_in_out_cubic((clock - anim.start) / anim.duration) if anim is not None else 1.0
         if anim is not None:
             hidden = {to for _, _, to in anim.pieces}
+            if anim.restore and anim.captured is not None:
+                hidden.add(anim.captured[1])  # wracająca figura jest rysowana niżej, z przenikaniem
         if self.drag_square is not None and self.drag_moved:
             hidden.add(self.drag_square)
         for square, piece in self.board.piece_map().items():
@@ -462,7 +497,8 @@ class BoardView:
             if anim.captured is not None:
                 victim, square = anim.captured
                 img = piece_surface(victim, s).copy()
-                img.set_alpha(int(255 * (1 - ease_out_cubic(progress * 1.4))))
+                fade = ease_out_cubic(progress * 1.4)
+                img.set_alpha(int(255 * (fade if anim.restore else 1 - fade)))
                 canvas.blit(img, img.get_rect(center=self._local_rect(square).center))
             for piece, from_sq, to_sq in anim.pieces:
                 a = self._local_rect(from_sq).center

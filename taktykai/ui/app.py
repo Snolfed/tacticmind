@@ -38,10 +38,12 @@ class App:
         pygame.display.set_caption(i18n.t("app.caption"))
         pygame.display.set_icon(app_icon(128))  # przed set_mode — na niektórych systemach inaczej nie działa
         self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.fullscreen = False
+        self.windowed_size = size
         pygame.key.set_repeat(300, 60)
         set_scale(compute_scale(*size))
         self.engine = EngineClient()
-        self.sounds = Sounds(self.profile.sound, background=True)
+        self.sounds = Sounds(self.profile.sound, background=True, volume=self.profile.volume)
         self.puzzles = load_puzzles()
         self.puzzle_source = puzzle_source()
         self.rng = random.Random()
@@ -84,6 +86,16 @@ class App:
             screen.on_language_change()
         self.relayout()
 
+    def toggle_fullscreen(self) -> None:
+        """F11: pełny ekran w rozdzielczości pulpitu i z powrotem do okna o poprzednim rozmiarze."""
+        if not self.fullscreen:
+            self.windowed_size = self.screen.get_size()
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode(self.windowed_size, pygame.RESIZABLE)
+        self.fullscreen = not self.fullscreen
+        self.relayout()
+
     def save(self) -> None:
         save_profile(self.profile)
 
@@ -95,6 +107,11 @@ class App:
         content = pygame.Rect(0, top, w, h - top)
         for screen in self.screens.values():
             screen.layout(content)
+
+    def _escape_used(self) -> bool:
+        """Esc zamyka najpierw podgląd wariantu na ekranie gry, a dopiero potem pełny ekran."""
+        play = self.screens.get("play")
+        return self.current_name == "play" and getattr(play, "preview", None) is not None
 
     def dispatch_engine(self, event: EngineEvent) -> None:
         for screen in self.screens.values():
@@ -110,6 +127,8 @@ class App:
                 if w < MIN_SIZE[0] or h < MIN_SIZE[1]:
                     self.screen = pygame.display.set_mode((max(w, MIN_SIZE[0]), max(h, MIN_SIZE[1])), pygame.RESIZABLE)
                 self.relayout()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11 or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE and self.fullscreen and not self._escape_used():
+                self.toggle_fullscreen()
             elif self.topbar.handle(event):
                 continue
             else:

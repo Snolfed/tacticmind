@@ -203,6 +203,54 @@ def test_drag_deadzone(app) -> None:  # type: ignore[no-untyped-def]
     assert view.drag_square is None and view.selected == piece_square  # figura wraca, zostaje zaznaczona
 
 
+def test_undo_animation_restores_captured_piece(app) -> None:  # type: ignore[no-untyped-def]
+    """◀ cofa ruch z animacją: figura wraca na pole startowe, a zbita figura płynnie się pojawia."""
+    import chess
+    import pygame
+
+    from taktykai.ui.board_view import BoardView
+
+    view = BoardView()
+    before = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    capture = chess.Move.from_uci("e4d5")
+    after = before.copy()
+    after.push(capture)
+    view.set_position(after, capture, animate=False)
+    view.set_position(before, None, undo=capture)
+    assert view.anim is not None and view.anim.restore
+    assert view.anim.pieces[0][1:] == (chess.D5, chess.E4)  # pion jedzie z d5 z powrotem na e4
+    assert view.anim.captured == (chess.Piece(chess.PAWN, chess.BLACK), chess.D5)
+    view.update(0.1)
+    view.draw(pygame.Surface((600, 600)))  # rysowanie w trakcie animacji cofania nie zgłasza błędów
+
+
+def test_volume_slider_and_fullscreen(app) -> None:  # type: ignore[no-untyped-def]
+    """Suwak głośności zmienia i zapamiętuje głośność; F11 włącza i wyłącza pełny ekran."""
+    import pygame
+
+    from taktykai.rating.profile import load_profile
+
+    bar = app.topbar
+    slider = bar.volume
+    run(app, 0.1)
+    x = slider.rect.x + int(slider.rect.width * 0.25)
+    for event in (
+        pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x, slider.rect.centery), button=1),
+        pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(x, slider.rect.centery), button=1),
+    ):
+        bar.handle(event)
+    assert abs(app.profile.volume - 0.25) < 0.05
+    assert abs(app.sounds.volume - app.profile.volume) < 1e-6
+    assert abs(load_profile().volume - app.profile.volume) < 1e-6  # zapisane na dysku
+    windowed = app.screen.get_size()
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11, mod=0, unicode="", scancode=0))
+    run(app, 0.1)
+    assert app.fullscreen
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11, mod=0, unicode="", scancode=0))
+    run(app, 0.1)
+    assert not app.fullscreen and app.screen.get_size() == windowed
+
+
 def test_app_icon_and_wide_pieces(app) -> None:  # type: ignore[no-untyped-def]
     """Ikona okna (pion) i poszerzone symbole króla i hetmana."""
     import chess

@@ -215,19 +215,23 @@ class PlayScreen(Screen):
 
     def _show_move(self, board_before: chess.Board, move: chess.Move, animate: bool = True) -> None:
         """Pokazuje ruch na szachownicy i odtwarza odpowiedni dźwięk."""
-        capture = board_before.is_capture(move)
-        castling = board_before.is_castling(move)
         board_after = board_before.copy()
         board_after.push(move)
         self.board_view.set_position(board_after, move, animate)
+        self._play_move_sound(board_before, move)
+
+    def _play_move_sound(self, board_before: chess.Board, move: chess.Move) -> None:
+        """Dźwięk ruchu (także przy cofaniu ◀): szach, promocja, roszada, bicie albo zwykły ruch."""
+        board_after = board_before.copy()
+        board_after.push(move)
         if board_after.is_check():
             self.app.sounds.play("check")
         elif move.promotion:
             self.app.sounds.play("promote")
-        elif castling:
+        elif board_before.is_castling(move):
             self.app.sounds.play("castle")
         else:
-            self.app.sounds.play("capture" if capture else "move")
+            self.app.sounds.play("capture" if board_before.is_capture(move) else "move")
 
     # ================================================================ ruch gracza
     def on_player_move(self, move: chess.Move) -> None:
@@ -591,7 +595,9 @@ class PlayScreen(Screen):
             self._show_move(board, preview.moves[preview.index])
         else:
             board, last = self._preview_board(new_index)
-            self.board_view.set_position(board, last, animate=False)
+            undone = preview.moves[new_index]
+            self.board_view.set_position(board, last, undo=undone)
+            self._play_move_sound(board, undone)
         preview.index = new_index
 
     def stop_preview(self) -> None:
@@ -635,9 +641,11 @@ class PlayScreen(Screen):
             self.view_index = None if new_index == total else new_index
             self._show_move(before, stack[new_index - 1])
         else:
+            undone = stack[new_index]
             self.view_index = new_index
             board = self.current_board()
-            self.board_view.set_position(board, board.peek() if board.move_stack else None, animate=False)
+            self.board_view.set_position(board, board.peek() if board.move_stack else None, undo=undone)
+            self._play_move_sound(board, undone)
         self.board_view.feedback = None
         live = self.view_index is None
         self.board_view.interactive = live and session.status == Status.PLAYER
