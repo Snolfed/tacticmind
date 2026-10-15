@@ -216,11 +216,16 @@ class PlayScreen(Screen):
     def _show_move(self, board_before: chess.Board, move: chess.Move, animate: bool = True) -> None:
         """Pokazuje ruch na szachownicy i odtwarza odpowiedni dźwięk."""
         capture = board_before.is_capture(move)
+        castling = board_before.is_castling(move)
         board_after = board_before.copy()
         board_after.push(move)
         self.board_view.set_position(board_after, move, animate)
         if board_after.is_check():
             self.app.sounds.play("check")
+        elif move.promotion:
+            self.app.sounds.play("promote")
+        elif castling:
+            self.app.sounds.play("castle")
         else:
             self.app.sounds.play("capture" if capture else "move")
 

@@ -87,6 +87,12 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
   pasek, poziomy pasek oceny nad szachownicą, panel pod nią, a cała strona przewija się kółkiem myszy.
 - **Ikona**: okno ma własną ikonę (biały pion na turkusowo-fioletowym kafelku), rysowaną w kodzie;
   `python -m taktykai.ui.icon` zapisuje ją jako `taktykai/assets/icon.png` (np. do skrótu na pulpicie).
+- **Dźwięki (w stylu chess.com)**: drewniane „puknięcie” przy ruchu, podwójne „klaśnięcie” przy biciu, dzwoneczek
+  przy szachu, dwa puknięcia przy roszadzie, rosnący ton przy promocji, dzwonkowe arpeggio po rozwiązaniu zadania
+  (jaśniejsze przy genialnym ruchu) i miękkie „bonk” po błędzie. Wszystkie są syntezowane w kodzie
+  (`ui/sounds.py`), więc nie ma plików z cudzą licencją; włącza/wyłącza je ikona głośnika w górnym pasku.
+- **Przeciąganie z „martwą strefą”**: figura zaczyna się przeciągać dopiero, gdy mysz odjedzie od miejsca kliknięcia
+  o ok. 1/5 pola — drobne drgnięcie przy kliknięciu nie „łapie” figury, tylko ją zaznacza (klik-klik).
 - **Wygląd i animacje**: własny ciemny motyw (granat + turkus dla gracza + fiolet dla AI) i szachownica w stalowych
   błękitach. Wszystkie kształty są wygładzane (supersampling), karty mają miękkie cienie. Animacje: płynny ruch figur
   (bita figura znika), wyskakujący ✓/✗ z falą, potrząśnięcie szachownicą po błędzie, konfetti po rozwiązaniu,
@@ -403,7 +409,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 90 testów, m.in.:
+`python -m pytest` — 92 testy, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|
@@ -482,7 +488,8 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 13. **Kara za czas** liczona od przeciętnego czasu z ostatnich 20 rozwiązanych zadań (co najmniej 3), liniowo od
     3× do 6× średniej (maks. −0,2).
 14. **Figury z symboli Unicode** (czcionka Noto Sans Symbols 2) i **dźwięki syntezowane w kodzie** — żadnych
-    plików graficznych ani dźwiękowych z niejasną licencją. Symbole króla i hetmana są w tej czcionce wąskie,
+    plików graficznych ani dźwiękowych z niejasną licencją. Dźwięki powstają w formacie, w jakim system otworzył
+    kartę dźwiękową (mono/stereo), w osobnym wątku przy starcie, z małym buforem (niskie opóźnienie). Symbole króla i hetmana są w tej czcionce wąskie,
     więc poszerzamy je w poziomie (×1,22 i ×1,14) podczas zmniejszania z podwójnej rozdzielczości.
 15. **Notacja w języku interfejsu** (po polsku K, H, W, G, S; po angielsku K, Q, R, B, N) w panelu i komunikatach;
     silnik i protokół używają UCI.

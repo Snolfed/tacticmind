@@ -161,6 +161,48 @@ def test_move_navigation_during_puzzle(app) -> None:  # type: ignore[no-untyped-
     assert play.session.finished
 
 
+def test_sounds_are_generated_for_stereo_output(app) -> None:  # type: ignore[no-untyped-def]
+    """Dźwięki działają także, gdy system otworzy dźwięk w stereo (wcześniej wtedy się wyłączały)."""
+    import pygame
+
+    from taktykai.ui.sounds import build_sounds
+
+    samples = build_sounds(22050)
+    assert set(samples) >= {"move", "capture", "check", "castle", "promote", "success", "brilliant", "error"}
+    assert all(max(abs(x) for x in data) > 0.05 for data in samples.values())
+    assert pygame.mixer.get_init() is not None and pygame.mixer.get_init()[2] == 2
+    deadline = time.monotonic() + 15
+    while not app.sounds.available and time.monotonic() < deadline:  # synteza w tle
+        time.sleep(0.05)
+    assert app.sounds.available
+    app.sounds.play("move")
+
+
+def test_drag_deadzone(app) -> None:  # type: ignore[no-untyped-def]
+    """Drobne drgnięcie myszy przy kliknięciu nie „łapie” figury; dopiero wyraźny ruch zaczyna przeciąganie."""
+    import pygame
+
+    app.go("play")
+    run(app, 1.2)
+    play = app.screens["play"]
+    view = play.board_view
+    view.interactive = True
+    piece_square = next(sq for sq, p in view.board.piece_map().items() if p.color == view.player_color and view.legal_targets(sq))
+    rect = view.square_rect(piece_square)
+    near_edge = (rect.x + 3, rect.y + 3)  # klik przy samej krawędzi pola
+    view.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=near_edge, button=1))
+    view.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=(near_edge[0] + 4, near_edge[1] + 3), rel=(4, 3), buttons=(1, 0, 0)))
+    assert not view.drag_moved and view.selected == piece_square
+    view.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(near_edge[0] + 4, near_edge[1] + 3), button=1))
+    assert view.selected == piece_square  # zwykłe kliknięcie = zaznaczenie (klik-klik)
+    far = (near_edge[0] + int(view.drag_deadzone()) + 6, near_edge[1])
+    view.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=near_edge, button=1))
+    view.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=far, rel=(20, 0), buttons=(1, 0, 0)))
+    assert view.drag_moved
+    view.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=far, rel=(0, 0), buttons=(0, 0, 0)))  # puszczono poza oknem
+    assert view.drag_square is None and view.selected == piece_square  # figura wraca, zostaje zaznaczona
+
+
 def test_app_icon_and_wide_pieces(app) -> None:  # type: ignore[no-untyped-def]
     """Ikona okna (pion) i poszerzone symbole króla i hetmana."""
     import chess

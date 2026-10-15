@@ -83,6 +83,8 @@ class BoardView:
         self.selected_at = 0.0
         self.drag_square: chess.Square | None = None
         self.drag_pos: tuple[int, int] = (0, 0)
+        #: Miejsce, w którym wciśnięto przycisk — przeciąganie zaczyna się dopiero po wyjściu poza „martwą strefę”.
+        self.drag_origin: tuple[int, int] = (0, 0)
         self.drag_moved = False
         self.promotion: _Promotion | None = None
         self.anim: _Anim | None = None
@@ -207,8 +209,14 @@ class BoardView:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             return self._left_down(event.pos)
         if event.type == pygame.MOUSEMOTION and self.drag_square is not None:
+            buttons = getattr(event, "buttons", (1, 0, 0))
+            if not buttons[0]:
+                # Przycisk puszczono poza oknem — kończymy przeciąganie, figura zostaje zaznaczona.
+                self.drag_square = None
+                self.drag_moved = False
+                return True
             self.drag_pos = event.pos
-            if not self.drag_moved and math.dist(event.pos, self.square_rect(self.drag_square).center) > px(6):
+            if not self.drag_moved and math.dist(event.pos, self.drag_origin) > self.drag_deadzone():
                 self.drag_moved = True
             return True
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.drag_square is not None:
@@ -218,10 +226,14 @@ class BoardView:
             if self.drag_moved and target is not None and target != source and target in self.legal_targets(source):
                 self._skip_next_animation = True
                 self._attempt(source, target)
-            elif self.drag_moved:
-                self.selected = None
+            elif self.drag_moved and target != source:
+                self.selected = None  # upuszczona na niedozwolone pole — wraca na miejsce
             return True
         return False
+
+    def drag_deadzone(self) -> float:
+        """Martwa strefa przeciągania: drobne drgnięcie myszy przy kliknięciu nie „łapie” figury."""
+        return max(px(10), self.square_size * 0.2)
 
     def _right_down(self, pos: tuple[int, int]) -> bool:
         square = self.square_at(pos)
@@ -267,6 +279,7 @@ class BoardView:
             self.selected_at = self.clock
             self.drag_square = square
             self.drag_pos = pos
+            self.drag_origin = pos
             self.drag_moved = False
         else:
             self.selected = None

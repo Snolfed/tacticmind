@@ -11,7 +11,7 @@ from .. import i18n
 from ..engine.process import EngineClient, EngineEvent
 from ..puzzles.loader import load_puzzles, puzzle_source
 from ..rating.profile import PlayerProfile, load_profile, save_profile
-from . import fonts, gfx
+from . import fonts, gfx, sounds
 from .anim import ease_out_cubic
 from .icon import app_icon
 from .scale import compute_scale, set_scale
@@ -30,6 +30,7 @@ TRANSITION = 0.22
 
 class App:
     def __init__(self, size: tuple[int, int] = DEFAULT_SIZE) -> None:
+        sounds.pre_init()  # stereo + mały bufor — przed pygame.init(), które otwiera dźwięk
         pygame.init()
         fonts.reset()
         self.profile: PlayerProfile = load_profile()
@@ -40,7 +41,7 @@ class App:
         pygame.key.set_repeat(300, 60)
         set_scale(compute_scale(*size))
         self.engine = EngineClient()
-        self.sounds = Sounds(self.profile.sound)
+        self.sounds = Sounds(self.profile.sound, background=True)
         self.puzzles = load_puzzles()
         self.puzzle_source = puzzle_source()
         self.rng = random.Random()
