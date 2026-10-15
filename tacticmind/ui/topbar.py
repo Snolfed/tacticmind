@@ -18,7 +18,9 @@ if TYPE_CHECKING:
     from .app import App
 
 BASE_HEIGHT = 68
-_NAV = (("play", "nav.play"), ("stats", "nav.stats"), ("howto", "nav.howto"))
+_NAV = (("play", "nav.play"), ("coach", "nav.coach"), ("stats", "nav.stats"), ("howto", "nav.howto"))
+#: Ekrany, przy których podświetla się dana zakładka.
+_ACTIVE = {"coach": ("coach", "coach_game")}
 
 
 def height() -> int:
@@ -37,6 +39,7 @@ class TopBar:
         self.language = Segmented(list(options), get_language(), app.set_language, size=12, accent=theme.VIOLET)
         self.logo_rect = pygame.Rect(0, 0, 0, 0)
         self.shown_rating = app.profile.rating
+        self.source = "puzzles"
         self.delta: float | None = None
         self.delta_at = -10.0
         self.two_rows = False
@@ -90,7 +93,7 @@ class TopBar:
             x, row_y, row_h = px(14), self.row_h, px(52)
             available = width - x - controls_w - px(30)
             if nav_w > available:
-                labels[2] = t("nav.howto_short")
+                labels[-1] = t("nav.howto_short")
                 widths = [fonts.text_size(label, fs(13), "bold")[0] + px(22) for label in labels]
             factor = min(1.0, available / max(1, sum(widths) + 2 * px(6)))
             widths = [int(w * factor) for w in widths]
@@ -114,8 +117,22 @@ class TopBar:
             return True
         return any(button.handle(event) for button in [*self.nav, self.sound, self.fullscreen])
 
+    def _source(self) -> str:
+        """Na ekranach trenera pasek pokazuje ranking partii z trenerem, a nie zadań."""
+        return "coach" if self.app.current_name.startswith("coach") else "puzzles"
+
+    def _rating(self) -> tuple[float, float | None]:
+        profile = self.app.profile
+        if self._source() == "coach":
+            return profile.coach.rating.rating, profile.coach.rating.rd
+        return profile.rating, profile.rd
+
     def update(self, dt: float) -> None:
-        target = self.app.profile.rating
+        target, _ = self._rating()
+        source = self._source()
+        if source != self.source:
+            self.source = source
+            self.shown_rating = target  # inny ranking — bez animowania „przewijania” liczby
         self.shown_rating = approach(self.shown_rating, target, dt, 5)
         if abs(target - self.shown_rating) < 0.5:
             self.shown_rating = target
@@ -133,7 +150,7 @@ class TopBar:
         surface.blit(ai_surface, ai_rect)
         self.logo_rect = logo.union(ai_rect)
         for button, (name, _) in zip(self.nav, _NAV):
-            button.active = self.app.current_name == name
+            button.active = self.app.current_name in _ACTIVE.get(name, (name,))
             button.draw(surface)
         self.language.value = get_language()
         self.language.draw(surface)
@@ -152,13 +169,15 @@ class TopBar:
         right = self.rect.right - px(22)
         clock = now()
         streak_w = 0
-        if profile.streak > 0:
+        coach = self._source() == "coach"
+        _, rd = self._rating()
+        if profile.streak > 0 and not coach:
             label = draw_text(surface, str(profile.streak), (right, h // 2), fs(22), theme.ORANGE, "bold", "midright")
             icon_flame(surface, (label.x - px(14), h // 2), px(26), clock)
             streak_w = label.width + px(36)
         rx = right - streak_w
-        if profile.rd is not None:
-            rd_rect = draw_text(surface, f"± {round(profile.rd)}", (rx, h // 2 + px(6)), fs(14), theme.MUTED, "bold", "midright")
+        if rd is not None:
+            rd_rect = draw_text(surface, f"± {round(rd)}", (rx, h // 2 + px(6)), fs(14), theme.MUTED, "bold", "midright")
             rx = rd_rect.x - px(6)
         # Liczba lekko „podskakuje” tuż po zmianie rankingu.
         age = clock - self.delta_at
@@ -167,10 +186,15 @@ class TopBar:
             value_surf = pygame.transform.smoothscale_by(value_surf, 1.0 + 0.12 * (1 - ease_out_cubic(age / 0.6)))
         value = value_surf.get_rect(midright=(rx, h // 2 + px(4)))
         surface.blit(value_surf, value)
-        system = "Glicko-2" if profile.system == "glicko" else "Elo"
-        caption = t("rating.caption", system=system)
-        if profile.calibrating:
-            caption += " · " + t("rating.calibration", n=profile.games)
+        if coach:
+            caption = t("rating.coach_caption")
+            if not profile.coach.calibrated:
+                caption += " · " + t("rating.calibration", n=profile.coach.calibration_progress())
+        else:
+            system = "Glicko-2" if profile.system == "glicko" else "Elo"
+            caption = t("rating.caption", system=system)
+            if profile.calibrating:
+                caption += " · " + t("rating.calibration", n=profile.games)
         draw_text(surface, caption, (right - streak_w, px(5)), fs(11), theme.MUTED, "regular", "topright", max_width=px(240))
         # Animowana zmiana: +12 turkusowo, −9 czerwono — wyskakuje, unosi się i znika.
         if self.delta is not None and age < 2.6:

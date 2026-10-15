@@ -1,10 +1,18 @@
-# TacticMind — szachowe zadania z AI, które myśli na głos
+# TacticMind — zadania taktyczne i trener szachowy z AI, które myśli na głos
 
 TacticMind to trener taktyki szachowej w stylu „Puzzles” z chess.com. Gracz rozwiązuje prawdziwe zadania z bazy
 Lichess, a obok szachownicy panel **„Mózg AI”** pokazuje na żywo, co liczy **własny silnik szachowy** napisany
 od zera w tym projekcie: głębokość, liczbę węzłów, cięcia alfa-beta, trzy najlepsze ruchy z wariantami,
 mini-drzewo przeszukiwania i „strumień myśli” po polsku. Drugi element AI to **adaptacyjny ranking**
 (Glicko-2 albo Elo) z **modelem gracza**, który dobiera kolejne zadania pod aktualny poziom i słabe strony gracza.
+
+Druga gra to **partia z trenerem** (jak „Play Coach” na chess.com): grasz z trenerem o wybranej sile
+(400–2000 Elo), a on po każdym Twoim ruchu ocenia go (najlepszy, dobry, niedokładność, błąd, przeoczenie…),
+tłumaczy, co robi Twój ruch i jaki ruch byłby lepszy — i dlaczego. Można też **uczyć się otwarć**: 15 linii
+z objaśnieniem każdego ruchu. Po 10 partiach kalibracji pojawia się poziom **„Twój poziom”** — trener gra z siłą
+dopasowaną do Twoich wyników i zmienia ją co 5 partii.
+
+![Trener Maks](tacticmind/assets/coach.png)
 
 Stockfish ani żaden inny gotowy silnik **nie jest używany**. Biblioteka `python-chess` służy wyłącznie warstwie
 interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza); silnik ma własną planszę 0x88 i własny generator ruchów.
@@ -15,14 +23,15 @@ interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza); silnik ma własn
 
 1. [Uruchomienie](#uruchomienie)
 2. [Jak grać](#jak-grać)
-3. [Architektura](#architektura)
-4. [Algorytmy](#algorytmy)
-5. [Pomiary: minimaks vs alfa-beta](#pomiary-minimaks-vs-alfa-beta)
-6. [Testy](#testy)
-7. [Zadania z bazy Lichess](#zadania-z-bazy-lichess)
-8. [Decyzje projektowe](#decyzje-projektowe)
-9. [Etapy pracy](#etapy-pracy)
-10. [Źródła i licencje](#źródła-i-licencje)
+3. [Gra z trenerem](#gra-z-trenerem)
+4. [Architektura](#architektura)
+5. [Algorytmy](#algorytmy)
+6. [Pomiary: minimaks vs alfa-beta](#pomiary-minimaks-vs-alfa-beta)
+7. [Testy](#testy)
+8. [Zadania z bazy Lichess](#zadania-z-bazy-lichess)
+9. [Decyzje projektowe](#decyzje-projektowe)
+10. [Etapy pracy](#etapy-pracy)
+11. [Źródła i licencje](#źródła-i-licencje)
 
 ---
 
@@ -43,12 +52,13 @@ Testy:
 python -m pytest
 ```
 
-Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.tacticmind/profile.json`
+Postępy (ranking, historia, statystyki, partie z trenerem i nauka otwarć) zapisują się w pliku `~/.tacticmind/profile.json`
 (inny katalog można wskazać zmienną `TACTICMIND_HOME`).
 
 ## Jak grać
 
-- **Ekran startowy**: „Graj”, „Statystyki”, „Jak działa AI?”.
+- **Ekran startowy**: „Zadania taktyczne”, „Graj z trenerem”, „Statystyki”, „Jak działa AI?”. Te same miejsca
+  są w górnym pasku: „Zadania”, „Trener”, „Statystyki”, „Jak działa AI?”.
 - **Zadanie**: pierwszy ruch wykonuje przeciwnik (z animacją), potem szukasz najlepszego ruchu. Szachownica jest
   obrócona na Twoją stronę. Ruch robisz przeciągnięciem albo klik-klik; kropki pokazują legalne pola, przy promocji
   pojawia się okno wyboru figury. Odpowiedzi przeciwnika wykonują się same po ok. 400 ms.
@@ -104,6 +114,41 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.tacticmind/p
   (bita figura znika), wyskakujący ✓/✗ z falą, potrząśnięcie szachownicą po błędzie, konfetti po rozwiązaniu,
   pulsująca podpowiedź i szach, sprężysty pasek oceny, przenikanie ekranów, przesuwające się wskaźniki przełączników.
 
+## Gra z trenerem
+
+Zakładka **„Trener”**. Trener nazywa się Maks — jego portret (z kilkoma minami, które zmieniają się w trakcie gry)
+jest rysowany w kodzie (`ui/coach_avatar.py`), bez plików graficznych.
+
+- **Ustawienia partii**: siła trenera suwakiem od 400 do 2000 Elo (z opisem: początkujący, amator,
+  średniozaawansowany, zaawansowany, ekspert), kolor (białe / losowo / czarne) i przycisk „Zagraj”.
+- **„Twój poziom”**: przez pierwsze 10 partii trwa kalibracja (licznik „kalibracja 3/10”). Po 10. partii
+  odblokowuje się nowy poziom trudności — trener gra z siłą równą Twojemu rankingowi z partii. Ten poziom
+  zmienia się **co 5 partii** (po 15., 20., 25. …), a podsumowanie partii mówi, kiedy będzie następna zmiana.
+- **W trakcie partii**: po każdym Twoim ruchu trener pokazuje znaczek klasy ruchu na polu docelowym i w liście
+  ruchów — !! genialny, ! świetny, ★ najlepszy, ✓ znakomity / dobry, książka (z teorii), ?! niedokładność,
+  ? błąd, ?? przeoczenie — i mówi, co ten ruch robi albo czym grozi przeciwnik i co było lepsze, np.
+  „Przeciwnik odpowie 1... hxg6 i tracisz hetmana. Lepsze było Sc3 — rozwija skoczka.”.
+  Po **błędzie i przeoczeniu** partia się zatrzymuje: „Cofnij i popraw” (strzałka pokazuje lepszy ruch)
+  albo „Graj dalej”. Trener komentuje też własne ruchy i ostrzega przed swoimi groźbami („Uważaj — grożę matem!”).
+  Mina trenera reaguje na Twoje ruchy (radość, zmartwienie, zdziwienie), a gdy liczy — myśli.
+- **Pomoc**: „Podpowiedź” (strzałka najlepszego ruchu) i „Cofnij ruch”. Każda pomoc obniża wynik partii
+  liczony do „Twojego poziomu” o 0,1.
+- **Nazwa debiutu** na bieżąco (np. „Obrona sycylijska — wariant Najdorfa”), rozpoznawana po pozycji, więc
+  działa też przy przestawieniu ruchów.
+- **Paski graczy** nad i pod szachownicą: portret trenera i Twoja ikona, kto jest na ruchu, zbite figury
+  i przewaga materialna.
+- **Po partii**: podsumowanie z **celnością** (%) Twoją i trenera, liczbą ruchów każdej klasy i zmianą poziomu.
+  Przyciskami ◀ ▶ (albo klikając ruch na liście) przeglądasz partię — dla każdego ruchu wraca komentarz trenera,
+  a przy słabszych ruchach strzałka pokazuje, co było lepsze. „Rewanż” zaczyna nową partię z tymi samymi ustawieniami.
+- **Nauka otwarć**: 15 otwarć — dla białych partia włoska, hiszpańska, szkocka, gambit hetmański, system londyński,
+  otwarcie angielskie; dla czarnych obrona sycylijska (Najdorf), francuska, Caro-Kann, skandynawska, dwóch
+  skoczków, słowiańska, królewsko-indyjska, nimzoindyjska i Grünfelda. Grasz ruchy głównej linii, trener odpowiada
+  ruchami z tej linii i **objaśnia każdy ruch** (obie strony). Ruch spoza linii jest cofany, a trener mówi, co się tu
+  gra i dlaczego (jeśli Twój ruch też jest z teorii, mówi i o tym). Za ukończenie otwarcia są gwiazdki: 1 —
+  ukończone, 2 — bez błędu, 3 — trzy razy bez błędu. Po lekcji można grać dalej z tej pozycji — wtedy to zwykła
+  partia, liczona do „Twojego poziomu”.
+- W górnym pasku na ekranach trenera widać ranking partii z trenerem (osobny od rankingu zadań).
+
 ## Architektura
 
 ```
@@ -120,21 +165,29 @@ tacticmind/
     compare.py              #   tryb porównawczy: minimaks / alfa-beta / alfa-beta + porządkowanie
     process.py              #   silnik w osobnym procesie + protokół wiadomości
     types.py                #   SearchInfo, EngineScore, TreeNode…
-  rating/                   # elo.py, glicko2.py, player_model.py, selector.py, profile.py
+  rating/                   # elo.py, glicko2.py, player_model.py, selector.py, profile.py,
+                            #   coach_profile.py (partie z trenerem, kalibracja, „Twój poziom”, gwiazdki otwarć)
+  coach/                    # GRA Z TRENEREM (bez pygame): openings.py (książka otwarć, nazwy debiutów),
+                            #   strength.py (siła gry wg Elo), review.py (klasy ruchów, celność),
+                            #   advice.py (wyjaśnienia trenera), game.py (przebieg partii i lekcji)
   puzzles/                  # loader.py, themes.py (tłumaczenia), validator.py, session.py
   brain/                    # notation.py (SAN w języku interfejsu), thoughts.py (strumień myśli), demo.py
-  i18n/                     # tłumaczenia: pl.py, en.py (jeden słownik na język) + liczba mnoga, formaty liczb
+  i18n/                     # tłumaczenia: pl.py, en.py (jeden słownik na język) + liczba mnoga, formaty liczb;
+                            #   openings_pl.py / openings_en.py — nazwy i objaśnienia otwarć
   ui/                       # pygame: app, board_view (z rysowaniem strzałek), eval_bar, brain_panel, topbar,
                             #   charts, sounds, screens/, a także scale.py (skalowanie), gfx.py (wygładzona
-                            #   grafika, cienie), anim.py (wygładzanie animacji), effects.py (konfetti, fale)
+                            #   grafika, cienie), anim.py (wygładzanie animacji), effects.py (konfetti, fale),
+                            #   coach_avatar.py (portret trenera), badges.py (znaczki !!, ?, ?? …),
+                            #   screens/coach_menu.py i screens/coach_game.py (ekrany trenera)
   data/                     # starter_puzzles.json (50 zadań), puzzles.json (3000 zadań)
   assets/fonts/             # fonty Noto (tekst i symbole figur)
+  assets/coach.png          # portret trenera (wygenerowany kodem: python -m tacticmind.ui.coach_avatar)
 scripts/build_puzzles.py    # budowa zestawu zadań z bazy Lichess
 scripts/benchmark.py        # pomiary do tabeli w README
 tests/                      # pytest
 ```
 
-Logika gry i silnik są oddzielone od interfejsu: `engine/`, `rating/`, `puzzles/` i `brain/` to czyste
+Logika gry i silnik są oddzielone od interfejsu: `engine/`, `rating/`, `puzzles/`, `brain/` i `coach/` to czyste
 moduły bez pygame, testowane jednostkowo. Interfejs tylko je wywołuje i rysuje wyniki.
 
 ```mermaid
@@ -375,6 +428,63 @@ Zadanie traktujemy jak przeciwnika o rankingu zadania.
 - każda decyzja ma uzasadnienie w okienku **„Dlaczego to zadanie?”**, np. „Ranking zadania ok. 1380, celuję
   w 65% szans (strefa flow). Twoja słaba strona: związanie (41%).”
 
+### Trener: siła gry zależna od Elo
+
+`coach/strength.py`. Trener używa tego samego silnika, ale gra słabiej w trzech miejscach:
+
+| Elo | Głębokość | Czas na ruch | Kandydaci (MultiPV) | Temperatura T | Przypadkowy ruch |
+|---|---|---|---|---|---|
+| 400 | 1 | 0,4 s | 8 | 305 cp | 25% |
+| 800 | 2 | 1,0 s | 6 | 174 cp | 14% |
+| 1200 | 3 | 1,6 s | 5 | 80 cp | 6% |
+| 1600 | 4 | 2,2 s | 4 | 24 cp | 1,6% |
+| 2000 | 5 | 2,8 s | 2 | 5 cp | 0% |
+
+Spośród kandydatów trener losuje ruch z prawdopodobieństwem `p(ruch) ~ exp((ocena − ocena_najlepszego) / T)`
+(softmax z temperaturą T): przy dużym T ruch gorszy o pół piona jest prawie tak samo prawdopodobny jak najlepszy,
+przy małym T trener prawie zawsze gra najlepszy ruch. „Przypadkowy ruch” to zupełnie losowy legalny ruch, jak
+przeoczenie początkującego. W debiucie trener gra z książki otwarć (losowo, z wagą = w ilu liniach występuje ruch).
+Elo trenera jest **przybliżone** — dokładne skalowanie wymagałoby tysięcy partii z graczami o znanym rankingu.
+
+### Ocena ruchów i celność
+
+`coach/review.py`. Kiedy gracz myśli, silnik w tle analizuje pozycję (MultiPV 3, do 1,6 s). Jeśli ruch gracza jest
+wśród trzech najlepszych, jego ocenę już znamy; jeśli nie, silnik liczy jeszcze pozycję po ruchu. Ocenę zamieniamy
+na **szansę na wygraną** (wzór z Lichess): `W(cp) = 50 + 50 · (2 / (1 + e^(−0,00368208 · cp)) − 1)` — 0 cp to 50%,
++3 piony ok. 75%, mat 100%. Klasa ruchu zależy od tego, o ile punktów procentowych **spadła** szansa na wygraną
+względem najlepszego ruchu: do 2 — znakomity, do 5 — dobry, do 10 — niedokładność, do 20 — błąd, powyżej —
+przeoczenie. Najlepszy ruch silnika to „najlepszy”, a jeśli drugi ruch był gorszy o ≥ 15 pkt — „świetny” (jedyny
+dobry ruch; nie dotyczy oczywistych odbić). „Genialny” to najlepszy (albo prawie) ruch, który poświęca figurę,
+w pozycji, która nie była już wygrana. Dzięki skali szans ten sam błąd o pół piona jest poważniejszy przy równej
+grze niż przy przewadze +8.
+
+**Celność** ruchu: `103,1668 · e^(−0,04354 · spadek) − 3,1669` (%, jak na Lichess), celność partii to średnia.
+Ruchy trenera oceniamy tak samo, więc podsumowanie pokazuje celność obu stron.
+
+### Wyjaśnienia trenera
+
+`coach/advice.py` — bez modelu językowego, tylko reguły i wyniki silnika:
+
+- **co robi ruch**: bicie, szach, roszada, promocja, atak na figurę cenniejszą od atakującej albo niebronioną
+  (dwie naraz = widełki), zabranie figury spod ataku, osłona wiszącej figury, rozwój lekkiej figury, pion w centrum,
+  wieża na otwartej linii,
+- **czym grozi przeciwnik**: wariant silnika po ruchu gracza — mat („Po tym ruchu przeciwnik daje mata: 1. Hxf7#”)
+  albo strata materiału, liczona do końca wymiany i ucięta na ruchu, który naprawdę zabiera materiał,
+- **co było lepsze**: najlepszy ruch i jego wariant — mat, zysk materiału albo cechy ruchu („rozwija skoczka”),
+- **groźby trenera** po jego ruchu: mat w jednym ruchu (sprawdzany „ruchem pustym”) albo wisząca figura gracza.
+
+Komentarze są zapisane jako dane (klucz tłumaczenia + parametry), a tekst powstaje przy rysowaniu, więc zmiana
+języka w trakcie partii od razu tłumaczy też wcześniejsze komentarze.
+
+### Kalibracja i „Twój poziom”
+
+`rating/coach_profile.py`. Każda partia z trenerem to jeden okres Glicko-2: przeciwnik ma ranking równy Elo
+trenera i RD = 80 (bo to Elo jest przybliżone), wynik `S` = 1 / 0,5 / 0 minus 0,1 za każdą podpowiedź i cofnięcie
+ruchu. Po **10 partiach** „Twój poziom” = ranking zaokrąglony do 25 (w granicach 400–2000); potem jest przeliczany
+**co 5 partii**, a nie po każdej — przeciwnik jest stabilny, a postęp widać jak awans na kolejny stopień.
+Przerwanie partii po co najmniej 5 ruchach liczy się jako poddanie (po potwierdzeniu); lekcje otwarć liczą się
+do poziomu dopiero wtedy, gdy po lekcji grasz dalej i partia się skończy.
+
 ## Pomiary: minimaks vs alfa-beta
 
 Ta sama pozycja, ta sama głębokość i ta sama funkcja oceny (bez quiescence i bez tablicy transpozycji),
@@ -415,7 +525,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 94 testy, m.in.:
+`python -m pytest` — 135 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|
@@ -425,8 +535,9 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 | `test_rating.py` | E i ΔR Elo dla przykładowych wartości, K w kalibracji, przykład Glicko-2 z artykułu, wynik S i kara za czas, profil i zapis |
 | `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
 | `test_puzzles.py` | dane Lichess (każdy ruch legalny w naszym generatorze i w python-chess), przebieg zadania, inny mat, „dobry ruch, ale jest lepszy”, notacja polska, strumień myśli |
+| `test_coach.py` | każda linia otwarcia legalna i objaśniona w obu językach, nazwy debiutów i transpozycje, książka otwarć, siła trenera rośnie z Elo (silny gra najlepsze ruchy, słaby losuje), szansa na wygraną i celność, progi klas ruchów, „świetny” i „genialny”, wyjaśnienia (wisząca figura, przegapiony i dopuszczony mat, widełki, groźby trenera), przebieg lekcji i cofanie ruchów, wynik partii i kara za pomoc, kalibracja 10 partii i zmiana poziomu co 5, zapis profilu |
 | `test_i18n.py` | każdy język ma komplet kluczy i te same pola `{…}`, liczba mnoga (polska: 1/2–4/5+), formaty liczb, litery figur |
-| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, zmiana języka w trakcie zadania, wszystkie ekrany w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; demonstracja alfa-bety |
+| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, zmiana języka w trakcie zadania, wszystkie ekrany (także trenera) w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; partia z trenerem (ruch z teorii, przeoczenie → pauza i strzałka lepszego ruchu, cofnięcie, poddanie, podsumowanie i kalibracja), lekcja otwarcia od błędu do końca linii, menu trenera i portret; demonstracja alfa-bety |
 
 Kod jest sprawdzany także narzędziami `ruff` i `mypy` (typy we wszystkich funkcjach, bez `type: ignore`
 w kodzie gry):
@@ -519,6 +630,19 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
     Żeby dodać język, wystarczy skopiować `en.py`, przetłumaczyć wartości i dopisać kod w `i18n/__init__.py`.
 20. **Strzałki gracza** działają jak na chess.com/lichess (prawy przycisk, kolory z Shift/Ctrl/Alt, L dla skoczka)
     i znikają po ruchu, żeby nie myliły się ze strzałkami silnika.
+21. **Trener w tej samej aplikacji** (zakładka „Trener”), a nie osobny program: korzysta z tego samego silnika,
+    profilu, dźwięków, języków i wyglądu. Ma osobny ranking (partie z trenerem), żeby wyniki w zadaniach i w partiach
+    się nie mieszały.
+22. **Siła trenera przez głębokość + losowanie softmax + przeoczenia** zamiast np. sztucznego psucia funkcji oceny:
+    słabszy trener gra „ludzkie” słabsze ruchy (bliskie najlepszym), a nie dziwne ruchy, których nikt by nie zagrał.
+23. **Ocena ruchów na skali szansy na wygraną**, a nie w centypionach — ten sam spadek oceny znaczy co innego
+    w równej i w wygranej pozycji. Do oceny ruchów gracza trener używa osobnej, dokładniejszej analizy niż do własnej
+    gry, więc słaby trener nadal dobrze ocenia ruchy gracza.
+24. **„Twój poziom” zmienia się co 5 partii** (po 10 partiach kalibracji), zgodnie z założeniem: przeciwnik jest
+    stabilny i nie „ucieka” po jednej wygranej. Pomoc trenera (podpowiedzi, cofnięcia) obniża wynik do poziomu,
+    żeby poziom nie rósł dzięki cofaniu błędów.
+25. **Własna, ręcznie przygotowana książka otwarć** (15 linii po 12–16 półruchów) zamiast pobierania gotowej bazy:
+    każdy ruch ma objaśnienie po polsku i po angielsku, a nazwy debiutów są rozpoznawane po pozycji (EPD).
 
 ## Etapy pracy
 
@@ -534,6 +658,8 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 8. **Druga wersja interfejsu** — własny wygląd (zamiast podobnego do chess.com), wygładzona grafika, skalowanie
    do rozdzielczości okna i dopasowanie tekstów, nowe animacje, język angielski (system tłumaczeń gotowy na kolejne
    języki), strzałki i zaznaczenia rysowane prawym przyciskiem myszy.
+9. **Gra z trenerem** — książka otwarć z objaśnieniami, siła gry zależna od Elo, klasy ruchów i celność, wyjaśnienia
+   trenera, kalibracja i „Twój poziom” co 5 partii, portret trenera z minami, ekrany „Trener” i partii, testy.
 
 ## Źródła i licencje
 

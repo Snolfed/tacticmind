@@ -273,7 +273,7 @@ def test_layouts_at_many_resolutions(app) -> None:  # type: ignore[no-untyped-de
     for size in ((430, 640), (800, 600), (1280, 720), (1920, 1080), (2560, 1440)):
         app.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
         app.relayout()
-        for name in ("home", "play", "stats", "howto"):
+        for name in ("home", "play", "stats", "howto", "coach", "coach_game"):
             app.go(name)
             run(app, 0.15)
         play = app.screens["play"]
@@ -308,3 +308,122 @@ def test_right_click_arrows_and_marks(app) -> None:  # type: ignore[no-untyped-d
     assert (chess.E2, chess.E4) not in view.user_arrows
     view.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=e2, button=1))  # lewy klik czyści rysunki
     assert not view.user_arrows and not view.marks
+
+
+# ---------------------------------------------------------------------------
+# Gra z trenerem
+# ---------------------------------------------------------------------------
+def _wait_phase(app, screen, phases, limit: float = 30.0) -> str:  # type: ignore[no-untyped-def]
+    end = time.monotonic() + limit
+    while time.monotonic() < end and screen.phase not in phases:
+        app.frame(1 / 60)
+        time.sleep(0.003)
+    return str(screen.phase)
+
+
+@pytest.fixture
+def fast_coach(monkeypatch):  # type: ignore[no-untyped-def]
+    """Krótsze pauzy trenera (w grze są po to, żeby było widać ruchy i komentarze)."""
+    from tacticmind.ui.screens import coach_game
+
+    monkeypatch.setattr(coach_game, "MIN_THINK", 0.05)
+    monkeypatch.setattr(coach_game, "TRAINER_PAUSE", 0.05)
+    monkeypatch.setattr(coach_game, "LESSON_REPLY", 0.05)
+    monkeypatch.setattr(coach_game, "PRE_TIME", 600)
+    monkeypatch.setattr(coach_game, "POST_TIME", 500)
+    return coach_game
+
+
+def test_coach_game_blunder_takeback_and_summary(app, fast_coach) -> None:  # type: ignore[no-untyped-def]
+    """Ruch z teorii, przeoczenie (pauza i strzałka lepszego ruchu), cofnięcie, poddanie i podsumowanie."""
+    import chess
+
+    app.start_coach_game(chess.WHITE, 1200, False, None)
+    screen = app.screens["coach_game"]
+    assert _wait_phase(app, screen, ("player",)) == "player"
+    screen.on_player_move(chess.Move.from_uci("d2d4"))
+    assert _wait_phase(app, screen, ("player",)) == "player"
+    game = screen.game
+    assert game.records[0].classification == "book" and not game.records[1].by_player
+    # Hetman na pole atakowane przez lekką figurę albo piona = przeoczenie.
+    screen.on_player_move(chess.Move.from_uci("d1d3"))
+    if _wait_phase(app, screen, ("player", "paused")) == "paused":
+        screen.continue_after_pause()
+        _wait_phase(app, screen, ("player",))
+    board = game.board
+    blunder = None
+    for move in board.legal_moves:
+        if board.piece_type_at(move.from_square) == chess.QUEEN and not board.is_capture(move):
+            after = board.copy()
+            after.push(move)
+            if any(after.piece_type_at(sq) in (chess.PAWN, chess.KNIGHT, chess.BISHOP) for sq in after.attackers(after.turn, move.to_square)):
+                blunder = move
+                break
+    assert blunder is not None
+    before = len(game.records)
+    screen.on_player_move(blunder)
+    assert _wait_phase(app, screen, ("paused",)) == "paused"
+    record = game.records[-1]
+    assert record.classification in ("mistake", "blunder") and record.best_uci
+    assert screen.arrow is not None and screen.board_view.arrows  # strzałka lepszego ruchu
+    run(app, 0.3)
+    screen.take_back()
+    assert _wait_phase(app, screen, ("player",)) == "player"
+    assert len(game.records) == before and game.takebacks == 1
+    screen.ask_resign()
+    assert screen.confirm is not None
+    screen._confirm_yes()
+    run(app, 1.2)
+    assert game.result == "loss" and screen.summary_visible()
+    assert len(app.profile.coach.games) == 1 and app.profile.coach.games[0].helps == 1
+    assert app.profile.coach.games[0].score == 0
+
+
+def test_coach_lesson_wrong_move_then_full_line(app, fast_coach) -> None:  # type: ignore[no-untyped-def]
+    import chess
+
+    from tacticmind.coach.openings import line_ucis, opening_by_id
+
+    app.start_coach_game(chess.WHITE, 800, False, opening_by_id("italian"))
+    screen = app.screens["coach_game"]
+    _wait_phase(app, screen, ("player",))
+    screen.on_player_move(chess.Move.from_uci("a2a3"))  # spoza linii
+    assert screen.phase == "lesson_wrong"
+    assert _wait_phase(app, screen, ("player",)) == "player"
+    game = screen.game
+    assert game.lesson_mistakes == 1 and not game.board.move_stack
+    line = line_ucis("italian")
+    while _wait_phase(app, screen, ("player", "lesson_done")) == "player":
+        screen.on_player_move(chess.Move.from_uci(line[len(game.board.move_stack)]))
+    assert game.lesson_complete()
+    assert app.profile.coach.stars("italian") == 1  # ukończona, ale z błędem
+    screen.continue_after_lesson()
+    assert game.playing and not game.lesson_active
+    # Po lekcji (12 półruchów) partia toczy się dalej: białe znów na ruchu.
+    assert _wait_phase(app, screen, ("player",)) == "player" and game.player_to_move
+
+
+def test_coach_menu_and_avatar(app) -> None:  # type: ignore[no-untyped-def]
+    import pygame
+
+    from tacticmind.ui.coach_avatar import EXPRESSIONS, coach_portrait
+
+    for expression in EXPRESSIONS:
+        portrait = coach_portrait(96, expression)
+        assert portrait.get_size() == (96, 96)
+        assert portrait.get_at((1, 1)).a == 0 and portrait.get_at((48, 48)).a == 255  # okrągły
+    app.go("coach")
+    run(app, 0.3)
+    menu = app.screens["coach"]
+    slider = menu.slider
+    x = slider.rect.x + slider.rect.width  # koniec suwaka = 2000
+    menu.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x, slider.rect.centery), button=1))
+    menu.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(x, slider.rect.centery), button=1))
+    assert app.profile.coach.elo == 2000
+    assert not menu.level_button.enabled  # „Twój poziom” zablokowany do końca kalibracji
+    opening, row = menu.rows[0]
+    menu.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=row.center, button=1))
+    run(app, 0.2)
+    assert app.current_name == "coach_game"
+    game = app.screens["coach_game"].game
+    assert game.lesson is opening and game.elo == 2000

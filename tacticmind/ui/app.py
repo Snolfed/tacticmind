@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import random
 
+import chess
 import pygame
 
 from .. import i18n
+from ..coach.openings import Opening
 from ..engine.process import EngineClient, EngineEvent
 from ..puzzles.loader import load_puzzles, puzzle_source
 from ..rating.profile import PlayerProfile, load_profile, save_profile
@@ -16,6 +18,8 @@ from .anim import ease_out_cubic
 from .icon import app_icon
 from .scale import compute_scale, set_scale
 from .screens.base import Screen
+from .screens.coach_game import CoachGameScreen
+from .screens.coach_menu import CoachMenuScreen
 from .screens.home import HomeScreen
 from .screens.howto import HowToScreen
 from .screens.play import PlayScreen
@@ -51,6 +55,8 @@ class App:
         self.screens: dict[str, Screen] = {
             "home": HomeScreen(self),
             "play": PlayScreen(self),
+            "coach": CoachMenuScreen(self),
+            "coach_game": CoachGameScreen(self),
             "stats": StatsScreen(self),
             "howto": HowToScreen(self),
         }
@@ -75,6 +81,13 @@ class App:
         self.current_name = name
         self.relayout()
         self.current.enter()
+
+    def start_coach_game(self, color: chess.Color, elo: int, adaptive: bool, lesson: Opening | None) -> None:
+        """Nowa partia z trenerem albo lekcja otwarcia (z ekranu „Trener”)."""
+        screen = self.screens["coach_game"]
+        assert isinstance(screen, CoachGameScreen)
+        screen.start(color, elo, adaptive, lesson)
+        self.go("coach_game")
 
     def set_language(self, code: str) -> None:
         """Zmiana języka interfejsu (zapamiętywana w profilu)."""

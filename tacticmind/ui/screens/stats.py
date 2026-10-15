@@ -42,7 +42,7 @@ class StatsScreen(Screen):
         self.confirming = False
 
     def _reset(self) -> None:
-        self.app.profile = PlayerProfile(sound=self.app.profile.sound, language=self.app.profile.language)
+        self.app.profile = PlayerProfile(sound=self.app.profile.sound, volume=self.app.profile.volume, language=self.app.profile.language)
         self.app.topbar.shown_rating = self.app.profile.rating
         self.app.save()
         self.confirming = False
@@ -80,6 +80,7 @@ class StatsScreen(Screen):
             (t("stats.accuracy"), f"{round(100 * solved / len(history))}%" if history else "—", theme.BLUE),
             (t("stats.best_streak"), str(profile.best_streak), theme.ORANGE),
             (t("stats.avg_time"), f"{fmt_decimal(sum(times) / len(times), 0)} s" if times else "—", theme.AMBER),
+            (t("stats.coach_games"), "{}–{}–{}".format(*profile.coach.results()), theme.ROSE),
         ]
         y = r.y + px(54)
         cols = 3 if narrow else len(cards)

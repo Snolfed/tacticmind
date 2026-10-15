@@ -32,7 +32,7 @@ POSITIONS = [
 ]
 #: Powyżej tylu szacowanych węzłów czysty minimaks w Pythonie trwałby zbyt długo.
 MINIMAX_LIMIT = 350_000
-SECTIONS = ["s1", "s2", "code", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"]
+SECTIONS = ["s1", "s2", "code", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"]
 
 
 def _walk(node: DemoNode) -> Iterator[DemoNode]:

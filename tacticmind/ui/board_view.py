@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import chess
 import pygame
 
-from . import fonts, gfx, theme
+from . import badges, fonts, gfx, theme
 from .anim import ease_in_out_cubic, ease_out_back, ease_out_cubic
 from .effects import Effects
 from .pieces import piece_surface
@@ -208,6 +208,18 @@ class BoardView:
             # Genialny ruch: druga, większa fala i iskry w kolorze „!!”.
             self.effects.ring(center, self.square_size * 0.55, theme.BRILLIANT, 0.9)
             self.effects.burst(center, [theme.BRILLIANT, (255, 255, 255), theme.ACCENT], count=22)
+
+    def show_badge(self, square: chess.Square, cls: str, effect: bool = True) -> None:
+        """Znaczek klasy ruchu (gra z trenerem): !!, !, ★, ✓, książka, ?!, ?, ??."""
+        self.feedback = (square, f"cls:{cls}", self.clock if effect else self.clock - 1.0)
+        if effect:
+            rect = self.square_rect(square)
+            center = (rect.right - self.square_size * 0.1, rect.top + self.square_size * 0.1)
+            color = badges.COLORS.get(cls, theme.MUTED)
+            self.effects.ring(center, self.square_size * 0.3, (color[0], color[1], color[2]))
+            if cls == "brilliant":
+                self.effects.ring(center, self.square_size * 0.55, theme.BRILLIANT, 0.9)
+                self.effects.burst(center, [theme.BRILLIANT, (255, 255, 255), theme.ACCENT], count=22)
 
     def shake(self) -> None:
         """Krótkie potrząśnięcie szachownicą po błędzie."""
@@ -552,6 +564,9 @@ class BoardView:
         if radius <= 1:
             return
         center = (rect.right - s * 0.1, rect.top + s * 0.1)
+        if kind.startswith("cls:"):
+            badges.draw_badge(surface, center, max(px(9), s * 0.19), kind[4:], pop)
+            return
         gfx.circle(surface, (*theme.SHADOW, 120), (center[0], center[1] + px(2)), radius + px(2))
         if kind == "brilliant":
             # „!!” — lekko pulsuje, żeby wyróżniał się na tle zwykłego ✓.

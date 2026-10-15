@@ -16,6 +16,7 @@ from typing import Literal
 from ..puzzles.loader import Puzzle, as_int
 from ..puzzles.session import PuzzleOutcome
 from . import elo, glicko2
+from .coach_profile import CoachProfile
 from .player_model import PlayerModel
 
 RatingSystem = Literal["glicko", "elo"]
@@ -85,6 +86,8 @@ class PlayerProfile:
     #: Głośność dźwięków 0..1 (suwak w górnym pasku).
     volume: float = 0.7
     language: str = "pl"
+    #: Partie z trenerem i nauka otwarć (osobny ranking i „Twój poziom”).
+    coach: CoachProfile = field(default_factory=CoachProfile)
 
     # ------------------------------------------------------------ ranking
     @property
@@ -164,6 +167,7 @@ class PlayerProfile:
             "sound": self.sound,
             "volume": self.volume,
             "language": self.language,
+            "coach": self.coach.to_json(),
         }
 
     @classmethod
@@ -190,6 +194,7 @@ class PlayerProfile:
             sound=bool(data.get("sound", True)),
             volume=min(1.0, max(0.0, as_float(data.get("volume"), 0.7))),
             language=str(data.get("language", "pl")),
+            coach=CoachProfile.from_json(data.get("coach")),
         )
 
 

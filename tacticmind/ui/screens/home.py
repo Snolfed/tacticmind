@@ -1,4 +1,4 @@
-"""Ekran startowy: nazwa gry, krótki opis i przyciski „Graj”, „Statystyki”, „Jak działa AI?”."""
+"""Ekran startowy: nazwa gry, krótki opis i przyciski „Zadania”, „Graj z trenerem”, „Statystyki”, „Jak działa AI?”."""
 
 from __future__ import annotations
 
@@ -29,7 +29,8 @@ class HomeScreen(Screen):
     def __init__(self, app: App) -> None:
         super().__init__(app)
         self.buttons = [
-            Button(partial(t, "home.play"), partial(app.go, "play"), style="primary", size=20),
+            Button(partial(t, "home.play"), partial(app.go, "play"), style="primary", size=19),
+            Button(partial(t, "home.coach"), partial(app.go, "coach"), style="violet", size=19),
             Button(partial(t, "home.stats"), partial(app.go, "stats"), size=16),
             Button(partial(t, "home.howto"), partial(app.go, "howto"), size=16),
         ]
@@ -86,16 +87,22 @@ class HomeScreen(Screen):
         y = title.bottom + px(6)
         y += draw_wrapped(surface, t("home.tagline"), pygame.Rect(r.x, y, r.width, px(64)), fs(20) if self.wide else fs(17), theme.TEXT_SOFT, "bold")
         y += px(8)
-        y += draw_wrapped(surface, t("home.desc"), pygame.Rect(r.x, y, r.width, px(70)), fs(15), theme.MUTED)
+        y += draw_wrapped(surface, t("home.desc"), pygame.Rect(r.x, y, r.width, px(96)), fs(15), theme.MUTED)
         y += px(22)
-        heights = (px(58), px(50), px(50))
         if not self.wide:
             # W wąskim układzie przyciski są pod szachownicą.
             y = self.demo.rect.bottom + px(26)
-        for button, h in zip(self.buttons, heights):
-            button.rect = pygame.Rect(r.x, y, min(r.width, px(340)) if self.wide else r.width, h)
+        # Dwie gry jeden pod drugim, a pod nimi statystyki i „Jak działa AI?” obok siebie.
+        bw = min(r.width, px(380)) if self.wide else r.width
+        for button in self.buttons[:2]:
+            button.rect = pygame.Rect(r.x, y, bw, px(54))
             button.draw(surface)
-            y += h + px(12)
+            y += px(54) + px(10)
+        half = (bw - px(10)) // 2
+        for i, button in enumerate(self.buttons[2:]):
+            button.rect = pygame.Rect(r.x + i * (half + px(10)), y, half, px(44))
+            button.draw(surface)
+        y += px(44) + px(12)
         profile = self.app.profile
         rating = f"{round(profile.rating)}" + (f" ± {round(profile.rd)}" if profile.rd is not None else "")
         solved = sum(1 for record in profile.history if record.solved)
