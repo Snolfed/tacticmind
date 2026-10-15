@@ -2,7 +2,7 @@
 
 STRINGS: dict[str, str] = {
     # --- ogólne -----------------------------------------------------------
-    "app.caption": "TaktykAI — szachowe zadania z AI, które myśli na głos",
+    "app.caption": "TacticMind — szachowe zadania z AI, które myśli na głos",
     "lang.name": "Polski",
     "common.cancel": "Anuluj",
     "fmt.decimal": ",",
@@ -176,7 +176,7 @@ STRINGS: dict[str, str] = {
     # --- Jak działa AI? -----------------------------------------------------
     "howto.title": "Jak działa AI?",
     "howto.intro": (
-        "TaktykAI ma dwa elementy sztucznej inteligencji: własny silnik szachowy (przeszukiwanie drzewa gry "
+        "TacticMind ma dwa elementy sztucznej inteligencji: własny silnik szachowy (przeszukiwanie drzewa gry "
         "algorytmem alfa-beta) oraz adaptacyjny dobór zadań (ranking Elo/Glicko-2 i model gracza). Silnik jest "
         "napisany od zera w Pythonie — nie korzysta ze Stockfisha ani innego gotowego silnika."
     ),

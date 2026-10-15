@@ -2,7 +2,7 @@
 
 import time
 
-from taktykai.engine.process import CompareEvent, DoneEvent, EngineClient, EngineEvent, InfoEvent
+from tacticmind.engine.process import CompareEvent, DoneEvent, EngineClient, EngineEvent, InfoEvent
 
 
 def wait_for(client: EngineClient, kind: type, req_id: int, timeout: float = 30.0) -> list[EngineEvent]:

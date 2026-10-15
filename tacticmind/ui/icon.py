@@ -1,7 +1,7 @@
 """Ikona aplikacji: biały pion na zaokrąglonym kwadracie z gradientem turkus → fiolet.
 
 Ikona jest rysowana w kodzie (bez plików graficznych). Polecenie
-``python -m taktykai.ui.icon`` zapisuje ją też jako ``taktykai/assets/icon.png``
+``python -m tacticmind.ui.icon`` zapisuje ją też jako ``tacticmind/assets/icon.png``
 (np. do skrótu na pulpicie).
 """
 

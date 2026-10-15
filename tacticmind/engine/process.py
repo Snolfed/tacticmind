@@ -172,7 +172,7 @@ class EngineClient:
         self._responses: Queue[EngineEvent] = ctx.Queue()
         self._stop = ctx.Event()
         self._process = ctx.Process(
-            target=_engine_main, args=(self._requests, self._responses, self._stop), daemon=True, name="TaktykAI-silnik"
+            target=_engine_main, args=(self._requests, self._responses, self._stop), daemon=True, name="TacticMind-silnik"
         )
         self._process.start()
         self._next_id = 0

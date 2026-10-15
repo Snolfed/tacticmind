@@ -2,7 +2,7 @@
 
 STRINGS: dict[str, str] = {
     # --- general ----------------------------------------------------------
-    "app.caption": "TaktykAI — chess puzzles with an AI that thinks out loud",
+    "app.caption": "TacticMind — chess puzzles with an AI that thinks out loud",
     "lang.name": "English",
     "common.cancel": "Cancel",
     "fmt.decimal": ".",
@@ -174,7 +174,7 @@ STRINGS: dict[str, str] = {
     # --- How the AI works -------------------------------------------------
     "howto.title": "How the AI works",
     "howto.intro": (
-        "TaktykAI has two artificial-intelligence parts: its own chess engine (a game-tree search with the "
+        "TacticMind has two artificial-intelligence parts: its own chess engine (a game-tree search with the "
         "alpha-beta algorithm) and adaptive puzzle selection (an Elo/Glicko-2 rating plus a player model). The engine "
         "is written from scratch in Python — it does not use Stockfish or any other ready-made engine."
     ),

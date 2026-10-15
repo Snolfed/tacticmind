@@ -1,4 +1,4 @@
-"""Paleta kolorów TaktykAI — własny, ciemny motyw „nocnego granatu” z akcentami turkusu (gracz)
+"""Paleta kolorów TacticMind — własny, ciemny motyw „nocnego granatu” z akcentami turkusu (gracz)
 i fioletu (AI). Szachownica w chłodnych, stalowo-niebieskich tonach."""
 
 from __future__ import annotations

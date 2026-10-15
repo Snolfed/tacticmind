@@ -1,7 +1,7 @@
 """Profil gracza: ranking (Elo i Glicko-2), serie, historia, model gracza i zapis na dysk.
 
 Postępy zapisujemy w pliku JSON (odpowiednik localStorage w przeglądarce):
-``~/.taktykai/profile.json`` albo w katalogu z zmiennej środowiskowej ``TAKTYKAI_HOME``.
+``~/.tacticmind/profile.json`` albo w katalogu z zmiennej środowiskowej ``TACTICMIND_HOME``.
 """
 
 from __future__ import annotations
@@ -200,7 +200,16 @@ def as_float(value: object, default: float) -> float:
 
 
 def data_dir() -> Path:
-    return Path(os.environ.get("TAKTYKAI_HOME", Path.home() / ".taktykai"))
+    if "TACTICMIND_HOME" in os.environ:
+        return Path(os.environ["TACTICMIND_HOME"])
+    path = Path.home() / ".tacticmind"
+    old = Path.home() / ".taktykai"  # katalog sprzed zmiany nazwy gry — przenosimy postępy
+    if not path.exists() and old.is_dir():
+        try:
+            old.rename(path)
+        except OSError:
+            return old
+    return path
 
 
 def profile_path() -> Path:

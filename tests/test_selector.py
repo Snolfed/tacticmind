@@ -2,9 +2,9 @@
 
 import random
 
-from taktykai.puzzles.loader import Puzzle
-from taktykai.rating.profile import PlayerProfile, PuzzleRecord
-from taktykai.rating.selector import FLOW_OFFSET, FLOW_SPREAD, select_next
+from tacticmind.puzzles.loader import Puzzle
+from tacticmind.rating.profile import PlayerProfile, PuzzleRecord
+from tacticmind.rating.selector import FLOW_OFFSET, FLOW_SPREAD, select_next
 
 THEMES = ["fork", "pin", "skewer", "mateIn2", "deflection", "attraction", "sacrifice", "discoveredAttack"]
 

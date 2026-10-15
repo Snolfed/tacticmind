@@ -1,6 +1,6 @@
-# TaktykAI — szachowe zadania z AI, które myśli na głos
+# TacticMind — szachowe zadania z AI, które myśli na głos
 
-TaktykAI to trener taktyki szachowej w stylu „Puzzles” z chess.com. Gracz rozwiązuje prawdziwe zadania z bazy
+TacticMind to trener taktyki szachowej w stylu „Puzzles” z chess.com. Gracz rozwiązuje prawdziwe zadania z bazy
 Lichess, a obok szachownicy panel **„Mózg AI”** pokazuje na żywo, co liczy **własny silnik szachowy** napisany
 od zera w tym projekcie: głębokość, liczbę węzłów, cięcia alfa-beta, trzy najlepsze ruchy z wariantami,
 mini-drzewo przeszukiwania i „strumień myśli” po polsku. Drugi element AI to **adaptacyjny ranking**
@@ -34,7 +34,7 @@ Wymagania: **Python 3.11+** (projekt sprawdzony na Pythonie 3.14). Bez backendu 
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt    # pygame-ce, python-chess, pytest
-python main.py                     # albo: python -m taktykai
+python main.py                     # albo: python -m tacticmind
 ```
 
 Testy:
@@ -43,8 +43,8 @@ Testy:
 python -m pytest
 ```
 
-Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/profile.json`
-(inny katalog można wskazać zmienną `TAKTYKAI_HOME`).
+Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.tacticmind/profile.json`
+(inny katalog można wskazać zmienną `TACTICMIND_HOME`).
 
 ## Jak grać
 
@@ -88,7 +88,7 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
   W szerokim oknie szachownica z panelem obok i pionowym paskiem oceny; w wąskim (jak telefon) dwuwierszowy górny
   pasek, poziomy pasek oceny nad szachownicą, panel pod nią, a cała strona przewija się kółkiem myszy.
 - **Ikona**: okno ma własną ikonę (biały pion na turkusowo-fioletowym kafelku), rysowaną w kodzie;
-  `python -m taktykai.ui.icon` zapisuje ją jako `taktykai/assets/icon.png` (np. do skrótu na pulpicie).
+  `python -m tacticmind.ui.icon` zapisuje ją jako `tacticmind/assets/icon.png` (np. do skrótu na pulpicie).
 - **Dźwięki (w stylu chess.com)**: drewniane „puknięcie” przy ruchu, podwójne „klaśnięcie” przy biciu, dzwoneczek
   przy szachu, dwa puknięcia przy roszadzie, rosnący ton przy promocji, dzwonkowe arpeggio po rozwiązaniu zadania
   (jaśniejsze przy genialnym ruchu) i miękkie „bonk” po błędzie. Wszystkie są syntezowane w kodzie
@@ -108,7 +108,7 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
 
 ```
 main.py                     # start gry
-taktykai/
+tacticmind/
   engine/                   # WŁASNY SILNIK (czysty Python, bez pygame)
     constants.py            #   kody figur, kodowanie ruchów, tablice pól 0x88
     zobrist.py              #   klucze haszowania Zobrista
@@ -434,7 +434,7 @@ w kodzie gry):
 ```bash
 pip install -r requirements-dev.txt
 ruff check .
-mypy taktykai scripts main.py --disallow-untyped-defs
+mypy tacticmind scripts main.py --disallow-untyped-defs
 ```
 
 ## Zadania z bazy Lichess
@@ -444,8 +444,8 @@ Baza: <https://database.lichess.org/lichess_db_puzzle.csv.zst> (licencja **CC0**
 
 ```bash
 # pobierz bazę (ok. 300 MB), potem:
-python scripts/build_puzzles.py lichess_db_puzzle.csv.zst                 # 3000 zadań → taktykai/data/puzzles.json
-python scripts/build_puzzles.py lichess_db_puzzle.csv.zst --count 50 --out taktykai/data/starter_puzzles.json
+python scripts/build_puzzles.py lichess_db_puzzle.csv.zst                 # 3000 zadań → tacticmind/data/puzzles.json
+python scripts/build_puzzles.py lichess_db_puzzle.csv.zst --count 50 --out tacticmind/data/starter_puzzles.json
 ```
 
 Skrypt bierze zadania z `Popularity > 80` i `NbPlays > 500` o rankingu 600–2800, dzieli je na koszyki co 100 punktów,
@@ -513,7 +513,7 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
     stalowo-niebieska szachownica. Jakość: wszystkie kształty (zaokrąglone karty, koła, strzałki, ikony) rysujemy
     w potrójnej rozdzielczości i zmniejszamy filtrem (`ui/gfx.py`), figury w podwójnej. Gotowe kształty trafiają
     do pamięci podręcznej w formacie ekranu — interfejs mieści się w 60 kl./s nawet przy 2560×1440.
-19. **Tłumaczenia jako słowniki** (`taktykai/i18n/`): każdy język to jeden plik z kluczami; brakujący klucz spada
+19. **Tłumaczenia jako słowniki** (`tacticmind/i18n/`): każdy język to jeden plik z kluczami; brakujący klucz spada
     na polski. Komunikaty na ekranie gry są przechowywane jako funkcje zwracające tekst, a strumień myśli jest
     odtwarzany z zapisanych wyników silnika — dzięki temu zmiana języka działa natychmiast, także w trakcie zadania.
     Żeby dodać język, wystarczy skopiować `en.py`, przetłumaczyć wartości i dopisać kod w `i18n/__init__.py`.
@@ -522,7 +522,7 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 
 ## Etapy pracy
 
-1. **Szkielet, szachownica, zadania** — pakiet `taktykai`, okno pygame, własna szachownica, zestaw startowy
+1. **Szkielet, szachownica, zadania** — pakiet `tacticmind`, okno pygame, własna szachownica, zestaw startowy
    i przebieg zadania (`puzzles/session.py`).
 2. **Silnik: plansza i generator** — 0x88, FEN, make/unmake, Zobrist, perft (wszystkie wartości referencyjne zgodne).
 3. **Wyszukiwanie** — ocena, negamax + alfa-beta, ID, quiescence, TT, MultiPV, proces silnika, testy matów.
@@ -543,5 +543,5 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 - Glicko-2: M. E. Glickman, *Example of the Glicko-2 system* (glicko.net).
 - Tablice pozycyjne oparte na „Simplified Evaluation Function” (T. Michniewski, Chess Programming Wiki),
   rozszerzone o wartości dla końcówki.
-- Fonty Noto (Google) — licencja w `taktykai/assets/fonts/`.
+- Fonty Noto (Google) — licencja w `tacticmind/assets/fonts/`.
 - Biblioteki: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, tylko warstwa interfejsu).

@@ -6,9 +6,9 @@ jakikolwiek błąd (roszady, en passant, promocje, związania), liczby się nie 
 
 import pytest
 
-from taktykai.engine.board import Board
-from taktykai.engine.constants import START_FEN
-from taktykai.engine.movegen import perft
+from tacticmind.engine.board import Board
+from tacticmind.engine.constants import START_FEN
+from tacticmind.engine.movegen import perft
 
 KIWIPETE = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
 POSITION_3 = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"
@@ -45,7 +45,7 @@ def test_perft_position_5(depth: int, expected: int) -> None:
 @pytest.mark.parametrize("fen", [START_FEN, KIWIPETE, POSITION_3, POSITION_4, POSITION_5])
 def test_fen_roundtrip_and_incremental_state(fen: str) -> None:
     """FEN wraca bez zmian, a hasz i sumy oceny liczone przyrostowo zgadzają się z liczonymi od zera."""
-    from taktykai.engine.movegen import legal_moves
+    from tacticmind.engine.movegen import legal_moves
 
     board = Board(fen)
     assert board.fen() == fen

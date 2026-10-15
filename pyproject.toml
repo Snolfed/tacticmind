@@ -1,7 +1,7 @@
 [project]
-name = "taktykai"
+name = "tacticmind"
 version = "1.0.0"
-description = "TaktykAI — trener taktyki szachowej z własnym silnikiem AI, który myśli na głos"
+description = "TacticMind — trener taktyki szachowej z własnym silnikiem AI, który myśli na głos"
 requires-python = ">=3.11"
 dependencies = ["pygame-ce>=2.5", "chess>=1.10"]
 

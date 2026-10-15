@@ -3,7 +3,7 @@
 Użycie::
 
     python scripts/build_puzzles.py lichess_db_puzzle.csv.zst
-    python scripts/build_puzzles.py lichess_db_puzzle.csv --count 3000 --out taktykai/data/puzzles.json
+    python scripts/build_puzzles.py lichess_db_puzzle.csv --count 3000 --out tacticmind/data/puzzles.json
 
 Baza: https://database.lichess.org/lichess_db_puzzle.csv.zst
 Kolumny: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
@@ -152,10 +152,10 @@ def build(path: Path, count: int, seed: int, pool_factor: int = 12) -> list[Puzz
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Buduje zestaw zadań TaktykAI z bazy Lichess.")
+    parser = argparse.ArgumentParser(description="Buduje zestaw zadań TacticMind z bazy Lichess.")
     parser.add_argument("csv", type=Path, help="lichess_db_puzzle.csv albo .csv.zst")
     parser.add_argument("--count", type=int, default=3000, help="liczba zadań (domyślnie 3000)")
-    parser.add_argument("--out", type=Path, default=Path("taktykai/data/puzzles.json"))
+    parser.add_argument("--out", type=Path, default=Path("tacticmind/data/puzzles.json"))
     parser.add_argument("--seed", type=int, default=2024)
     args = parser.parse_args()
     puzzles = build(args.csv, args.count, args.seed)

@@ -6,7 +6,7 @@ odsetek odciętych gałęzi, trafienia w tablicę transpozycji. Zmiana najlepsze
 ruchu między głębokościami jest wyraźnie oznaczana — to pokazuje, że AI
 naprawdę „myśli” i poprawia swoje zdanie, gdy liczy głębiej.
 
-Szablony zdań są w ``taktykai/i18n`` (klucze ``thought.*``, ``comment.*``, ``gain.*``).
+Szablony zdań są w ``tacticmind/i18n`` (klucze ``thought.*``, ``comment.*``, ``gain.*``).
 """
 
 from __future__ import annotations

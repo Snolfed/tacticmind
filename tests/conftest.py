@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from taktykai.i18n import DEFAULT_LANGUAGE, set_language
+from tacticmind.i18n import DEFAULT_LANGUAGE, set_language
 
 
 @pytest.fixture(autouse=True)

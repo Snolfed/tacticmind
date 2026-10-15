@@ -2,13 +2,13 @@
 
 import pytest
 
-from taktykai.engine.board import Board
-from taktykai.engine.compare import compare_algorithms, run_variant
-from taktykai.engine.constants import START_FEN
-from taktykai.engine.evaluation import evaluate_white, explain
-from taktykai.engine.movegen import parse_uci_move
-from taktykai.engine.search import Searcher, SearchLimits, find_best_move
-from taktykai.engine.types import EngineScore, format_score, to_white_score
+from tacticmind.engine.board import Board
+from tacticmind.engine.compare import compare_algorithms, run_variant
+from tacticmind.engine.constants import START_FEN
+from tacticmind.engine.evaluation import evaluate_white, explain
+from tacticmind.engine.movegen import parse_uci_move
+from tacticmind.engine.search import Searcher, SearchLimits, find_best_move
+from tacticmind.engine.types import EngineScore, format_score, to_white_score
 
 
 def after_first_move(fen: str, first_move: str) -> Board:

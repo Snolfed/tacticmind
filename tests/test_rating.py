@@ -4,11 +4,11 @@ import math
 
 import pytest
 
-from taktykai.puzzles.loader import Puzzle
-from taktykai.puzzles.session import PuzzleOutcome
-from taktykai.rating import elo, glicko2
-from taktykai.rating.player_model import PlayerModel
-from taktykai.rating.profile import PlayerProfile, load_profile, puzzle_score, save_profile
+from tacticmind.puzzles.loader import Puzzle
+from tacticmind.puzzles.session import PuzzleOutcome
+from tacticmind.rating import elo, glicko2
+from tacticmind.rating.player_model import PlayerModel
+from tacticmind.rating.profile import PlayerProfile, load_profile, puzzle_score, save_profile
 
 
 def test_expected_score_examples() -> None:

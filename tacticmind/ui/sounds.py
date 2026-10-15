@@ -183,7 +183,7 @@ class Sounds:
         except (pygame.error, NotImplementedError):
             return
         if background:
-            threading.Thread(target=self._build, args=(rate, channels), daemon=True, name="TaktykAI-dźwięki").start()
+            threading.Thread(target=self._build, args=(rate, channels), daemon=True, name="TacticMind-dźwięki").start()
         else:
             self._build(rate, channels)
 

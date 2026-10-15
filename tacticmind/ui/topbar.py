@@ -70,7 +70,7 @@ class TopBar:
     def layout(self, width: int) -> None:
         """Rozmieszcza elementy w jednym wierszu, a gdy okno jest wąskie — w dwóch
         (logo i ranking u góry, nawigacja, język i dźwięk pod spodem)."""
-        logo_w = fonts.text_size("TaktykAI", fs(26), "bold")[0]
+        logo_w = fonts.text_size("TacticMind", fs(26), "bold")[0]
         narrow = width < px(560)
         slider_w = px(56) if narrow else px(90)
         self.fullscreen.visible = not narrow  # w bardzo wąskim oknie pełny ekran zostaje pod F11
@@ -126,9 +126,9 @@ class TopBar:
         pygame.draw.line(surface, theme.BORDER_SOFT, (0, self.rect.height - 1), (self.rect.width, self.rect.height - 1))
         if self.two_rows:
             pygame.draw.line(surface, (*theme.BORDER_SOFT[:3],), (px(14), h), (self.rect.width - px(14), h))
-        # Logo: „Taktyk” + „AI” w gradiencie turkus → fiolet
-        logo = draw_text(surface, "Taktyk", (px(22), h // 2), fs(26), theme.TEXT, "bold", "midleft")
-        ai_surface = gfx.gradient_text(fonts.render("AI", fs(26), (255, 255, 255), "bold"), theme.ACCENT, theme.VIOLET)
+        # Logo: „Tactic” + „Mind” w gradiencie turkus → fiolet
+        logo = draw_text(surface, "Tactic", (px(22), h // 2), fs(26), theme.TEXT, "bold", "midleft")
+        ai_surface = gfx.gradient_text(fonts.render("Mind", fs(26), (255, 255, 255), "bold"), theme.ACCENT, theme.VIOLET)
         ai_rect = ai_surface.get_rect(midleft=(logo.right, h // 2))
         surface.blit(ai_surface, ai_rect)
         self.logo_rect = logo.union(ai_rect)

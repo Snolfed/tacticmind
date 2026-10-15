@@ -4,8 +4,8 @@ import re
 
 import pytest
 
-from taktykai.brain.notation import localize_san
-from taktykai.i18n import LANGUAGES, en, fmt_compact, fmt_decimal, pl, plural_form, set_language, t, tn
+from tacticmind.brain.notation import localize_san
+from tacticmind.i18n import LANGUAGES, en, fmt_compact, fmt_decimal, pl, plural_form, set_language, t, tn
 
 
 def _base_keys(strings: dict[str, str]) -> set[str]:

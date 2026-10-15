@@ -6,7 +6,7 @@ z polami ``{nazwa}``). Żeby dodać język, wystarczy skopiować ``en.py`` jako 
 
 Użycie::
 
-    from taktykai.i18n import t, tn
+    from tacticmind.i18n import t, tn
     t("play.best_move")                      # „Najlepszy ruch!” / “Best move!”
     t("thought.same", d=4, move="Hxf7+", score="+3.2")
     tn("reason.easier", 3)                   # liczba mnoga zależna od języka

@@ -18,10 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from taktykai.engine.board import Board  # noqa: E402
-from taktykai.engine.compare import run_variant  # noqa: E402
-from taktykai.engine.movegen import legal_moves  # noqa: E402
-from taktykai.engine.types import format_score  # noqa: E402
+from tacticmind.engine.board import Board  # noqa: E402
+from tacticmind.engine.compare import run_variant  # noqa: E402
+from tacticmind.engine.movegen import legal_moves  # noqa: E402
+from tacticmind.engine.types import format_score  # noqa: E402
 
 POSITIONS = [
     ("Debiut włoski (gra środkowa)", "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3"),

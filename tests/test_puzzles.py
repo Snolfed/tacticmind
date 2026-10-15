@@ -3,17 +3,17 @@
 import chess
 import pytest
 
-from taktykai.brain.notation import format_line, to_polish
-from taktykai.brain.thoughts import ThoughtStream, describe_refutation, explain_puzzle
-from taktykai.engine.board import Board
-from taktykai.engine.movegen import make_legal_move, parse_uci_move
-from taktykai.engine.search import Searcher, SearchLimits
-from taktykai.engine.types import EngineScore
-from taktykai.i18n import has, set_language
-from taktykai.puzzles.loader import FULL_SET, STARTER_SET, Puzzle, load_puzzles
-from taktykai.puzzles.session import PuzzleSession, Status, Verdict
-from taktykai.puzzles.themes import theme_name
-from taktykai.puzzles.validator import Alternative, judge_alternative
+from tacticmind.brain.notation import format_line, to_polish
+from tacticmind.brain.thoughts import ThoughtStream, describe_refutation, explain_puzzle
+from tacticmind.engine.board import Board
+from tacticmind.engine.movegen import make_legal_move, parse_uci_move
+from tacticmind.engine.search import Searcher, SearchLimits
+from tacticmind.engine.types import EngineScore
+from tacticmind.i18n import has, set_language
+from tacticmind.puzzles.loader import FULL_SET, STARTER_SET, Puzzle, load_puzzles
+from tacticmind.puzzles.session import PuzzleSession, Status, Verdict
+from tacticmind.puzzles.themes import theme_name
+from tacticmind.puzzles.validator import Alternative, judge_alternative
 
 
 def test_starter_set_is_real_lichess_data() -> None:
@@ -164,7 +164,7 @@ def test_thought_stream_from_real_search() -> None:
 
 
 def test_thought_stream_marks_change_of_mind() -> None:
-    from taktykai.engine.types import SearchInfo
+    from tacticmind.engine.types import SearchInfo
 
     def info(depth: int, move: str, cp: int) -> SearchInfo:
         score = EngineScore(cp, None, cp)
@@ -188,7 +188,7 @@ def test_explanations() -> None:
 
 def test_sacrifice_detection() -> None:
     """Genialny ruch (!!) = poprawny ruch, który oddaje figurę."""
-    from taktykai.puzzles.validator import is_sacrifice, sacrifice_loss
+    from tacticmind.puzzles.validator import is_sacrifice, sacrifice_loss
 
     # 00LNB: Wxa6+ — wieża za piona (bxa6).
     board = chess.Board(LNB.start_fen)

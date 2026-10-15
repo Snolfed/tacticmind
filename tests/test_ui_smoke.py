@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from taktykai.brain.demo import alphabeta_demo, build_demo_tree, minimax_demo
+from tacticmind.brain.demo import alphabeta_demo, build_demo_tree, minimax_demo
 
 
 def test_alpha_beta_demo_tree() -> None:
@@ -25,9 +25,9 @@ def test_alpha_beta_demo_tree() -> None:
 def app(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
     monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
-    monkeypatch.setenv("TAKTYKAI_HOME", str(tmp_path))
+    monkeypatch.setenv("TACTICMIND_HOME", str(tmp_path))
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-    from taktykai.ui.app import App
+    from tacticmind.ui.app import App
 
     application = App((1280, 800))
     yield application
@@ -91,8 +91,8 @@ def test_play_solve_and_mistake(app) -> None:  # type: ignore[no-untyped-def]
 
 def test_brilliant_move_and_buttons(app) -> None:  # type: ignore[no-untyped-def]
     """Poświęcenie w zadaniu pokazuje „!!”, a „Następne zadanie” pojawia się dopiero po rozwiązaniu."""
-    from taktykai.puzzles.loader import Puzzle
-    from taktykai.puzzles.session import PuzzleSession
+    from tacticmind.puzzles.loader import Puzzle
+    from tacticmind.puzzles.session import PuzzleSession
 
     app.go("play")
     run(app, 1.2)
@@ -123,8 +123,8 @@ def test_move_navigation_during_puzzle(app) -> None:  # type: ignore[no-untyped-
     """◀ ▶ w trakcie zadania: cofanie do wcześniejszych pozycji i powrót do bieżącej."""
     import chess
 
-    from taktykai.puzzles.loader import Puzzle
-    from taktykai.puzzles.session import PuzzleSession
+    from tacticmind.puzzles.loader import Puzzle
+    from tacticmind.puzzles.session import PuzzleSession
 
     app.go("play")
     run(app, 1.2)
@@ -165,7 +165,7 @@ def test_sounds_are_generated_for_stereo_output(app) -> None:  # type: ignore[no
     """Dźwięki działają także, gdy system otworzy dźwięk w stereo (wcześniej wtedy się wyłączały)."""
     import pygame
 
-    from taktykai.ui.sounds import build_sounds
+    from tacticmind.ui.sounds import build_sounds
 
     samples = build_sounds(22050)
     assert set(samples) >= {"move", "capture", "check", "castle", "promote", "success", "brilliant", "error"}
@@ -208,7 +208,7 @@ def test_undo_animation_restores_captured_piece(app) -> None:  # type: ignore[no
     import chess
     import pygame
 
-    from taktykai.ui.board_view import BoardView
+    from tacticmind.ui.board_view import BoardView
 
     view = BoardView()
     before = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
@@ -228,7 +228,7 @@ def test_volume_slider_and_fullscreen(app) -> None:  # type: ignore[no-untyped-d
     """Suwak głośności zmienia i zapamiętuje głośność; F11 włącza i wyłącza pełny ekran."""
     import pygame
 
-    from taktykai.rating.profile import load_profile
+    from tacticmind.rating.profile import load_profile
 
     bar = app.topbar
     slider = bar.volume
@@ -255,8 +255,8 @@ def test_app_icon_and_wide_pieces(app) -> None:  # type: ignore[no-untyped-def]
     """Ikona okna (pion) i poszerzone symbole króla i hetmana."""
     import chess
 
-    from taktykai.ui.icon import app_icon
-    from taktykai.ui.pieces import piece_surface
+    from tacticmind.ui.icon import app_icon
+    from tacticmind.ui.pieces import piece_surface
 
     icon = app_icon(64)
     assert icon.get_size() == (64, 64)
