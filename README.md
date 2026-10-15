@@ -107,6 +107,9 @@ Postępy (ranking, historia, statystyki, partie z trenerem i nauka otwarć) zapi
 - **Głośność**: w górnym pasku jest suwak głośności (przeciągnij, kliknij albo kręć kółkiem myszy nad nim);
   ikona głośnika wycisza/włącza dźwięk. Głośność jest zapamiętywana w profilu.
 - **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy; Esc z niego wychodzi.
+- **Ustawienia (koło zębate ⚙)**: licznik FPS w rogu okna (także F3) i limit klatek na sekundę: 60, 120, 144, 170
+  albo 240. Klatki zaczynają się w równych odstępach (precyzyjny limiter w `ui/pacing.py`), a wszystkie animacje
+  w danej klatce liczą się od jednego, dokładnego zegara — dzięki temu ruch nie „drga”.
 - **Przeciąganie z „martwą strefą”**: figura zaczyna się przeciągać dopiero, gdy mysz odjedzie od miejsca kliknięcia
   o ok. 1/5 pola — drobne drgnięcie przy kliknięciu nie „łapie” figury, tylko ją zaznacza (klik-klik).
 - **Wygląd i animacje**: własny ciemny motyw (granat + turkus dla gracza + fiolet dla AI) i szachownica w stalowych
@@ -536,8 +539,9 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 | `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
 | `test_puzzles.py` | dane Lichess (każdy ruch legalny w naszym generatorze i w python-chess), przebieg zadania, inny mat, „dobry ruch, ale jest lepszy”, notacja polska, strumień myśli |
 | `test_coach.py` | każda linia otwarcia legalna i objaśniona w obu językach, nazwy debiutów i transpozycje, książka otwarć, siła trenera rośnie z Elo (silny gra najlepsze ruchy, słaby losuje), szansa na wygraną i celność, progi klas ruchów, „świetny” i „genialny”, wyjaśnienia (wisząca figura, przegapiony i dopuszczony mat, widełki, groźby trenera), przebieg lekcji i cofanie ruchów, wynik partii i kara za pomoc, kalibracja 10 partii i zmiana poziomu co 5, zapis profilu |
+| `test_pacing.py` | limiter FPS trzyma równe odstępy między klatkami, licznik FPS, zapis ustawień FPS w profilu (błędne wartości → 60) |
 | `test_i18n.py` | każdy język ma komplet kluczy i te same pola `{…}`, liczba mnoga (polska: 1/2–4/5+), formaty liczb, litery figur |
-| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, zmiana języka w trakcie zadania, wszystkie ekrany (także trenera) w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; partia z trenerem (ruch z teorii, przeoczenie → pauza i strzałka lepszego ruchu, cofnięcie, poddanie, podsumowanie i kalibracja), lekcja otwarcia od błędu do końca linii, menu trenera i portret; demonstracja alfa-bety |
+| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, okienko ustawień (limit FPS, F3, Esc), zmiana języka w trakcie zadania, wszystkie ekrany (także trenera) w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; partia z trenerem (ruch z teorii, przeoczenie → pauza i strzałka lepszego ruchu, cofnięcie, poddanie, podsumowanie i kalibracja), lekcja otwarcia od błędu do końca linii, menu trenera i portret; demonstracja alfa-bety |
 
 Kod jest sprawdzany także narzędziami `ruff` i `mypy` (typy we wszystkich funkcjach, bez `type: ignore`
 w kodzie gry):

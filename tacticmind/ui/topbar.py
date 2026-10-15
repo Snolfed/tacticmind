@@ -35,6 +35,7 @@ class TopBar:
         self.sound = Button("", self._toggle_sound, style="ghost", pill=True)
         self.volume = Slider(app.profile.volume, self._volume_changed, self._volume_released)
         self.fullscreen = Button("", app.toggle_fullscreen, style="ghost", pill=True, icon="fullscreen")
+        self.settings = Button("", app.settings.toggle, style="ghost", pill=True, icon="settings")
         options: list[tuple[str, str]] = [(code, code.upper()) for code in LANGUAGES]
         self.language = Segmented(list(options), get_language(), app.set_language, size=12, accent=theme.VIOLET)
         self.logo_rect = pygame.Rect(0, 0, 0, 0)
@@ -77,7 +78,7 @@ class TopBar:
         narrow = width < px(560)
         slider_w = px(56) if narrow else px(90)
         self.fullscreen.visible = not narrow  # w bardzo wąskim oknie pełny ekran zostaje pod F11
-        controls_w = px(84) + px(8) + px(40) + px(6) + slider_w + (px(12) + px(40) if self.fullscreen.visible else 0)
+        controls_w = px(84) + px(8) + px(40) + px(6) + slider_w + (px(12) + px(40) if self.fullscreen.visible else 0) + px(6) + px(40)
         labels = [t(key) for _, key in _NAV]
         widths = [fonts.text_size(label, fs(14), "bold")[0] + px(30) for label in labels]
         nav_w = sum(widths) + 2 * px(6)
@@ -108,6 +109,9 @@ class TopBar:
         self.sound.rect = pygame.Rect(self.language.rect.right + px(8), row_y + (row_h - px(38)) // 2, px(40), px(38))
         self.volume.rect = pygame.Rect(self.sound.rect.right + px(6), row_y + (row_h - px(20)) // 2, slider_w, px(20))
         self.fullscreen.rect = pygame.Rect(self.volume.rect.right + px(12), row_y + (row_h - px(38)) // 2, px(40), px(38))
+        settings_x = (self.fullscreen.rect.right if self.fullscreen.visible else self.volume.rect.right + px(6)) + px(6)
+        self.settings.rect = pygame.Rect(settings_x, row_y + (row_h - px(38)) // 2, px(40), px(38))
+        self.app.settings.layout(self.settings.rect, width)
 
     def handle(self, event: pygame.event.Event) -> bool:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.logo_rect.collidepoint(event.pos):
@@ -115,7 +119,7 @@ class TopBar:
             return True
         if self.volume.handle(event) or self.language.handle(event):
             return True
-        return any(button.handle(event) for button in [*self.nav, self.sound, self.fullscreen])
+        return any(button.handle(event) for button in [*self.nav, self.sound, self.fullscreen, self.settings])
 
     def _source(self) -> str:
         """Na ekranach trenera pasek pokazuje ranking partii z trenerem, a nie zadań."""
@@ -161,6 +165,8 @@ class TopBar:
         self.volume.draw(surface)
         self.fullscreen.icon = "fullscreen_exit" if self.app.fullscreen else "fullscreen"
         self.fullscreen.draw(surface)
+        self.settings.active = self.app.settings.open
+        self.settings.draw(surface)
         self._draw_rating(surface)
 
     def _draw_rating(self, surface: pygame.Surface) -> None:

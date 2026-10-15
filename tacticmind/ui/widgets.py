@@ -192,7 +192,7 @@ class Button:
     enabled: bool = True
     visible: bool = True
     size: int = 15  # bazowy rozmiar czcionki (skalowany przez fs)
-    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit"
+    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit" | "settings"
     pill: bool = False
     active: bool = False  # np. aktywna zakładka nawigacji
     hovered: bool = False
@@ -243,6 +243,9 @@ class Button:
             return
         if self.icon in ("fullscreen", "fullscreen_exit"):
             icon_fullscreen(surface, rect.center, rect.height * 0.62, text_color, self.icon == "fullscreen_exit")
+            return
+        if self.icon == "settings":
+            icon_gear(surface, rect.center, rect.height * 0.56, text_color)
             return
         draw_text(surface, label_text(self.label), rect.center, fs(self.size), text_color, "bold", "center", max_width=rect.width - px(14))
 
@@ -373,6 +376,17 @@ def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: 
             else:
                 gfx.thick_line(surface, color, corner, (corner[0] - sx * arm, corner[1]), w)
                 gfx.thick_line(surface, color, corner, (corner[0], corner[1] - sy * arm), w)
+
+
+def icon_gear(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color) -> None:
+    """Ikona ustawień: koło zębate (pierścień i osiem zębów)."""
+    cx, cy = center
+    w = max(1.5, size * 0.16)
+    for k in range(8):
+        a = k * math.pi / 4
+        dx, dy = math.cos(a), math.sin(a)
+        gfx.thick_line(surface, color, (cx + dx * size * 0.3, cy + dy * size * 0.3), (cx + dx * size * 0.46, cy + dy * size * 0.46), w)
+    gfx.circle(surface, color, center, size * 0.31, max(2, round(size * 0.15)))
 
 
 @dataclass

@@ -35,10 +35,15 @@ def app(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 
 def run(app, seconds: float) -> None:  # type: ignore[no-untyped-def]
-    end = time.monotonic() + seconds
-    while time.monotonic() < end:
-        app.frame(1 / 60)
+    # Czas gry płynie jak w prawdziwej pętli (rzeczywisty odstęp między klatkami), a nie stałe 1/60 s
+    # na klatkę — inaczej na wolniejszej maszynie intro zadania nie zdążyłoby się skończyć.
+    last = time.monotonic()
+    end = last + seconds
+    while last < end:
         time.sleep(0.005)
+        current = time.monotonic()
+        app.frame(min(current - last, 0.1))
+        last = current
 
 
 def test_play_solve_and_mistake(app) -> None:  # type: ignore[no-untyped-def]
@@ -427,3 +432,25 @@ def test_coach_menu_and_avatar(app) -> None:  # type: ignore[no-untyped-def]
     assert app.current_name == "coach_game"
     game = app.screens["coach_game"].game
     assert game.lesson is opening and game.elo == 2000
+
+
+def test_settings_panel_fps(app) -> None:  # type: ignore[no-untyped-def]
+    """Koło zębate otwiera ustawienia: limit FPS zmienia się kliknięciem, F3 włącza licznik, Esc zamyka."""
+    import pygame
+
+    app.go("stats")
+    run(app, 0.3)
+    app.topbar.settings.on_click()
+    run(app, 0.3)
+    assert app.settings.open
+    target = app.settings.fps_limit._segment(2)  # „144”
+    pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=target.center, button=1))
+    run(app, 0.1)
+    assert app.profile.fps_limit == 144
+    assert app.settings.open  # klik w okienku go nie zamyka
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
+    run(app, 0.1)
+    assert app.profile.show_fps and app.fps.fps > 0
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode=""))
+    run(app, 0.1)
+    assert not app.settings.open
