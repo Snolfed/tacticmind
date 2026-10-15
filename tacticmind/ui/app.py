@@ -150,7 +150,9 @@ class App:
             self.dispatch_engine(engine_event)
         self.topbar.update(dt)
         self.current.update(dt)
-        self.screen.blit(gfx.background(self.screen.get_size()), (0, 0))
+        # Pasek górny ma własne, nieprzezroczyste tło — pod nim tła aplikacji nie kopiujemy.
+        top = self.topbar.rect.height
+        self.screen.blit(gfx.background(self.screen.get_size()), (0, top), pygame.Rect(0, top, self.screen.get_width(), self.screen.get_height() - top))
         self.current.draw(self.screen)
         if self._transition is not None:
             # Przenikanie: stary ekran płynnie znika nad nowym.

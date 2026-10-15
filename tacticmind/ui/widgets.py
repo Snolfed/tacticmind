@@ -87,8 +87,17 @@ def card(surface: pygame.Surface, rect: pygame.Rect, radius: int | None = None, 
     if rect.width <= 0 or rect.height <= 0:
         return
     blur, dy = (px(16), px(6)) if elevated else (0, 0)
-    surf, pad = gfx.card_surface(rect.size, radius, color, theme.BORDER_SOFT, max(1, px(1)), blur, 120, dy)
-    surface.blit(surf, (rect.x - pad, rect.y - pad))
+    border_w = max(1, px(1))
+    surf, pad = gfx.card_surface(rect.size, radius, color, theme.BORDER_SOFT, border_w, blur, 120, dy)
+    if len(color) == 4 and color[3] < 255:
+        surface.blit(surf, (rect.x - pad, rect.y - pad))
+        return
+    # Środek nieprzezroczystej karty to jednolity kolor: wypełnienie jest dużo tańsze niż kopiowanie pikseli.
+    radius = max(0, min(radius, min(rect.size) // 2))
+    inner = pygame.Rect(pad + border_w + 1, pad + radius + 1, rect.width - 2 * (border_w + 1), rect.height - 2 * (radius + 1))
+    gfx.blit_frame(surface, surf, (rect.x - pad, rect.y - pad), inner)
+    if inner.width > 0 and inner.height > 0:
+        surface.fill(color[:3], inner.move(rect.x - pad, rect.y - pad))
 
 
 def icon_check(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color = theme.TEXT) -> None:
