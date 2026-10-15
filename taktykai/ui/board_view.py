@@ -23,7 +23,7 @@ from .anim import ease_in_out_cubic, ease_out_back, ease_out_cubic
 from .effects import Effects
 from .pieces import piece_surface
 from .scale import px
-from .widgets import icon_check, icon_cross
+from .widgets import draw_text, icon_check, icon_cross
 
 ANIMATION_TIME = 0.2
 Color = tuple[int, ...]
@@ -77,7 +77,10 @@ class BoardView:
         #: Rysunki gracza (prawy przycisk myszy).
         self.user_arrows: dict[Arrow, Color] = {}
         self.marks: dict[chess.Square, Color] = {}
-        self.feedback: tuple[chess.Square, bool, float] | None = None
+        #: Znaczek na polu docelowym: (pole, rodzaj „ok” / „bad” / „brilliant”, czas pojawienia się).
+        self.feedback: tuple[chess.Square, str, float] | None = None
+        #: Strzałka ostatniego ruchu (żeby było widać, skąd przyszła figura).
+        self.show_move_arrow = True
         self.selected: chess.Square | None = None
         self.selected_at = 0.0
         self.drag_square: chess.Square | None = None
@@ -94,6 +97,7 @@ class BoardView:
         self._shake_at = -10.0
         self._engine_key: tuple[object, ...] = ()
         self._engine_since = 0.0
+        self._move_arrow_since = 0.0
         self.clock = 0.0
         # Pamięć podręczna: warstwa pól ze współrzędnymi (zmienia się tylko przy zmianie rozmiaru/obrotu)
         # i płótno wielokrotnego użytku — nie tworzymy nowych powierzchni w każdej klatce.
@@ -138,6 +142,7 @@ class BoardView:
         self.promotion = None
         if move is not None:
             self.clear_drawings()
+            self._move_arrow_since = self.clock
         if move is not None and animate and not self._skip_next_animation:
             moving = previous.piece_at(move.from_square)
             if moving is not None:
@@ -160,11 +165,18 @@ class BoardView:
             self.anim = None
         self._skip_next_animation = False
 
-    def show_feedback(self, square: chess.Square, ok: bool) -> None:
-        self.feedback = (square, ok, self.clock)
+    def show_feedback(self, square: chess.Square, ok: bool, brilliant: bool = False) -> None:
+        """✓ (dobry ruch), ✗ (błąd) albo !! (genialny ruch — poświęcenie) w rogu pola docelowego."""
+        kind = "brilliant" if ok and brilliant else "ok" if ok else "bad"
+        self.feedback = (square, kind, self.clock)
         rect = self.square_rect(square)
         center = (rect.right - self.square_size * 0.1, rect.top + self.square_size * 0.1)
-        self.effects.ring(center, self.square_size * 0.3, theme.ACCENT if ok else theme.RED)
+        color = {"ok": theme.ACCENT, "bad": theme.RED, "brilliant": theme.BRILLIANT}[kind]
+        self.effects.ring(center, self.square_size * 0.3, color)
+        if kind == "brilliant":
+            # Genialny ruch: druga, większa fala i iskry w kolorze „!!”.
+            self.effects.ring(center, self.square_size * 0.55, theme.BRILLIANT, 0.9)
+            self.effects.burst(center, [theme.BRILLIANT, (255, 255, 255), theme.ACCENT], count=22)
 
     def shake(self) -> None:
         """Krótkie potrząśnięcie szachownicą po błędzie."""
@@ -451,6 +463,17 @@ class BoardView:
                 canvas.blit(img, img.get_rect(center=(round(pos[0]), round(pos[1]))))
 
     def _draw_arrows(self, canvas: pygame.Surface, s: int, clock: float) -> None:
+        # Strzałka ostatniego ruchu: pojawia się po zakończeniu animacji, z ciemnym obrysem,
+        # żeby była widoczna na jasnych i ciemnych polach.
+        if self.show_move_arrow and self.last_move is not None and self.last_move.from_square != self.last_move.to_square:
+            since = self.anim.start + self.anim.duration if self.anim is not None else self._move_arrow_since
+            if self.anim is not None:
+                self._move_arrow_since = since
+            appear = ease_out_cubic((clock - since) / 0.3) if clock >= since else 0.0
+            if appear > 0.01:
+                points = self.arrow_points(self.last_move.from_square, self.last_move.to_square)
+                gfx.draw_arrows(canvas, [(points, theme.MOVE_ARROW_OUTLINE, s * 0.17)], appear)
+                gfx.draw_arrows(canvas, [(points, theme.MOVE_ARROW, s * 0.11)], appear)
         engine_key = tuple((f, to) for f, to, _ in self.arrows)  # zmiana koloru nie restartuje animacji
         if engine_key != self._engine_key:
             self._engine_key = engine_key
@@ -488,7 +511,7 @@ class BoardView:
         """✓ / ✗ w rogu pola docelowego (wyskakuje ze sprężystym efektem)."""
         if self.feedback is None:
             return
-        square, ok, started = self.feedback
+        square, kind, started = self.feedback
         pop = ease_out_back((clock - started) / 0.3, 2.2)
         rect = self.square_rect(square).move(offset, 0)
         radius = max(px(9), s * 0.19) * pop
@@ -496,8 +519,15 @@ class BoardView:
             return
         center = (rect.right - s * 0.1, rect.top + s * 0.1)
         gfx.circle(surface, (*theme.SHADOW, 120), (center[0], center[1] + px(2)), radius + px(2))
-        gfx.circle(surface, theme.ACCENT if ok else theme.RED, center, radius)
-        if ok:
+        if kind == "brilliant":
+            # „!!” — lekko pulsuje, żeby wyróżniał się na tle zwykłego ✓.
+            glow = 0.5 + 0.5 * math.sin((clock - started) * 6)
+            gfx.ring_glow(surface, theme.BRILLIANT, center, radius * (2.4 + 0.3 * glow), int(120 + 60 * glow))
+            gfx.circle(surface, theme.BRILLIANT, center, radius * 1.12)
+            draw_text(surface, "!!", (center[0], center[1] - radius * 0.06), max(9, round(radius * 1.25)), (255, 255, 255), "bold", "center")
+            return
+        gfx.circle(surface, theme.ACCENT if kind == "ok" else theme.RED, center, radius)
+        if kind == "ok":
             icon_check(surface, center, radius * 1.6, (8, 28, 34))
         else:
             icon_cross(surface, center, radius * 1.6, (255, 255, 255))

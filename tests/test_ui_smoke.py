@@ -89,6 +89,36 @@ def test_play_solve_and_mistake(app) -> None:  # type: ignore[no-untyped-def]
     assert app.profile.language == "pl"
 
 
+def test_brilliant_move_and_buttons(app) -> None:  # type: ignore[no-untyped-def]
+    """Poświęcenie w zadaniu pokazuje „!!”, a „Następne zadanie” pojawia się dopiero po rozwiązaniu."""
+    from taktykai.puzzles.loader import Puzzle
+    from taktykai.puzzles.session import PuzzleSession
+
+    app.go("play")
+    run(app, 1.2)
+    play = app.screens["play"]
+    # Podmieniamy zadanie na 00LNB: 1. Wxa6+! bxa6 2. Wa7# (poświęcenie wieży).
+    puzzle = Puzzle("00LNB", "kr6/1pR4p/p4R2/n2r4/P3p3/4B3/6PP/6K1 b - - 0 38", ("d5d3", "f6a6", "b7a6", "c7a7"), 1074, 80, ("mateIn2", "sacrifice"))
+    play.session = PuzzleSession(puzzle)
+    play.board_view.orientation = play.board_view.player_color = puzzle.player_color
+    play._play_intro()
+    run(app, 0.4)
+    assert play.btn_hint.visible and play.btn_solution.visible
+    assert not play.btn_next.visible and not play.btn_retry.visible
+    assert play.board_view.last_move is not None  # ruch przeciwnika widać strzałką i podświetleniem
+    play.on_player_move(play.session.expected_move)
+    assert play.board_view.feedback is not None and play.board_view.feedback[1] == "brilliant"
+    assert play.message[0]() == "Genialny ruch!!"
+    while play.session.status.value in ("player", "opponent"):
+        if play.session.status.value == "player":
+            play.on_player_move(play.session.expected_move)
+        run(app, 0.8)
+    run(app, 0.2)
+    assert play.session.finished
+    assert play.btn_next.visible and play.btn_next.enabled
+    assert not play.btn_hint.visible and not play.btn_solution.visible
+
+
 def test_app_icon_and_wide_pieces(app) -> None:  # type: ignore[no-untyped-def]
     """Ikona okna (pion) i poszerzone symbole króla i hetmana."""
     import chess

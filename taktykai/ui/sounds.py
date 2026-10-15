@@ -52,6 +52,9 @@ class Sounds:
                 "success": pygame.mixer.Sound(
                     buffer=_tone([(523, 523, 0.09), (659, 659, 0.09), (784, 784, 0.09), (1047, 1047, 0.25)], 0.35, decay=6)
                 ),
+                "brilliant": pygame.mixer.Sound(
+                    buffer=_tone([(784, 784, 0.07), (988, 988, 0.07), (1175, 1175, 0.07), (1568, 1568, 0.32)], 0.38, decay=5)
+                ),
                 "error": pygame.mixer.Sound(buffer=_tone([(180, 110, 0.3)], 0.45, decay=5)),
             }
             self.available = True

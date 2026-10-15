@@ -55,6 +55,13 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
 - **Informacja zwrotna**: turkusowy ✓ albo czerwony ✗ na polu docelowym i komunikaty „Najlepszy ruch!” /
   „Niestety, to nie to”. Po błędzie silnik wylicza odpowiedź przeciwnika, np. „Po Wd1? przeciwnik gra Hxh2#. Mat.”,
   a Ty wybierasz „Spróbuj ponownie” albo „Pokaż rozwiązanie”.
+- **Genialny ruch (!!)**: jeśli poprawny ruch jest poświęceniem (oddajesz figurę za co najmniej 2 piony materiału,
+  np. wieżę za piona), zamiast ✓ pojawia się cyjanowe „!!” z poświatą, iskrami i komunikatem „Genialny ruch!!” —
+  jak na chess.com (`puzzles/validator.py: is_sacrifice`).
+- **Strzałka ostatniego ruchu**: każdy wykonany ruch (przeciwnika i Twój) zostawia jasną strzałkę z polem
+  startowym i docelowym, więc od razu widać, skąd przyszła figura (dla skoczka w kształcie litery L).
+- **Przyciski**: w trakcie zadania widać „Podpowiedź” i „Pokaż rozwiązanie” (po błędzie także „Spróbuj ponownie”);
+  „Następne zadanie” pojawia się dopiero po rozwiązaniu albo pokazaniu rozwiązania.
 - **Alternatywne rozwiązania**: ruch inny niż wzorcowy, który daje mata, rozwiązuje zadanie. Ruch, który według
   silnika nadal wyraźnie wygrywa (ocena > +3 i najwyżej 0,5 piona gorzej od najlepszego), daje komunikat
   „Dobry ruch, ale jest lepszy. Spróbuj jeszcze raz” i nie jest liczony jako błąd.
@@ -395,7 +402,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 86 testów, m.in.:
+`python -m pytest` — 89 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|

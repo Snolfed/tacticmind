@@ -184,3 +184,25 @@ def test_explanations() -> None:
     assert any("poświęcenie" in line for line in lines)
     text = describe_refutation(LNB.start_fen, "g1f1", "d3d1", None)
     assert text.startswith("Po Kf1? przeciwnik gra")
+
+
+def test_sacrifice_detection() -> None:
+    """Genialny ruch (!!) = poprawny ruch, który oddaje figurę."""
+    from taktykai.puzzles.validator import is_sacrifice, sacrifice_loss
+
+    # 00LNB: Wxa6+ — wieża za piona (bxa6).
+    board = chess.Board(LNB.start_fen)
+    assert is_sacrifice(board, chess.Move.from_uci("f6a6")) and sacrifice_loss(board, chess.Move.from_uci("f6a6")) == 4
+    # Hd8+ Gxd8 — poświęcenie hetmana.
+    board = chess.Board("r1b2k1r/ppp1bppp/8/1B1Q4/5q2/2P5/PPP2PPP/R3R1K1 w - - 1 1")
+    assert is_sacrifice(board, chess.Move.from_uci("d5d8"))
+    # Mat szewski: hetmana nie da się zbić — to nie poświęcenie.
+    board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4")
+    assert not is_sacrifice(board, chess.Move.from_uci("h5f7"))
+    # Zwykły ruch i równa wymiana.
+    assert not is_sacrifice(chess.Board(), chess.Move.from_uci("g1f3"))
+    board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    assert not is_sacrifice(board, chess.Move.from_uci("e4d5"))
+    # Skoczek za piona bronionego skoczkiem (Sxe5 Sxe5) — to już jest poświęcenie figury.
+    board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4")
+    assert is_sacrifice(board, chess.Move.from_uci("f3e5"))

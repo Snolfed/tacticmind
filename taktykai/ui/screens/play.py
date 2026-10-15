@@ -21,7 +21,7 @@ from ...engine.types import EngineScore, SearchInfo
 from ...i18n import t
 from ...puzzles.session import PuzzleSession, Status, Verdict
 from ...puzzles.themes import skill_themes, theme_name
-from ...puzzles.validator import judge_alternative
+from ...puzzles.validator import is_sacrifice, judge_alternative
 from ...rating.profile import RatingChange
 from ...rating.selector import Selection, select_next
 from .. import fonts, gfx, theme
@@ -231,21 +231,30 @@ class PlayScreen(Screen):
         self.board_view.hint_square = None
         verdict = session.submit(move)
         if verdict in (Verdict.CORRECT, Verdict.SOLVED, Verdict.SOLVED_ALT_MATE):
+            # Poprawny ruch, który oddaje materiał, to „genialny ruch” (!!), jak na chess.com.
+            brilliant = is_sacrifice(board_before, move)
             self._show_move(board_before, move)
-            self.board_view.show_feedback(move.to_square, True)
+            self.board_view.show_feedback(move.to_square, True, brilliant)
+            if brilliant:
+                self.app.sounds.play("brilliant")
             if verdict == Verdict.CORRECT:
-                self.say(tx("play.best_move"), theme.ACCENT)
+                if brilliant:
+                    self.say(tx("play.brilliant"), theme.BRILLIANT)
+                else:
+                    self.say(tx("play.best_move"), theme.ACCENT)
                 self.board_view.interactive = False
-                self.schedule(OPPONENT_DELAY + 0.2, self._opponent_reply)
+                # Po genialnym ruchu przeciwnik „zastanawia się” dłużej, żeby było widać „!!”.
+                delay = OPPONENT_DELAY + (0.9 if brilliant else 0.2)
+                self.schedule(delay, partial(self._opponent_reply, brilliant))
             else:
-                self.on_solved(verdict == Verdict.SOLVED_ALT_MATE, move.to_square)
+                self.on_solved(verdict == Verdict.SOLVED_ALT_MATE, move.to_square, brilliant)
         elif verdict == Verdict.NEEDS_ENGINE:
             self._show_move(board_before, move)
             self.board_view.interactive = False
             self.say(tx("play.checking"), theme.MUTED)
             self.start_check(board_before.fen(), move)
 
-    def _opponent_reply(self) -> None:
+    def _opponent_reply(self, after_brilliant: bool = False) -> None:
         session = self.session
         if session is None or session.status != Status.OPPONENT:
             return
@@ -255,7 +264,8 @@ class PlayScreen(Screen):
         self.board_view.feedback = None
         self.board_view.interactive = True
         san = move_san(board_before, move)
-        self.say(tx("play.best_continue"), theme.ACCENT, lambda: t("play.opponent_replied", move=_san_now(board_before, move, san)))
+        key, color = ("play.brilliant_continue", theme.BRILLIANT) if after_brilliant else ("play.best_continue", theme.ACCENT)
+        self.say(tx(key), color, lambda: t("play.opponent_replied", move=_san_now(board_before, move, san)))
         self.analyze_current()
 
     # ---------------------------------------------------------------- ruch spoza rozwiązania
@@ -340,15 +350,19 @@ class PlayScreen(Screen):
         self.analyze_current()
 
     # ---------------------------------------------------------------- koniec zadania
-    def on_solved(self, alternative_mate: bool, square: chess.Square) -> None:
+    def on_solved(self, alternative_mate: bool, square: chess.Square, brilliant: bool = False) -> None:
         assert self.session is not None
-        self.app.sounds.play("success")
+        if not brilliant:
+            self.app.sounds.play("success")
         self.board_view.interactive = False
         first_try = self.session.outcome is not None and self.session.outcome.solved
         if first_try:
             self.board_view.celebrate(square)
         key = "play.solved" if first_try else "play.solved_after_mistake"
-        self.say(tx(key), theme.ACCENT, tx("play.alt_mate") if alternative_mate else _empty)
+        if brilliant and first_try:
+            key = "play.solved_brilliant"
+        color = theme.BRILLIANT if brilliant and first_try else theme.ACCENT
+        self.say(tx(key), color, tx("play.alt_mate") if alternative_mate else _empty)
         self.apply_outcome()
         self._finish()
 
@@ -636,8 +650,23 @@ class PlayScreen(Screen):
         self._layout_controls()
 
     def _layout_controls(self) -> None:
+        """Pokazujemy tylko przyciski, które mają teraz sens: w trakcie zadania „Podpowiedź” i „Pokaż
+        rozwiązanie” (po błędzie także „Spróbuj ponownie”), a „Następne zadanie” dopiero po jego zakończeniu."""
         r = self.controls_rect
-        buttons = [self.btn_hint, self.btn_solution, self.btn_retry, self.btn_next]
+        session = self.session
+        finished = session is not None and session.finished
+        self.btn_hint.visible = not finished
+        self.btn_solution.visible = not finished
+        self.btn_retry.visible = not finished and session is not None and session.status == Status.MISTAKE
+        self.btn_next.visible = finished
+        controls = [
+            (self.btn_hint, "play.btn.hint", "play.btn.hint"),
+            (self.btn_solution, "play.btn.solution", "play.btn.solution_short"),
+            (self.btn_retry, "play.btn.retry", "play.btn.retry_short"),
+            (self.btn_next, "play.btn.next", "play.btn.next_short"),
+        ]
+        visible = [entry for entry in controls if entry[0].visible]
+        buttons = [button for button, _, _ in visible]
         nav_w = 0
         if self.view_index is not None and self.session is not None and self.session.finished:
             nav_w = 2 * r.height + px(16)
@@ -645,8 +674,8 @@ class PlayScreen(Screen):
             self.btn_next_pos.rect = pygame.Rect(r.x + r.height + px(6), r.y, r.height, r.height)
         gap = px(8)
         avail = r.width - nav_w - (len(buttons) - 1) * gap
-        long_labels = ["play.btn.hint", "play.btn.solution", "play.btn.retry", "play.btn.next"]
-        short_labels = ["play.btn.hint", "play.btn.solution_short", "play.btn.retry_short", "play.btn.next_short"]
+        long_labels = [long_key for _, long_key, _ in visible]
+        short_labels = [short_key for _, _, short_key in visible]
         widths = [fonts.text_size(t(key), fs(14), "bold")[0] + px(26) for key in long_labels]
         keys = long_labels if sum(widths) <= avail else short_labels
         for button, key in zip(buttons, keys):
@@ -754,7 +783,7 @@ class PlayScreen(Screen):
         self.btn_hint.enabled = status == Status.PLAYER and self.preview is None
         self.btn_solution.enabled = not session.finished and status not in (Status.INTRO, Status.CHECKING, Status.OPPONENT)
         self.btn_retry.enabled = status == Status.MISTAKE
-        self.btn_next.enabled = session.outcome is not None or session.finished
+        self.btn_next.enabled = session.finished
         self.btn_next_pos.enabled = self.view_index is not None and self.view_index < len(session.board.move_stack)
         self.btn_prev_pos.enabled = self.view_index is not None and self.view_index > 0
         self._layout_controls()
