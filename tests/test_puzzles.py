@@ -206,3 +206,26 @@ def test_sacrifice_detection() -> None:
     # Skoczek za piona bronionego skoczkiem (Sxe5 Sxe5) — to już jest poświęcenie figury.
     board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4")
     assert is_sacrifice(board, chess.Move.from_uci("f3e5"))
+
+
+def test_sacrifice_leaving_piece_en_prise() -> None:
+    """Poświęceniem jest też zostawienie figury pod biciem — ale nie oddanie figury, której nie da się uratować."""
+    from tacticmind.puzzles.validator import is_sacrifice, sacrifice_loss, see
+
+    # Mat Legala: Sxe5!! zostawia hetmana pod biciem gońca (Gxd1 Gxf7+ Ke7 Sd5#).
+    board = chess.Board("rn1qkbnr/ppp2p1p/3p2p1/4p3/2B1P1b1/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 5")
+    assert sacrifice_loss(board, chess.Move.from_uci("f3e5")) == 5  # Gxd1 Kxd1: hetman za gońca i piona
+    # Grecki dar: Gxh7+ Kxh7.
+    board = chess.Board("rnbq1rk1/pppn1ppp/4p3/3pP3/1b1P4/2NB1N2/PPP2PPP/R1BQK2R w KQ - 0 7")
+    assert is_sacrifice(board, chess.Move.from_uci("d3h7"))
+    # Uwięziony skoczek bije piona (desperado) — i tak był stracony, więc to nie poświęcenie.
+    board = chess.Board("Nk6/p7/1p6/8/8/8/8/4K3 w - - 0 1")
+    assert not is_sacrifice(board, chess.Move.from_uci("a8b6"))
+    assert not is_sacrifice(board, chess.Move.from_uci("e1d2"))
+    # Sxd5 exd5 Wxd5 — skoczek za dwa piony: strata tylko 1, więc to nie poświęcenie.
+    board = chess.Board("4k3/8/4p3/3p4/8/2N5/8/3RK3 w - - 0 1")
+    assert sacrifice_loss(board, chess.Move.from_uci("c3d5")) == 1
+    # Promień rentgenowski: zdublowane wieże wygrywają piona (Wxd5 Wxd5 Wxd5).
+    assert see(chess.Board("3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1"), chess.D5) == 1
+    assert see(chess.Board("4k3/8/8/3p4/4N3/8/8/4K3 b - - 0 1"), chess.E4) == 3
+
