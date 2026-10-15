@@ -105,7 +105,7 @@ def test_brilliant_move_and_buttons(app) -> None:  # type: ignore[no-untyped-def
     run(app, 0.4)
     assert play.btn_hint.visible and play.btn_solution.visible
     assert not play.btn_next.visible and not play.btn_retry.visible
-    assert play.board_view.last_move is not None  # ruch przeciwnika widać strzałką i podświetleniem
+    assert play.board_view.last_move is not None  # ruch przeciwnika jest podświetlony
     play.on_player_move(play.session.expected_move)
     assert play.board_view.feedback is not None and play.board_view.feedback[1] == "brilliant"
     assert play.message[0]() == "Genialny ruch!!"
@@ -117,6 +117,48 @@ def test_brilliant_move_and_buttons(app) -> None:  # type: ignore[no-untyped-def
     assert play.session.finished
     assert play.btn_next.visible and play.btn_next.enabled
     assert not play.btn_hint.visible and not play.btn_solution.visible
+
+
+def test_move_navigation_during_puzzle(app) -> None:  # type: ignore[no-untyped-def]
+    """◀ ▶ w trakcie zadania: cofanie do wcześniejszych pozycji i powrót do bieżącej."""
+    import chess
+
+    from taktykai.puzzles.loader import Puzzle
+    from taktykai.puzzles.session import PuzzleSession
+
+    app.go("play")
+    run(app, 1.2)
+    play = app.screens["play"]
+    puzzle = Puzzle("00LNB", "kr6/1pR4p/p4R2/n2r4/P3p3/4B3/6PP/6K1 b - - 0 38", ("d5d3", "f6a6", "b7a6", "c7a7"), 1074, 80, ("mateIn2",))
+    play.timers.clear()
+    play.session = PuzzleSession(puzzle)
+    play.board_view.orientation = play.board_view.player_color = puzzle.player_color
+    play._play_intro()
+    play.on_player_move(chess.Move.from_uci("f6a6"))
+    run(app, 1.8)  # odpowiedź przeciwnika bxa6
+    live_fen = play.session.board.fen()
+    assert play.btn_prev_pos.visible and play.btn_prev_pos.enabled and not play.btn_next_pos.enabled
+
+    play.step_view(-1)  # przed bxa6
+    run(app, 0.3)
+    assert play.view_index == 2 and not play.board_view.interactive
+    assert play.board_view.board.piece_at(chess.A6) == chess.Piece(chess.ROOK, chess.WHITE)
+    play.step_view(-1)
+    play.step_view(-1)  # pozycja początkowa zadania (przed ruchem przeciwnika)
+    run(app, 0.1)
+    assert play.view_index == 0 and not play.btn_prev_pos.enabled and play.btn_next_pos.enabled
+    play.hint()  # na starszej pozycji podpowiedź jest niedostępna (i nie zabiera nagrody)
+    run(app, 0.1)
+    assert not play.btn_hint.enabled and play.board_view.hint_square is None and not play.session.hint_used
+
+    for _ in range(3):
+        play.step_view(1)
+    run(app, 0.3)
+    assert play.view_index is None and play.board_view.board.fen() == live_fen
+    assert play.board_view.interactive and play.btn_hint.enabled
+    play.on_player_move(chess.Move.from_uci("c7a7"))
+    run(app, 0.3)
+    assert play.session.finished
 
 
 def test_app_icon_and_wide_pieces(app) -> None:  # type: ignore[no-untyped-def]

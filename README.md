@@ -58,8 +58,9 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
 - **Genialny ruch (!!)**: jeśli poprawny ruch jest poświęceniem (oddajesz figurę za co najmniej 2 piony materiału,
   np. wieżę za piona), zamiast ✓ pojawia się cyjanowe „!!” z poświatą, iskrami i komunikatem „Genialny ruch!!” —
   jak na chess.com (`puzzles/validator.py: is_sacrifice`).
-- **Strzałka ostatniego ruchu**: każdy wykonany ruch (przeciwnika i Twój) zostawia jasną strzałkę z polem
-  startowym i docelowym, więc od razu widać, skąd przyszła figura (dla skoczka w kształcie litery L).
+- **Cofanie się po ruchach**: przyciski ◀ ▶ pod szachownicą (albo klawisze ← →) działają przez całe zadanie —
+  można wrócić do pozycji przed ruchem przeciwnika i zobaczyć, co się stało. Na wcześniejszej pozycji nie da się
+  ruszyć ani zobaczyć podpowiedzi; ▶ do końca (albo kolejny ruch przeciwnika) wraca do bieżącej pozycji.
 - **Przyciski**: w trakcie zadania widać „Podpowiedź” i „Pokaż rozwiązanie” (po błędzie także „Spróbuj ponownie”);
   „Następne zadanie” pojawia się dopiero po rozwiązaniu albo pokazaniu rozwiązania.
 - **Alternatywne rozwiązania**: ruch inny niż wzorcowy, który daje mata, rozwiązuje zadanie. Ruch, który według
@@ -73,7 +74,7 @@ Postępy (ranking, historia, statystyki) zapisują się w pliku `~/.taktykai/pro
     Kliknięcie linii kandydującej odtwarza ją na szachownicy w trybie podglądu.
 - **Ranking**: duża liczba u góry (np. „1450 ± 80”) z animowaną zmianą (+12 turkusowo, −9 na czerwono),
   seria z ikoną ognia, ranking zadania widoczny po jego zakończeniu, okienko „Dlaczego to zadanie?”.
-- Po zakończeniu zadania strzałki ◀ ▶ (albo klawisze ← →) przewijają pozycje, a silnik analizuje każdą z nich.
+- Po zakończeniu zadania ◀ ▶ (albo ← →) przewijają pozycje, a silnik analizuje każdą z nich.
 - **Strzałki i zaznaczenia (jak na chess.com)**: prawym przyciskiem myszy przeciągasz z pola na pole, żeby
   narysować strzałkę (ruch skoczka rysuje się jako litera L), a klikasz, żeby zaznaczyć pole. Shift = czerwony,
   Ctrl = niebieski, Alt = turkusowy, bez klawisza = bursztynowy. Ponowne narysowanie usuwa strzałkę, lewy klik
@@ -402,7 +403,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 89 testów, m.in.:
+`python -m pytest` — 90 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|

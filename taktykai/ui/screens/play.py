@@ -100,7 +100,9 @@ class PlayScreen(Screen):
         self.detail: Text = _empty
         self.change: RatingChange | None = None
         self.preview: _Preview | None = None
+        #: Przeglądana pozycja (liczba ruchów od początku zadania); None = bieżąca pozycja „na żywo”.
         self.view_index: int | None = None
+        self.hint_square: chess.Square | None = None
         self.show_why = False
         self.why_at = 0.0
         self.confirm: tuple[Text, Callable[[], None]] | None = None
@@ -186,7 +188,7 @@ class PlayScreen(Screen):
         bv.orientation = puzzle.player_color
         bv.player_color = puzzle.player_color
         bv.interactive = False
-        bv.hint_square = None
+        self.hint_square = None
         bv.feedback = None
         bv.arrows = []
         bv.clear_drawings()
@@ -228,7 +230,7 @@ class PlayScreen(Screen):
         if session is None or session.status != Status.PLAYER:
             return
         board_before = session.board.copy()
-        self.board_view.hint_square = None
+        self.hint_square = None
         verdict = session.submit(move)
         if verdict in (Verdict.CORRECT, Verdict.SOLVED, Verdict.SOLVED_ALT_MATE):
             # Poprawny ruch, który oddaje materiał, to „genialny ruch” (!!), jak na chess.com.
@@ -258,6 +260,7 @@ class PlayScreen(Screen):
         session = self.session
         if session is None or session.status != Status.OPPONENT:
             return
+        self._go_live()
         board_before = session.board.copy()
         move = session.opponent_reply()
         self._show_move(board_before, move)
@@ -346,6 +349,7 @@ class PlayScreen(Screen):
     def _show_refutation(self, board_before: chess.Board, move: chess.Move) -> None:
         if self.session is None or self.session.status != Status.MISTAKE:
             return
+        self._go_live(board_before)
         self._show_move(board_before, move)
         self.analyze_current()
 
@@ -373,7 +377,7 @@ class PlayScreen(Screen):
         # Wyjaśnienie od początku (zamiast przewijać na koniec strumienia myśli).
         self.brain.tab = "thoughts"
         self.brain.scroll.scroll_to_top()
-        self.view_index = len(self.session.board.move_stack)
+        self._go_live()
         self.analyze_current()
 
     def apply_outcome(self) -> None:
@@ -390,13 +394,13 @@ class PlayScreen(Screen):
 
     def hint(self) -> None:
         session = self.session
-        if session is None or session.status != Status.PLAYER:
+        if session is None or session.status != Status.PLAYER or self.view_index is not None:
             return
         rated = session.outcome is None
         square = session.hint()
         if square is None:
             return
-        self.board_view.hint_square = square
+        self.hint_square = square
         if self.state.mode == "hidden":
             self.state.mode = "hint"
         self.say(tx("play.hint"), theme.VIOLET, tx("play.hint_penalty") if rated else _empty)
@@ -406,6 +410,7 @@ class PlayScreen(Screen):
         if session is None or session.status != Status.MISTAKE:
             return
         session.retry()
+        self.view_index = None
         last = session.board.peek() if session.board.move_stack else None
         self.board_view.set_position(session.board, last, animate=False)
         self.board_view.feedback = None
@@ -420,11 +425,12 @@ class PlayScreen(Screen):
             return
         self.timers.clear()
         moves = session.reveal()
+        self.view_index = None
         self.apply_outcome()
         last = session.board.peek() if session.board.move_stack else None
         self.board_view.set_position(session.board, last, animate=False)
         self.board_view.feedback = None
-        self.board_view.hint_square = None
+        self.hint_square = None
         self.board_view.interactive = False
         fen = session.board.fen()
         ucis = [m.uci() for m in moves]
@@ -435,6 +441,7 @@ class PlayScreen(Screen):
 
     def _reveal_step(self, move: chess.Move) -> None:
         assert self.session is not None
+        self._go_live()
         board_before = self.session.board.copy()
         self.session.push_revealed(move)
         self._show_move(board_before, move)
@@ -588,27 +595,50 @@ class PlayScreen(Screen):
         self.preview = None
         board = self.current_board()
         self.board_view.set_position(board, board.peek() if board.move_stack else None, animate=False)
-        self.board_view.interactive = self.session.status == Status.PLAYER
+        self.board_view.interactive = self.view_index is None and self.session.status == Status.PLAYER
 
-    # ================================================================ przeglądanie po zadaniu
-    def step_view(self, delta: int) -> None:
+    # ================================================================ cofanie się po ruchach (◀ ▶)
+    def can_navigate(self) -> bool:
+        """Ruchy można przeglądać w trakcie zadania i po nim — ale nie, gdy silnik sprawdza ruch albo trwa podgląd."""
         session = self.session
-        if session is None or not session.finished or self.view_index is None:
+        if session is None or self.preview is not None or not session.board.move_stack:
+            return False
+        return session.status not in (Status.INTRO, Status.CHECKING)
+
+    def _go_live(self, board: chess.Board | None = None) -> None:
+        """Powrót z przeglądanej pozycji do bieżącej (przed każdym nowym ruchem na szachownicy)."""
+        if self.view_index is None or self.session is None:
             return
-        total = len(session.board.move_stack)
-        new_index = max(0, min(total, self.view_index + delta))
-        if new_index == self.view_index:
+        self.view_index = None
+        live = board if board is not None else self.session.board
+        self.board_view.set_position(live, live.peek() if live.move_stack else None, animate=False)
+
+    def step_view(self, delta: int) -> None:
+        """◀ / ▶: cofa albo przewija o jeden ruch. W trakcie zadania na starszej pozycji nie da się ruszyć;
+        ▶ do końca wraca do bieżącej pozycji i znów można grać."""
+        session = self.session
+        if session is None or not self.can_navigate():
+            return
+        stack = session.board.move_stack
+        total = len(stack)
+        current = total if self.view_index is None else self.view_index
+        new_index = max(0, min(total, current + delta))
+        if new_index == current:
             return
         if delta > 0:
             before = self.current_board()
-            self.view_index = new_index
-            self._show_move(before, session.board.move_stack[new_index - 1])
+            self.view_index = None if new_index == total else new_index
+            self._show_move(before, stack[new_index - 1])
         else:
             self.view_index = new_index
             board = self.current_board()
             self.board_view.set_position(board, board.peek() if board.move_stack else None, animate=False)
         self.board_view.feedback = None
-        self.analyze_current()
+        live = self.view_index is None
+        self.board_view.interactive = live and session.status == Status.PLAYER
+        # Po zadaniu silnik analizuje oglądaną pozycję; w trakcie zadania liczy dalej bieżącą.
+        if session.finished:
+            self.analyze_current()
 
     # ================================================================ układ
     def layout(self, rect: pygame.Rect) -> None:
@@ -668,7 +698,8 @@ class PlayScreen(Screen):
         visible = [entry for entry in controls if entry[0].visible]
         buttons = [button for button, _, _ in visible]
         nav_w = 0
-        if self.view_index is not None and self.session is not None and self.session.finished:
+        self.btn_prev_pos.visible = self.btn_next_pos.visible = session is not None and session.status != Status.INTRO
+        if self.btn_prev_pos.visible:
             nav_w = 2 * r.height + px(16)
             self.btn_prev_pos.rect = pygame.Rect(r.x, r.y, r.height, r.height)
             self.btn_next_pos.rect = pygame.Rect(r.x + r.height + px(6), r.y, r.height, r.height)
@@ -725,13 +756,12 @@ class PlayScreen(Screen):
                 return
         elif self.board_view.handle(event):
             return
-        if event.type == pygame.KEYDOWN and self.session is not None and self.session.finished:
+        if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_LEFT:
                 self.step_view(-1)
             elif event.key == pygame.K_RIGHT:
                 self.step_view(1)
-        reviewing = self.view_index is not None and self.session is not None and self.session.finished
-        nav = [self.btn_prev_pos, self.btn_next_pos] if reviewing else []
+        nav = [self.btn_prev_pos, self.btn_next_pos]
         controls = [] if self.preview is not None else [self.btn_hint, self.btn_solution, self.btn_retry, self.btn_next, *nav]
         for button in [*controls, self.btn_why]:
             if button.handle(event):
@@ -780,12 +810,16 @@ class PlayScreen(Screen):
             self.board_view.arrows = []
 
         status = session.status
-        self.btn_hint.enabled = status == Status.PLAYER and self.preview is None
+        self.btn_hint.enabled = status == Status.PLAYER and self.preview is None and self.view_index is None
         self.btn_solution.enabled = not session.finished and status not in (Status.INTRO, Status.CHECKING, Status.OPPONENT)
         self.btn_retry.enabled = status == Status.MISTAKE
         self.btn_next.enabled = session.finished
-        self.btn_next_pos.enabled = self.view_index is not None and self.view_index < len(session.board.move_stack)
-        self.btn_prev_pos.enabled = self.view_index is not None and self.view_index > 0
+        navigable = self.can_navigate()
+        current = len(session.board.move_stack) if self.view_index is None else self.view_index
+        self.btn_prev_pos.enabled = navigable and current > 0
+        self.btn_next_pos.enabled = navigable and self.view_index is not None
+        # Podpowiedź widać tylko na bieżącej pozycji.
+        self.board_view.hint_square = self.hint_square if self.view_index is None else None
         self._layout_controls()
 
     # ================================================================ rysowanie
@@ -804,9 +838,8 @@ class PlayScreen(Screen):
         else:
             for button in [self.btn_hint, self.btn_solution, self.btn_retry, self.btn_next]:
                 button.draw(surface)
-            if self.view_index is not None and self.session is not None and self.session.finished:
-                self.btn_prev_pos.draw(surface)
-                self.btn_next_pos.draw(surface)
+            self.btn_prev_pos.draw(surface)
+            self.btn_next_pos.draw(surface)
         self._draw_card(surface)
         self.brain.draw(surface, self.state)
         if self.show_why:

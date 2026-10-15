@@ -79,8 +79,6 @@ class BoardView:
         self.marks: dict[chess.Square, Color] = {}
         #: Znaczek na polu docelowym: (pole, rodzaj „ok” / „bad” / „brilliant”, czas pojawienia się).
         self.feedback: tuple[chess.Square, str, float] | None = None
-        #: Strzałka ostatniego ruchu (żeby było widać, skąd przyszła figura).
-        self.show_move_arrow = True
         self.selected: chess.Square | None = None
         self.selected_at = 0.0
         self.drag_square: chess.Square | None = None
@@ -97,7 +95,6 @@ class BoardView:
         self._shake_at = -10.0
         self._engine_key: tuple[object, ...] = ()
         self._engine_since = 0.0
-        self._move_arrow_since = 0.0
         self.clock = 0.0
         # Pamięć podręczna: warstwa pól ze współrzędnymi (zmienia się tylko przy zmianie rozmiaru/obrotu)
         # i płótno wielokrotnego użytku — nie tworzymy nowych powierzchni w każdej klatce.
@@ -142,7 +139,6 @@ class BoardView:
         self.promotion = None
         if move is not None:
             self.clear_drawings()
-            self._move_arrow_since = self.clock
         if move is not None and animate and not self._skip_next_animation:
             moving = previous.piece_at(move.from_square)
             if moving is not None:
@@ -463,17 +459,6 @@ class BoardView:
                 canvas.blit(img, img.get_rect(center=(round(pos[0]), round(pos[1]))))
 
     def _draw_arrows(self, canvas: pygame.Surface, s: int, clock: float) -> None:
-        # Strzałka ostatniego ruchu: pojawia się po zakończeniu animacji, z ciemnym obrysem,
-        # żeby była widoczna na jasnych i ciemnych polach.
-        if self.show_move_arrow and self.last_move is not None and self.last_move.from_square != self.last_move.to_square:
-            since = self.anim.start + self.anim.duration if self.anim is not None else self._move_arrow_since
-            if self.anim is not None:
-                self._move_arrow_since = since
-            appear = ease_out_cubic((clock - since) / 0.3) if clock >= since else 0.0
-            if appear > 0.01:
-                points = self.arrow_points(self.last_move.from_square, self.last_move.to_square)
-                gfx.draw_arrows(canvas, [(points, theme.MOVE_ARROW_OUTLINE, s * 0.17)], appear)
-                gfx.draw_arrows(canvas, [(points, theme.MOVE_ARROW, s * 0.11)], appear)
         engine_key = tuple((f, to) for f, to, _ in self.arrows)  # zmiana koloru nie restartuje animacji
         if engine_key != self._engine_key:
             self._engine_key = engine_key

@@ -50,9 +50,6 @@ DOT = (15, 23, 42, 70)
 
 #: Genialny ruch (!!) — jasny cyjan, jak na chess.com.
 BRILLIANT = (34, 211, 238)
-#: Strzałka ostatniego wykonanego ruchu: jasna z ciemnym obrysem.
-MOVE_ARROW = (244, 247, 252, 200)
-MOVE_ARROW_OUTLINE = (24, 30, 46, 120)
 
 #: Strzałki silnika: najlepszy ruch turkusowy, drugi i trzeci półprzezroczyste.
 ENGINE_ARROWS: tuple[Color, ...] = ((45, 212, 191, 215), (45, 212, 191, 105), (167, 139, 250, 100))
