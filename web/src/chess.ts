@@ -195,10 +195,14 @@ export function arrowPath(points: [number, number][], width: number): string {
       ny = Math.cos(a0);
     } else {
       // Bend (knight arrow): a shared normal, lengthened so that the shaft keeps a constant width.
-      const mid = (a0 + a1) / 2 + (Math.abs(a1 - a0) > Math.PI ? Math.PI : 0);
+      // The turn is taken in (-180°, 180°]: e.g. up (-90°) then left (180°) is a 90° turn, not 270°.
+      let turn = a1 - a0;
+      if (turn > Math.PI) turn -= 2 * Math.PI;
+      else if (turn <= -Math.PI) turn += 2 * Math.PI;
+      const mid = a0 + turn / 2;
       nx = -Math.sin(mid);
       ny = Math.cos(mid);
-      scale = 1 / Math.max(0.3, Math.cos((a1 - a0) / 2));
+      scale = 1 / Math.max(0.3, Math.cos(turn / 2));
     }
     left.push([p[0] + nx * half * scale, p[1] + ny * half * scale]);
     right.push([p[0] - nx * half * scale, p[1] - ny * half * scale]);

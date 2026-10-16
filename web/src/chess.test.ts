@@ -120,6 +120,25 @@ describe("arrows", () => {
     expect(knight).not.toContain("NaN");
   });
 
+  it("a knight arrow keeps its width at the bend in every direction", () => {
+    // Up-then-left (g1-f3) and left-then-up (h2-f3) turns cross the ±180° angle boundary; the shaft used to swell there.
+    const width = 0.18;
+    for (let from = 0; from < 64; from++) {
+      for (let to = 0; to < 64; to++) {
+        if (arrowPoints(from, to, "white").length !== 3) continue;
+        for (const orientation of ["white", "black"] as const) {
+          const points = arrowPoints(from, to, orientation);
+          const corner = points[1] as [number, number];
+          const outline = (arrowPath(points, width).slice(1, -1).split("L")).map((p) => p.split(" ").map(Number));
+          for (const index of [1, outline.length - 2]) {
+            const [x, y] = outline[index] as [number, number];
+            expect(Math.hypot(x - corner[0], y - corner[1])).toBeCloseTo((width / 2) * Math.SQRT2, 3);
+          }
+        }
+      }
+    }
+  });
+
   it("splits colour and opacity", () => {
     expect(splitAlpha("rgba(45,212,191,0.84)")).toEqual(["rgb(45,212,191)", 0.84]);
     expect(splitAlpha("rgb(1, 2, 3)")).toEqual(["rgb(1,2,3)", 1]);
