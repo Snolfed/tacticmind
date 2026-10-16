@@ -537,12 +537,16 @@ coś atakuje króla). Perft zgadza się z wartościami referencyjnymi, np. Kiwip
 ```
 768 cech (kolor × figura × pole) z perspektywy strony na ruchu ──► 256 neuronów ─┐
 768 cech z perspektywy przeciwnika (te same wagi)               ──► 256 neuronów ─┴► SCReLU ─► 512 → 1
+                                                                       (8 warstw wyjściowych — według liczby figur)
 ```
+
+Warstwę wyjściową wybieramy według liczby figur na planszy (8 „kubełków” od końcówki do debiutu): te same
+cechy znaczą w końcówce co innego niż w debiucie, a koszt jest zerowy — liczymy i tak tylko jedną warstwę.
 
 Trik NNUE: pierwsza warstwa (akumulator) to suma kolumn wag dla figur na planszy, a ruch zmienia tylko 2–4 figury.
 Zamiast liczyć 768 × 256 mnożeń, przy każdym ruchu dodajemy i odejmujemy 2–4 kolumny po 256 liczb. Wagi są
 skwantowane do liczb całkowitych (int16), więc ocena kosztuje mniej niż ręczna funkcja oceny — silnik z siecią
-liczy ok. 1,7 mln węzłów/s.
+liczy 0,7–1,7 mln węzłów/s na jednym rdzeniu (zależnie od procesora), ok. 20–30 razy więcej niż silnik w Pythonie.
 
 **Skąd sieć?** Cała wytrenowana w tym projekcie (`scripts/nnue/`), bez cudzych sieci i bez ocen innych silników:
 
@@ -551,7 +555,44 @@ liczy ok. 1,7 mln węzłów/s.
 2. trener w C (`train.c`, Adam, OpenMP) uczy sieć przewidywać `sigmoid(ocena / 400)`,
 3. silnik z nową siecią znowu gra sam ze sobą — jego oceny są lepsze, więc kolejna sieć też.
 
-<!-- POMIARY-NNUE -->
+### Pomiary siły
+
+Wszystkie mecze: `scripts/match.py`, 30 otwarć granych obydwoma kolorami, jeden wątek na silnik,
+Elo z 95% przedziałem ufności.
+
+**Kolejne sieci** (każda przeciw poprzedniej, 200 partii, 2 s + 0,02 s na partię):
+
+| Sieć | Dane treningowe | Wynik | Elo |
+|---|---|---:|---:|
+| 1 | 2,2 mln pozycji z partii z ręczną oceną | 78 : 22 z ręczną oceną (100 partii) | +220 ± 63 |
+| 2 | 12 mln (+ partie sieci 1) | 150,5 : 49,5 | +193 ± 40 |
+| 3 | 20 mln (+ partie sieci 2) | 121,5 : 78,5 | +76 ± 39 |
+| 3 z 512 neuronami | te same 20 mln | 97 : 103 z siecią 3 | −10 ± 40 (dokładniejsza, ale 2× wolniejsza) |
+| 3 z kubełkami | te same 20 mln | 104,5 : 95,5 z siecią 3 | +16 ± 37 |
+| **4 (w grze)** | **27,3 mln** (+ partie sieci 3), kubełki | 108,5 : 91,5 z siecią 3 | +30 ± 41 |
+
+**Przeciw Stockfishowi 16 z ograniczoną siłą** (`UCI_LimitStrength`, `UCI_Elo`; 100 partii na poziom,
+10 s + 0,1 s na partię):
+
+| Stockfish `UCI_Elo` | Wygrane / remisy / porażki | Wynik | Różnica Elo |
+|---:|:---:|---:|---:|
+| 2400 | 90 / 5 / 5 | 92,5% | +436 ± 136 |
+| 2700 | 70 / 12 / 18 | 76% | +200 ± 75 |
+| 3000 | 23 / 24 / 53 | 35% | −108 ± 62 |
+
+Najlepiej pasujące Elo (największa wiarygodność ze wszystkich 300 partii): **ok. 2890** (95%: 2840–2940)
+w skali `UCI_Elo` Stockfisha, która jest kalibrowana do listy CCRL 40/4. To przybliżenie: kalibracja
+Stockfisha dotyczy wolniejszego tempa, a nasze mecze grane były szybciej.
+
+**Przeciw staremu silnikowi w Pythonie** (300 ms na ruch): 20 : 0.
+
+Uruchomienie u siebie (potrzebny `pip install chess` i Stockfish):
+
+```bash
+python scripts/build_engine.py
+python scripts/match.py --a tacticmind/engine/native/build/tmengine --b stockfish \
+    --b-option UCI_LimitStrength=true --b-option UCI_Elo=2700 --tc 10+0.1 --games 100 --concurrency 4
+```
 
 ## Pomiary: minimaks vs alfa-beta
 
@@ -599,7 +640,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 |---|---|
 | `test_perft.py` | perft z pozycji startowej (1–4: 20, 400, 8 902, 197 281), Kiwipete (1–3: 48, 2 039, 97 862), pozycja 3 (1–4: 14, 191, 2 812, 43 238) oraz pozycje 4 i 5 z CPW; zgodność FEN i przyrostowego hasza/oceny |
 | `test_search.py` | maty w 1, 2 i 3 (pozycje klasyczne i z bazy Lichess, także dla czarnych), szybszy mat, pat/mat w korzeniu, MultiPV, statystyki, drzewo, przerwanie, minimaks = alfa-beta przy mniejszej liczbie węzłów |
-| `test_native.py` | silnik w C: perft (5 pozycji), maty w 1–3, pat/mat w korzeniu, MultiPV, statystyki i mini-drzewo, przerwanie i liczniki na żywo, symetria oceny NNUE, dołączona sieć, wybór silnika C |
+| `test_native.py` | silnik w C: perft (5 pozycji), maty w 1–3, pat/mat w korzeniu, MultiPV, statystyki i mini-drzewo, przerwanie i liczniki na żywo, symetria oceny NNUE, dołączona sieć, wybór silnika C, mat w setnym półruchu, niemożliwe bicie w przelocie w FEN |
 | `test_engine_process.py` | proces silnika: `info` po każdej głębokości, przerwanie nowym zapytaniem, tryb porównawczy |
 | `test_rating.py` | E i ΔR Elo dla przykładowych wartości, K w kalibracji, przykład Glicko-2 z artykułu, wynik S i kara za czas, profil i zapis |
 | `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
@@ -730,7 +771,7 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 9. **Gra z trenerem** — książka otwarć z objaśnieniami, siła gry zależna od Elo, klasy ruchów i celność, wyjaśnienia
    trenera, kalibracja i „Twój poziom” co 5 partii, portret trenera z minami, ekrany „Trener” i partii, testy.
 10. **Silnik w C z NNUE** — bitboardy, PVS z przycinaniem, sieć NNUE z przyrostową aktualizacją, własny generator
-    danych i trener sieci, kilka rund uczenia, mecze ze starym silnikiem i ze Stockfishem z ograniczoną siłą.
+    danych i trener sieci, cztery rundy uczenia (27 mln pozycji), ok. 2890 Elo w skali Stockfisha z ograniczoną siłą.
 
 ## Źródła i licencje
 
