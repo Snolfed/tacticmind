@@ -550,11 +550,15 @@ to a **win chance** (the Lichess formula): `W(cp) = 50 + 50 · (2 / (1 + e^(−0
 +3 pawns about 75%, mate 100%. The move class depends on how many percentage points the win chance **dropped**
 compared to the best move: up to 2 — excellent, up to 5 — good, up to 10 — inaccuracy, up to 20 — mistake, above that —
 blunder. The engine's best move is "best", and if the second move was worse by ≥ 15 points — "great" (the only
-good move; does not apply to obvious recaptures). "Brilliant" is the best (or nearly best) move that sacrifices a piece,
-in a position that was not already winning. Thanks to the win-chance scale, the same half-pawn mistake weighs more in an equal
+good move; does not apply to obvious captures: a recapture or taking a piece left hanging). "Brilliant" is the engine's
+move (or within 1 point of it) that really sacrifices a piece, in a position that was not already winning. A sacrifice is
+measured against the safest move in the position: material that every move loses (a trapped piece, two pieces attacked
+at once) is not a sacrifice. Thanks to the win-chance scale, the same half-pawn mistake weighs more in an equal
 game than at a +8 advantage.
 
-**Accuracy** of a move: `103.1668 · e^(−0.04354 · drop) − 3.1669` (%, as on Lichess); game accuracy is the average.
+**Accuracy** of a move: `103.1668 · e^(−0.04354 · drop) − 3.1669` (%, as on Lichess). Game accuracy is also Lichess's:
+the average of the mean weighted by how sharp the game was around each move and the **harmonic** mean, so a few blunders
+among many easy moves pull it down instead of disappearing in the average.
 The coach's moves are rated the same way, so the summary shows the accuracy of both sides.
 
 ### Coach explanations

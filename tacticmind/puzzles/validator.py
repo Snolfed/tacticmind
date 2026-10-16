@@ -109,24 +109,9 @@ def _exposed(after: chess.Board, square: chess.Square) -> int:
     return see(after, square)
 
 
-def _doomed(board: chess.Board, square: chess.Square) -> bool:
-    """Whether the piece on ``square`` can no longer be saved — every move loses it (then it is not a sacrifice)."""
-    for move in board.legal_moves:
-        target = move.to_square if move.from_square == square else square
-        after = board.copy(stack=False)
-        after.push(move)
-        if _exposed(after, target) - _captured_value(board, move) < SACRIFICE_MIN_LOSS:
-            return False
-    return True
-
-
-def sacrifice_loss(board: chess.Board, move: chess.Move) -> int:
-    """How much material (in pawns) the move gives up: the opponent may capture the moved piece or a piece left undefended.
-
-    As on chess.com, leaving a piece en prise (e.g. ignoring an attack on the queen) or moving a defender away
-    also counts as a sacrifice — but not giving up a piece that could not be saved anyway (desperado).
-    Returns 0 when the opponent cannot win anything by capturing or the move delivers mate.
-    """
+def material_at_risk(board: chess.Board, move: chess.Move) -> int:
+    """How much material (in pawns) the opponent can win right after ``move`` by capturing one of our pieces:
+    the moved piece or a piece left undefended, net of what the move itself captured. 0 after a mate."""
     piece = board.piece_at(move.from_square)
     if piece is None:
         return 0
@@ -135,27 +120,26 @@ def sacrifice_loss(board: chess.Board, move: chess.Move) -> int:
     after.push(move)
     if after.is_checkmate():
         return 0
-    loss = 0
+    worst = 0
     for square, other in after.piece_map().items():
-        if other.color != piece.color:
-            continue
-        given = _exposed(after, square) - gained
-        if given <= loss:
-            continue
-        origin = move.from_square if square == move.to_square else square
-        if board.piece_at(origin) == other and _exposed_before(board, origin) >= given and _doomed(board, origin):
-            continue  # the piece was lost anyway
-        loss = given
-    return loss
+        if other.color == piece.color:
+            worst = max(worst, _exposed(after, square) - gained)
+    return worst
 
 
-def _exposed_before(board: chess.Board, square: chess.Square) -> int:
-    """How much the opponent would win by capturing the piece on ``square`` before the move (if it were their turn)."""
-    if board.is_check():
-        return 0
-    null = board.copy(stack=False)
-    null.push(chess.Move.null())
-    return _exposed(null, square)
+def sacrifice_loss(board: chess.Board, move: chess.Move) -> int:
+    """How much material (in pawns) the move gives up **compared with the safest move** in the position.
+
+    As on chess.com, leaving a piece en prise (e.g. ignoring an attack on the queen) or moving a defender away
+    also counts as a sacrifice. But material that every move loses is not sacrificed: a trapped piece that
+    takes a pawn (desperado), or saving one of two attacked pieces, gives up nothing the player had a choice about.
+    Returns 0 when the opponent cannot win anything by capturing or the move delivers mate.
+    """
+    risk = material_at_risk(board, move)
+    if risk < SACRIFICE_MIN_LOSS:
+        return max(0, risk)
+    safest = min(material_at_risk(board, other) for other in board.legal_moves)
+    return max(0, risk - safest)
 
 
 def is_sacrifice(board: chess.Board, move: chess.Move) -> bool:

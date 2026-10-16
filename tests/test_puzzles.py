@@ -226,6 +226,10 @@ def test_sacrifice_leaving_piece_en_prise() -> None:
     board = chess.Board("Nk6/p7/1p6/8/8/8/8/4K3 w - - 0 1")
     assert not is_sacrifice(board, chess.Move.from_uci("a8b6"))
     assert not is_sacrifice(board, chess.Move.from_uci("e1d2"))
+    # Two pieces attacked, only one can be saved: Qxd4 saves the c3 knight and leaves h4 to the queen —
+    # every move loses a knight, so it is not a sacrifice.
+    board = chess.Board("rnbqkb1r/ppp2ppp/8/3p4/3p1PnN/2N5/PPP1P1PP/R1BQKB1R w KQkq - 0 6")
+    assert not is_sacrifice(board, chess.Move.from_uci("d1d4"))
     # Nxd5 exd5 Rxd5 — a knight for two pawns: a loss of only 1, so not a sacrifice.
     board = chess.Board("4k3/8/4p3/3p4/8/2N5/8/3RK3 w - - 0 1")
     assert sacrifice_loss(board, chess.Move.from_uci("c3d5")) == 1

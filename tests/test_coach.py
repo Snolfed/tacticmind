@@ -123,6 +123,26 @@ def test_special_classes() -> None:
     assert review.classify(0, is_best=True, sacrifice=True, win_before=100, second_drop=1) == "best"
     assert review.classify(0, is_best=True, sacrifice=True, win_before=55, second_drop=30) == "brilliant"
     assert review.classify(30, is_best=False, book=True) == "book"
+    # A sacrifice that is clearly worse than the engine's move is not brilliant.
+    assert review.classify(1.8, is_best=False, sacrifice=True, win_before=60) == "excellent"
+
+
+def test_game_accuracy_punishes_blunders() -> None:
+    """A long game with many easy moves and a few blunders must not score ~87% (a plain mean did)."""
+    moves = [100.0] * 26 + [95.0] * 26 + [85.0] * 5 + [70.0] * 5 + [45.0] * 6 + [20.0] * 6
+    plain = sum(moves) / len(moves)
+    accuracy = review.game_accuracy(moves)
+    assert accuracy is not None and accuracy < plain - 6
+    assert review.game_accuracy([100.0] * 10) == pytest.approx(100)
+    assert review.game_accuracy([]) is None
+    assert review.game_accuracy([100.0, 0.0]) is not None  # one 0% move does not divide by zero
+
+
+def test_volatility_weights() -> None:
+    calm = review.volatility_weights([50.0] * 21)
+    assert len(calm) == 20 and all(w == 0.5 for w in calm)
+    sharp = review.volatility_weights([50.0] * 10 + [90.0, 10.0] * 5 + [50.0])
+    assert len(sharp) == 20 and max(sharp) > 10
 
 
 # ---------------------------------------------------------------- explanations (asserted in the Polish locale)
