@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -313,6 +314,29 @@ def test_without_the_window_the_game_explains_what_to_install(home: Path, monkey
     assert exit_info.value.code == 1
     assert "no window here" in capsys.readouterr().err
     assert not started  # nothing starts in the background
+
+
+def test_nvidia_under_wayland_turns_off_the_dma_buf_renderer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Otherwise WebKitGTK's window dies at once: "Error 71 (Protocol error) dispatching to Wayland display"."""
+    from tacticmind.web import window
+
+    driver = tmp_path / "version"
+    monkeypatch.setattr(window, "NVIDIA_DRIVER", driver)
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-1")
+    monkeypatch.delenv("GDK_BACKEND", raising=False)
+    monkeypatch.delenv("WEBKIT_DISABLE_DMABUF_RENDERER", raising=False)
+    window._avoid_nvidia_wayland_crash()  # no NVIDIA driver: nothing changes
+    assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in os.environ
+    driver.write_text("NVRM version: NVIDIA UNIX x86_64 Kernel Module  580.178.04")
+    monkeypatch.setenv("GDK_BACKEND", "x11")
+    window._avoid_nvidia_wayland_crash()  # X11 session or backend: not affected
+    assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in os.environ
+    monkeypatch.delenv("GDK_BACKEND")
+    window._avoid_nvidia_wayland_crash()
+    assert os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"] == "1"
+    monkeypatch.setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "0")
+    window._avoid_nvidia_wayland_crash()  # the player's own choice wins
+    assert os.environ["WEBKIT_DISABLE_DMABUF_RENDERER"] == "0"
 
 
 def test_board_snapshot_promotion_and_legality(home: Path) -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import os
 import site
 import sys
 from pathlib import Path
@@ -21,6 +22,8 @@ BACKGROUND = "#0f111a"
 ICON = Path(__file__).resolve().parent / "static" / "icon.png"
 #: Window class on X11 and app id on Wayland (taskbar grouping, ``StartupWMClass`` of a .desktop shortcut).
 APP_ID = "tacticmind"
+#: Present when the proprietary NVIDIA driver is loaded.
+NVIDIA_DRIVER = Path("/proc/driver/nvidia/version")
 
 MISSING_PYWEBVIEW = """TacticMind: the pywebview library for the game window is not installed.
 Install the game's libraries in the activated .venv:  pip install -r requirements.txt"""
@@ -69,12 +72,20 @@ def _borrow_system_gi() -> None:
             sys.path.remove(path)
 
 
+def _avoid_nvidia_wayland_crash() -> None:
+    """With the proprietary NVIDIA driver under Wayland, WebKitGTK's DMA-BUF renderer kills the window at once
+    ("Error 71 (Protocol error) dispatching to Wayland display"); its older renderer works. A value the player set wins."""
+    if os.environ.get("WAYLAND_DISPLAY") and os.environ.get("GDK_BACKEND", "wayland").startswith("wayland") and NVIDIA_DRIVER.exists():
+        os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+
+
 def check() -> str | None:
-    """Why the window cannot open on this computer (with what to install), or ``None`` when it can."""
+    """Prepares the window (Linux) and says why it cannot open on this computer (with what to install), or ``None``."""
     if importlib.util.find_spec("webview") is None:
         return MISSING_PYWEBVIEW
     if sys.platform.startswith("linux"):
         _borrow_system_gi()
+        _avoid_nvidia_wayland_crash()
         try:
             glib = importlib.import_module("gi.repository.GLib")
             # Before GTK starts: otherwise the window is named after the script ("main.py").
