@@ -95,6 +95,7 @@
       }
       code {
         color: var(--accent);
+        white-space: nowrap;
       }
       body.failed .spinner,
       body.failed .status {
@@ -120,8 +121,9 @@
         <strong>Gra w Pythonie nie działa.</strong>
         <pre id="details"></pre>
         <p class="hint">
-          Sprawdź, czy działa <code>python main.py</code> i czy są zainstalowane biblioteki:
-          <code>pip install -r requirements.txt</code>. Potem uruchom okno ponownie.
+          Okno uruchamia Pythona z katalogu <code>.venv</code> w folderze gry. Utwórz go i zainstaluj biblioteki:
+          <code>python3 -m venv .venv</code>, potem <code>.venv/bin/pip install -r requirements.txt</code>
+          (Windows: <code>.venv\Scripts\pip install -r requirements.txt</code>). Potem uruchom okno ponownie.
         </p>
       </div>
     </main>

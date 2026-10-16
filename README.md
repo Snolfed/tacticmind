@@ -57,19 +57,34 @@ w trybie aplikacji (bez pasków przeglądarki); gdy żadnej z nich nie ma — w 
 
 ### Okno aplikacji (Tauri 2)
 
-Własne okno gry, bez przeglądarki. Potrzebny jest [Rust](https://rustup.rs); na Windows także „Desktop development
-with C++” z Visual Studio Build Tools (instalator Rusta sam go proponuje) i WebView2 (jest w Windows 10 i 11),
-na Linuksie pakiety WebKitGTK (lista: [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)).
-Node.js nie jest potrzebny — zbudowany interfejs jest w repozytorium.
+Własne okno gry, bez przeglądarki. Node.js nie jest potrzebny — zbudowany interfejs jest w repozytorium.
 
-```bash
-cargo run --release --manifest-path web/src-tauri/Cargo.toml
-```
+1. **Python z bibliotekami w `.venv`** — jak w poleceniach wyżej (`python3 -m venv .venv`, potem
+   `pip install -r requirements.txt` w aktywnym `.venv`). Okno samo używa `.venv` z katalogu gry; bez niego sięga
+   po systemowego Pythona (`python`, `py -3`, `python3`), który zwykle nie ma pygame-ce i python-chess.
+   Inny interpreter wskazuje zmienna `TACTICMIND_PYTHON`.
+2. **[Rust](https://rustup.rs)** oraz biblioteki systemowe okna:
+
+   | System | Polecenie |
+   |---|---|
+   | Arch / Manjaro | `sudo pacman -S --needed webkit2gtk-4.1 base-devel` |
+   | Debian / Ubuntu / Mint | `sudo apt install libwebkit2gtk-4.1-dev build-essential pkg-config` |
+   | Fedora | `sudo dnf install webkit2gtk4.1-devel gcc pkgconf-pkg-config` |
+   | Windows | „Desktop development with C++” z Visual Studio Build Tools (instalator Rusta sam go proponuje); WebView2 jest w Windows 10 i 11 |
+   | macOS | `xcode-select --install` |
+
+   Bez WebKitGTK kompilacja kończy się błędem „The system library … was not found” przy `javascriptcore-rs-sys`
+   albo `webkit2gtk-sys` (pełna lista dla innych systemów:
+   [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)).
+3. **Start okna:**
+
+   ```bash
+   cargo run --release --manifest-path web/src-tauri/Cargo.toml
+   ```
 
 Pierwsza kompilacja trwa kilka minut, kolejne starty są natychmiastowe (gotowy program:
-`web/src-tauri/target/release/tacticmind`, na Windows `tacticmind.exe`). Okno samo uruchamia Pythona w tle
-(`.venv` w katalogu gry, a gdy go nie ma — `python`, `py -3` albo `python3`; inny interpreter wskazuje zmienna
-`TACTICMIND_PYTHON`) i zamyka go razem z sobą. Gdy Python się nie uruchomi, okno pokazuje komunikat z jego błędem.
+`web/src-tauri/target/release/tacticmind`, na Windows `tacticmind.exe`). Okno uruchamia Pythona w tle i zamyka go
+razem z sobą; gdy Python się nie uruchomi, pokazuje komunikat z jego błędem.
 Instalator (.msi / .exe, .deb, .dmg): `cd web && npm install && npm run tauri build`.
 
 Testy:
