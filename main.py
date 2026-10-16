@@ -1,7 +1,7 @@
 """TacticMind — chess puzzles with an AI that thinks out loud.
 
-Usage:  python main.py            (TypeScript interface in an app window)
-        python main.py --help     (other options: --browser, --no-window, --port)
+Usage:  python main.py            (the game in its own window)
+        python main.py --help     (other options: --no-window, --port)
 """
 
 import sys

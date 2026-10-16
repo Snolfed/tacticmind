@@ -78,8 +78,6 @@ class WebApp:
         self._last_time = time.monotonic()
         self._running = False
         self._thread: threading.Thread | None = None
-        #: When any tab was last connected (to shut the server down after the window is closed).
-        self.last_client = time.monotonic()
         self.screens: dict[str, WebScreen] = {
             "home": HomeScreen(self),
             "play": PlayScreen(self),
@@ -303,14 +301,12 @@ class WebApp:
         with self.lock:
             self._subscribers.append(subscriber)
             subscriber.put("event: state\ndata: " + (self._last_state or self._encode_state()) + "\n\n")
-            self.last_client = time.monotonic()
         return subscriber
 
     def unsubscribe(self, subscriber: queue.Queue[str | None]) -> None:
         with self.lock:
             if subscriber in self._subscribers:
                 self._subscribers.remove(subscriber)
-            self.last_client = time.monotonic()
 
     @property
     def clients(self) -> int:

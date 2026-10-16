@@ -42,11 +42,19 @@ The `python-chess` library is used only by the interface layer (SAN notation, ch
 ## Getting started
 
 Requirements: **Python 3.11+** (tested on Python 3.14). No backend and no internet — everything runs locally.
+On Linux the game window also needs WebKitGTK and the system GTK bindings for Python (Windows 10/11 and macOS already
+have everything the window needs):
+
+| System | Command |
+|---|---|
+| Arch / Manjaro | `sudo pacman -S --needed python-gobject webkit2gtk-4.1` |
+| Debian / Ubuntu / Mint | `sudo apt install python3-gi gir1.2-webkit2-4.1` |
+| Fedora | `sudo dnf install python3-gobject webkit2gtk4.1` |
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt    # python-chess, pytest
+pip install -r requirements.txt    # python-chess, pywebview (game window), pytest
 python main.py                     # or: python -m tacticmind
 ```
 
@@ -59,45 +67,12 @@ this works, the game silently falls back to the Python engine (weaker, but it be
 python scripts/build_engine.py     # library for the game + the tmengine UCI program
 ```
 
-`python main.py` starts a local game server and opens the interface (TypeScript) in a separate Chrome / Edge window
-in app mode (no browser toolbars); if neither is installed — in the default browser. Other modes:
-
-| Command | What it does |
-|---|---|
-| `python main.py --browser` | interface in a regular tab of the default browser |
-| `python main.py --no-window` | game server only (address printed in the console), e.g. for working on the interface |
-
-### Application window (Tauri 2)
-
-A dedicated game window, without a browser. Node.js is not needed — the built interface is in the repository.
-
-1. **Python with the libraries in `.venv`** — as in the commands above (`python3 -m venv .venv`, then
-   `pip install -r requirements.txt` in the activated `.venv`). The window uses the `.venv` in the game directory on its
-   own; without it, it falls back to the system Python (`python`, `py -3`, `python3`), which usually lacks
-   python-chess. A different interpreter can be set with the `TACTICMIND_PYTHON` variable.
-2. **[Rust](https://rustup.rs)** and the system libraries for the window:
-
-   | System | Command |
-   |---|---|
-   | Arch / Manjaro | `sudo pacman -S --needed webkit2gtk-4.1 base-devel` |
-   | Debian / Ubuntu / Mint | `sudo apt install libwebkit2gtk-4.1-dev build-essential pkg-config` |
-   | Fedora | `sudo dnf install webkit2gtk4.1-devel gcc pkgconf-pkg-config` |
-   | Windows | "Desktop development with C++" from Visual Studio Build Tools (the Rust installer offers it); WebView2 ships with Windows 10 and 11 |
-   | macOS | `xcode-select --install` |
-
-   Without WebKitGTK the build fails with "The system library … was not found" in `javascriptcore-rs-sys`
-   or `webkit2gtk-sys` (full list for other systems:
-   [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)).
-3. **Start the window:**
-
-   ```bash
-   cargo run --release --manifest-path web/src-tauri/Cargo.toml
-   ```
-
-The first build takes a few minutes; later starts are instant (the built program:
-`web/src-tauri/target/release/tacticmind`, on Windows `tacticmind.exe`). The window starts Python in the background and
-shuts it down when it closes; if Python fails to start, it shows a message with Python's error.
-Installer (.msi / .exe, .deb, .dmg): `cd web && npm install && npm run tauri build`.
+`python main.py` starts a local game server and shows the game in its own window
+([pywebview](https://pywebview.flowrl.com/) with the system's web engine: WebKitGTK on Linux, WebView2 on Windows,
+WKWebView on macOS), so no browser opens and nothing has to be built. Closing the window ends the game. On Linux the
+`.venv` uses the system PyGObject by itself, as long as it was created with the system Python; if anything is missing,
+`python main.py` prints what to install. If the window stays blank on Linux (this happens with some NVIDIA drivers),
+start the game with `WEBKIT_DISABLE_DMABUF_RENDERER=1 python main.py`.
 
 Tests:
 
@@ -177,8 +152,8 @@ npm run build                      # new build into tacticmind/web/static
   fit their boxes (they shrink the font or get truncated with "…" instead of overflowing).
   In a wide window the board has the panel beside it and a vertical evaluation bar; in a narrow one (like a phone) there is a
   two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
-- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile): `web/public/icon.png`,
-  and the Tauri app icons in `web/src-tauri/icons/`.
+- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile): `web/public/icon.png`
+  (on Linux the window uses its built copy, `tacticmind/web/static/icon.png`).
 - **Sounds (chess.com style)**: a wooden "knock" on a move, a double "clack" on a capture, a little bell
   on check, two knocks on castling, a rising tone on promotion, a chime arpeggio after solving a puzzle
   (brighter for a brilliant move) and a soft "bonk" after a mistake. All of them are synthesized in code
@@ -187,8 +162,7 @@ npm run build                      # new build into tacticmind/web/static
   filter and a light echo, with no harsh high frequencies.
 - **Volume**: the top bar has a volume slider (drag it, click it or scroll the mouse wheel over it);
   the speaker icon mutes/unmutes the sound. The volume is remembered in the profile.
-- **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode (in the browser Esc also
-  exits it).
+- **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode of the window.
 - **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it) and an animation
   frame limit: 60, 120, 144, 170, 240 or unlimited (as fast as the monitor refreshes).
 - **Dragging with a "dead zone"**: a piece starts being dragged only once the mouse moves away from the click point
@@ -275,7 +249,7 @@ tacticmind/
                             #   openings_pl.py / openings_en.py — opening names and explanations
   web/                      # TYPESCRIPT INTERFACE SERVER: core.py (screens → state snapshots, actions),
                             #   screens/ (puzzle, coach, statistics, "How does the AI work?"), board.py, brain.py,
-                            #   server.py (HTTP + SSE on 127.0.0.1), app.py (launch modes, window),
+                            #   server.py (HTTP + SSE on 127.0.0.1), app.py (launch), window.py (game window),
                             #   static/ (built interface — produced by `npm run build`, do not edit by hand)
   data/                     # starter_puzzles.json (50 puzzles), puzzles.json (3000 puzzles)
   assets/fonts/             # Noto fonts (WOFF2 subsets, about 60 KB each)
@@ -285,7 +259,6 @@ web/                        # TYPESCRIPT INTERFACE
                             #   EvalBar, TopBar with settings, CoachAvatar…), chess.ts (FEN, animations, arrows),
                             #   ticker.ts (a single requestAnimationFrame loop with an FPS limit), effects.ts, sound.ts
   public/pieces/            #   "cburnett" pieces (SVG)
-  src-tauri/                #   Tauri 2 application window (Rust): starts Python and shows the interface
 scripts/build_puzzles.py    # builds the puzzle set from the Lichess database
 scripts/benchmark.py        # measurements for the table in the README
 scripts/build_engine.py     # compiles the C engine
@@ -299,13 +272,13 @@ modules without any interface code, covered by unit tests. The interface only ca
 
 **TypeScript interface.** Python holds the game state: `tacticmind/web/core.py` runs the screens (puzzle, game
 against the coach, statistics…) without drawing, and after every change sends a state snapshot (JSON) over the SSE stream
-`/api/events`; moves and clicks come back as `POST /api/action`. The browser only draws: an SVG board
+`/api/events`; moves and clicks come back as `POST /api/action`. The interface only draws: an SVG board
 (sharp at any resolution and any display scaling), move animations, arrows, move badges, effects
 and charts — all in a single `requestAnimationFrame` loop with the frame limit from the settings. The player's move appears
 immediately (optimistically), and Python confirms or reverts it. The server listens only on `127.0.0.1`, rejects a foreign
-`Host` header (DNS rebinding) and actions without the `X-TacticMind` header. The Tauri window (`web/src-tauri`) starts
-`python main.py --server --port 0`, reads the address from it and shows the same interface; Python exits when
-the window closes its standard input. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
+`Host` header (DNS rebinding) and actions without the `X-TacticMind` header. `python main.py` starts
+the server on a free port and opens the game window on its address (`tacticmind/web/window.py`, pywebview); full screen (F11) goes
+through a small Python API the window gives the page, and closing the window shuts the server down. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
 
 ```mermaid
 flowchart LR
@@ -733,7 +706,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 173 tests, including:
+`python -m pytest` — 174 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -746,7 +719,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
 | `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
-| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), `--server` mode for the Tauri window |
+| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing) and the message when the window cannot open |
 | `test_training.py` | puzzle modes: theme training draws only that theme, the review queue (order, clean solve removes, limit, missing puzzles, rebuilt from an old profile), Puzzle Rush gets harder without repeats and keeps the best score; on the puzzle screen: switching asks first, review is unrated, a whole Rush run (solve, 3 strikes, summary, again, back) and the clock running out |
 | `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
@@ -881,6 +854,8 @@ and the player plays the side to move after it (the board flips to that side).
     interface removed (about 7 000 lines and the pygame-ce dependency) and the fonts reduced to WOFF2 subsets.
 13. **Puzzle modes and CI** — theme training, review of failed puzzles and Puzzle Rush (3 min, 5 min, Survival); tests
     on GitHub Actions for every pull request.
+14. **One game window** — `python main.py` opens the game in a native window (pywebview, the system's web engine) instead
+    of a Chrome window or the separate Tauri app; Rust and the Tauri build (about 1 GB of build files) are no longer needed.
 
 ## Sources and licenses
 
@@ -898,4 +873,4 @@ and the player plays the side to move after it (the board flips to that side).
 - Pieces in the TypeScript interface: the "cburnett" set (Colin M.L. Burnett, Wikimedia Commons), license
   **CC BY-SA 3.0** (also GFDL, BSD and GPL), files from the chessground package (lichess.org) — `web/public/pieces/LICENSE.txt`.
 - Libraries: [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
-  [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [Tauri](https://tauri.app/) (MIT / Apache-2.0).
+  [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [pywebview](https://pywebview.flowrl.com/) (BSD-3-Clause).

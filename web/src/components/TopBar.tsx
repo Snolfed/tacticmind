@@ -19,29 +19,29 @@ const NAV: { screen: ScreenName; key: string; active: ScreenName[] }[] = [
 
 export const FPS_LIMITS = [60, 120, 144, 170, 240, 0];
 
-// In the Tauri window, full screen is toggled by the window itself: with requestFullscreen WebView2 (Windows)
-// only enlarges the page to the window size. Permission for these two commands comes from web/src-tauri/capabilities.
-interface TauriInternals {
-  invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
+// In the game window (pywebview), full screen is toggled by the window itself: with requestFullscreen WebView2
+// (Windows) only enlarges the page to the window size, and WKWebView (macOS) has no Fullscreen API. The two methods
+// come from WindowApi in tacticmind/web/window.py; pywebview adds them to the page shortly after it loads.
+interface WindowApi {
+  toggle_fullscreen(): Promise<boolean>;
+  is_fullscreen(): Promise<boolean>;
 }
-const tauri = (window as unknown as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
 const FULLSCREEN_EVENT = "tacticmind:fullscreen";
 
-async function windowIsFullscreen(api: TauriInternals): Promise<boolean> {
-  return (await api.invoke("plugin:window|is_fullscreen", { label: "main" })) === true;
+function windowApi(): WindowApi | undefined {
+  const api = (window as unknown as { pywebview?: { api?: Partial<WindowApi> } }).pywebview?.api;
+  return typeof api?.toggle_fullscreen === "function" && typeof api.is_fullscreen === "function"
+    ? (api as WindowApi)
+    : undefined;
 }
 
 export function toggleFullscreen(): void {
-  if (tauri) {
-    const api = tauri;
-    void (async () => {
-      try {
-        await api.invoke("plugin:window|set_fullscreen", { label: "main", value: !(await windowIsFullscreen(api)) });
-      } catch {
-        // without the permission a regular window remains
-      }
-      window.dispatchEvent(new Event(FULLSCREEN_EVENT));
-    })();
+  const api = windowApi();
+  if (api) {
+    api.toggle_fullscreen().then(
+      () => window.dispatchEvent(new Event(FULLSCREEN_EVENT)),
+      () => undefined,
+    );
     return;
   }
   if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
@@ -51,27 +51,28 @@ export function toggleFullscreen(): void {
 export function useFullscreen(): boolean {
   const [full, setFull] = useState(() => !!document.fullscreenElement);
   useEffect(() => {
-    if (tauri) {
-      const api = tauri;
-      let alive = true;
-      const check = (): void => {
-        windowIsFullscreen(api).then(
-          (value) => alive && setFull(value),
-          () => undefined,
-        );
-      };
-      check();
-      window.addEventListener("resize", check);
-      window.addEventListener(FULLSCREEN_EVENT, check);
-      return () => {
-        alive = false;
-        window.removeEventListener("resize", check);
-        window.removeEventListener(FULLSCREEN_EVENT, check);
-      };
-    }
-    const onChange = (): void => setFull(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    let alive = true;
+    const check = (): void => {
+      const api = windowApi();
+      if (!api) {
+        setFull(!!document.fullscreenElement);
+        return;
+      }
+      api.is_fullscreen().then(
+        (value) => alive && setFull(value),
+        () => undefined,
+      );
+    };
+    check();
+    window.addEventListener("pywebviewready", check);
+    window.addEventListener(FULLSCREEN_EVENT, check);
+    document.addEventListener("fullscreenchange", check);
+    return () => {
+      alive = false;
+      window.removeEventListener("pywebviewready", check);
+      window.removeEventListener(FULLSCREEN_EVENT, check);
+      document.removeEventListener("fullscreenchange", check);
+    };
   }, []);
   return full;
 }
