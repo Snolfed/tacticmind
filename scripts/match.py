@@ -89,58 +89,94 @@ def _python_move(board: chess.Board, ms: int) -> chess.Move:
     return chess.Move.from_uci(info.best_move)
 
 
+def _engine_command(spec: str) -> list[str]:
+    """Polecenie silnika. Na Windowsie shlex w trybie POSIX zjadłby ukośniki wsteczne w ścieżce."""
+    if Path(spec).exists():
+        return [spec]
+    if sys.platform == "win32":
+        return [part.strip('"') for part in shlex.split(spec, posix=False)]
+    return shlex.split(spec)
+
+
+def _finished(board: chess.Board) -> tuple[bool | None, str] | None:
+    """Koniec partii, który naprawdę nastąpił: (zwycięzca albo None przy remisie, powód) lub None.
+
+    Nie używamy ``claim_draw=True`` — to uznaje remis, gdy strona na ruchu *mogłaby* go zażądać,
+    nawet jeśli ma wygraną (np. mata w setnym półruchu)."""
+    if board.is_checkmate():
+        return (not board.turn), "mat"
+    if board.is_stalemate():
+        return None, "pat"
+    if board.is_insufficient_material():
+        return None, "brak materiału"
+    if board.is_repetition(3):
+        return None, "powtórzenie"
+    if board.halfmove_clock >= 100:
+        return None, "50 ruchów"
+    if board.fullmove_number > 300:
+        return None, "limit ruchów"
+    return None
+
+
 def play_game(a: Player, b: Player, opening: str, a_white: bool, control: Control) -> tuple[float, str]:
     """Jedna partia. Zwraca (wynik gracza A: 1 / 0.5 / 0, opis zakończenia)."""
     board = chess.Board()
     for uci in opening.split():
         board.push_uci(uci)
+    a_color = chess.WHITE if a_white else chess.BLACK
     engines: dict[bool, chess.engine.SimpleEngine | None] = {}
     clocks = {chess.WHITE: control.base_s, chess.BLACK: control.base_s}
+
+    def loss_of(color: bool, reason: str) -> tuple[float, str]:
+        return (0.0 if color == a_color else 1.0), reason
+
     try:
-        for player, color in ((a, chess.WHITE if a_white else chess.BLACK), (b, chess.BLACK if a_white else chess.WHITE)):
+        for player, color in ((a, a_color), (b, not a_color)):
             if player.spec == "python":
                 engines[color] = None
             else:
-                proc = chess.engine.SimpleEngine.popen_uci(shlex.split(player.spec))
+                proc = chess.engine.SimpleEngine.popen_uci(_engine_command(player.spec))
                 for name, value in player.options:
                     proc.configure({name: value})
                 engines[color] = proc
-        reason = ""
-        while not board.is_game_over(claim_draw=True):
+        while (end := _finished(board)) is None:
             eng = engines[board.turn]
             move: chess.Move | None
-            if eng is None:
-                ms = control.movetime_ms or int(1000 * max(0.05, clocks[board.turn] / 30 + control.inc_s))
-                move = _python_move(board, ms)
-            else:
-                if control.movetime_ms:
-                    limit = chess.engine.Limit(time=control.movetime_ms / 1000)
+            t0 = time.perf_counter()
+            try:
+                if eng is None:
+                    if control.movetime_ms:
+                        ms = control.movetime_ms
+                    else:
+                        ms = int(1000 * max(0.02, clocks[board.turn] / 30 + control.inc_s * 0.75))
+                    move = _python_move(board, ms)
                 else:
-                    limit = chess.engine.Limit(
-                        white_clock=clocks[chess.WHITE], black_clock=clocks[chess.BLACK],
-                        white_inc=control.inc_s, black_inc=control.inc_s,
-                    )
-                t0 = time.perf_counter()
-                move = eng.play(board, limit).move
-                if not control.movetime_ms:
-                    clocks[board.turn] -= time.perf_counter() - t0
-                    if clocks[board.turn] < 0:
-                        reason = "czas"
-                        loser_white = board.turn == chess.WHITE
-                        return (0.0 if loser_white == a_white else 1.0), reason
-                    clocks[board.turn] += control.inc_s
+                    if control.movetime_ms:
+                        limit = chess.engine.Limit(time=control.movetime_ms / 1000)
+                    else:
+                        limit = chess.engine.Limit(
+                            white_clock=clocks[chess.WHITE], black_clock=clocks[chess.BLACK],
+                            white_inc=control.inc_s, black_inc=control.inc_s,
+                        )
+                    move = eng.play(board, limit).move
+            except (chess.engine.EngineError, chess.engine.EngineTerminatedError, ValueError):
+                # python-chess zgłasza nielegalny bestmove jako EngineError — to porażka, nie koniec meczu.
+                return loss_of(board.turn, "nielegalny ruch / awaria silnika")
+            if not control.movetime_ms:
+                clocks[board.turn] -= time.perf_counter() - t0
+                if clocks[board.turn] < 0:
+                    # Przekroczenie czasu to remis, jeśli przeciwnik nie ma czym dać mata (FIDE 6.9).
+                    if board.has_insufficient_material(not board.turn):
+                        return 0.5, "czas / brak materiału"
+                    return loss_of(board.turn, "czas")
+                clocks[board.turn] += control.inc_s
             if move is None or move not in board.legal_moves:
-                reason = "nielegalny ruch"
-                return (0.0 if board.turn == (chess.WHITE if a_white else chess.BLACK) else 1.0), reason
+                return loss_of(board.turn, "nielegalny ruch")
             board.push(move)
-            if board.fullmove_number > 300:
-                return 0.5, "limit ruchów"
-        outcome = board.outcome(claim_draw=True)
-        assert outcome is not None
-        reason = outcome.termination.name.lower()
-        if outcome.winner is None:
+        winner, reason = end
+        if winner is None:
             return 0.5, reason
-        return (1.0 if outcome.winner == (chess.WHITE if a_white else chess.BLACK) else 0.0), reason
+        return (1.0 if winner == a_color else 0.0), reason
     finally:
         for opened in engines.values():
             if opened is not None:

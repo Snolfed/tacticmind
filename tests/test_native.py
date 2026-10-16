@@ -58,6 +58,22 @@ def test_wins_hanging_queen() -> None:
     assert info.best_move == "c1g5"
 
 
+def test_mate_beats_fifty_move_rule() -> None:
+    # Mat w setnym półruchu kończy partię matem, nie remisem — silnik nie może go oddać.
+    info = searcher().search("7k/8/6K1/8/8/8/8/R7 w - - 99 120", SearchLimits(max_depth=6, time_ms=10_000))
+    assert info.best_move == "a1a8" and info.mate_in == 1
+    # Obrona: czarne nie mogą wejść w mata, licząc na remis z reguły 50 ruchów.
+    info = searcher().search("6k1/8/6K1/8/8/8/8/R7 b - - 98 120", SearchLimits(max_depth=6, time_ms=10_000))
+    assert info.best_move == "g8f8"
+
+
+def test_impossible_en_passant_square_is_ignored() -> None:
+    # Pole e6 z FEN, choć nie ma czarnego piona na e5 — bicie w przelocie byłoby niemożliwe.
+    assert LIB is not None
+    bogus = LIB.lib.tm_perft(b"4k3/8/8/3P4/8/8/8/4K3 w - e6 0 1", 3)
+    assert bogus == LIB.lib.tm_perft(b"4k3/8/8/3P4/8/8/8/4K3 w - - 0 1", 3)
+
+
 def test_multipv_stats_and_tree() -> None:
     fen = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
     depths: list[int] = []

@@ -142,7 +142,7 @@ int evaluate(Position *pos) {
     if (pos_insufficient(pos)) return 0;
     int v = (pos->use_nnue && NET_LOADED) ? nnue_evaluate(pos) : eval_hce(pos);
     /* Zbliżanie się do reguły 50 ruchów ściąga ocenę do remisu. */
-    v = v * (200 - pos->halfmove) / 200;
+    v = v * (200 - (pos->halfmove < 100 ? pos->halfmove : 100)) / 200;
     if (v > MATE_BOUND - 1) v = MATE_BOUND - 1;
     if (v < -MATE_BOUND + 1) v = -MATE_BOUND + 1;
     return v;

@@ -10,13 +10,99 @@
  */
 #include "tm.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#else
+#include <sys/select.h>
+#include <unistd.h>
+#endif
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 static Engine *E;
+
+/* ------------------------------------------------------- wejście UCI
+   Czytamy stdin sami, bez bufora stdio: w trakcie liczenia (co ok. 20 ms) sprawdzamy, czy GUI
+   nie przysłało „stop” albo „quit”. Bufor stdio mógłby schować te polecenia przed select(). */
+static char in_buf[1 << 16];
+static size_t in_len;
+static int in_eof, quit_requested;
+
+static int stdin_ready(void) {
+#ifdef _WIN32
+    static HANDLE h;
+    static int is_pipe = -1;
+    if (is_pipe < 0) {
+        DWORD mode;
+        h = GetStdHandle(STD_INPUT_HANDLE);
+        is_pipe = !GetConsoleMode(h, &mode);
+    }
+    if (is_pipe) {
+        DWORD avail = 0;
+        if (!PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL)) return 1; /* zamknięty potok: read() zwróci koniec */
+        return avail > 0;
+    }
+    DWORD events = 0;
+    GetNumberOfConsoleInputEvents(h, &events);
+    return events > 1;
+#else
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(0, &set);
+    struct timeval tv = {0, 0};
+    return select(1, &set, NULL, NULL, &tv) > 0;
+#endif
+}
+
+/* Następna linia wejścia do out. Zwraca 1 — jest linia, 0 — na razie nic (tylko gdy !block), −1 — koniec wejścia. */
+static int next_line(char *out, size_t size, int block) {
+    for (;;) {
+        char *nl = memchr(in_buf, '\n', in_len);
+        if (nl || in_eof || in_len == sizeof in_buf) {
+            size_t n = nl ? (size_t)(nl - in_buf) + 1 : in_len;
+            if (n == 0) return -1;
+            size_t copy = n < size ? n : size - 1;
+            memcpy(out, in_buf, copy);
+            out[copy] = 0;
+            memmove(in_buf, in_buf + n, in_len - n);
+            in_len -= n;
+            return 1;
+        }
+        if (!block && !stdin_ready()) return 0;
+#ifdef _WIN32
+        int got = _read(0, in_buf + in_len, (unsigned)(sizeof in_buf - in_len));
+#else
+        ssize_t got = read(0, in_buf + in_len, sizeof in_buf - in_len);
+#endif
+        if (got <= 0) in_eof = 1;
+        else in_len += (size_t)got;
+    }
+}
+
+/* Wywoływane z wyszukiwania co ok. 20 ms: 1 = przerwij. */
+static int uci_poll(void *user, int depth, uint64_t nodes, uint64_t cutoffs, uint64_t tt_hits, int time_ms) {
+    (void)user, (void)depth, (void)nodes, (void)cutoffs, (void)tt_hits, (void)time_ms;
+    char line[16384];
+    int r;
+    while ((r = next_line(line, sizeof line, 0)) == 1) {
+        if (!strncmp(line, "isready", 7)) {
+            printf("readyok\n");
+            fflush(stdout);
+        } else if (!strncmp(line, "stop", 4)) {
+            return 1;
+        } else if (!strncmp(line, "quit", 4)) {
+            quit_requested = 1;
+            return 1;
+        }
+    }
+    if (r < 0) quit_requested = 1;
+    return r < 0;
+}
 
 static void cmd_position(char *line) {
     char *p = strstr(line, "startpos");
@@ -53,16 +139,21 @@ static long arg_value(const char *line, const char *name, long def) {
 }
 
 static void cmd_go(char *line) {
+    line[strcspn(line, "\r\n")] = 0;
+    strcat(line, " "); /* żeby „go depth 5” na końcu linii też pasowało do " depth " */
     int depth = (int)arg_value(line, " depth ", MAX_PLY - 8);
     long movetime = arg_value(line, " movetime ", 0);
     long nodes = arg_value(line, " nodes ", 0);
-    long mytime = arg_value(line, E->pos.side == WHITE ? " wtime " : " btime ", -1);
+    long mytime = arg_value(line, E->pos.side == WHITE ? " wtime " : " btime ", LONG_MIN);
     long inc = arg_value(line, E->pos.side == WHITE ? " winc " : " binc ", 0);
     long mtg = arg_value(line, " movestogo ", 0);
+    int infinite = strstr(line, " infinite") != NULL;
     int time_ms = 0;
     if (movetime > 0) {
         time_ms = (int)movetime;
-    } else if (mytime >= 0) {
+    } else if (mytime != LONG_MIN) {
+        if (mytime < 0) mytime = 0; /* czas już przekroczony — ruch jak najszybciej */
+        if (inc < 0) inc = 0;
         long base = mytime / (mtg > 0 ? mtg + 2 : 25) + inc * 3 / 4;
         long t = base * 2;
         long cap = mytime / 2 - 30;
@@ -71,7 +162,25 @@ static void cmd_go(char *line) {
         time_ms = (int)t;
     }
     int score;
+    E->poll = uci_poll;
     Move best = engine_think(E, depth, time_ms, (uint64_t)nodes, &score, 1);
+    /* „go infinite”: bestmove dopiero po „stop”, nawet jeśli wyszukiwanie skończyło się wcześniej. */
+    if (infinite && !E->stop) {
+        char cmd[16384];
+        int r;
+        while ((r = next_line(cmd, sizeof cmd, 1)) == 1) {
+            if (!strncmp(cmd, "isready", 7)) {
+                printf("readyok\n");
+                fflush(stdout);
+            } else if (!strncmp(cmd, "stop", 4)) {
+                break;
+            } else if (!strncmp(cmd, "quit", 4)) {
+                quit_requested = 1;
+                break;
+            }
+        }
+        if (r < 0) quit_requested = 1;
+    }
     char buf[8];
     move_to_uci(best, buf);
     printf("bestmove %s\n", buf);
@@ -80,7 +189,7 @@ static void cmd_go(char *line) {
 
 static void uci_loop(void) {
     char line[16384];
-    while (fgets(line, sizeof line, stdin)) {
+    while (!quit_requested && next_line(line, sizeof line - 2, 1) == 1) {
         if (!strncmp(line, "ucinewgame", 10)) {
             engine_clear(E);
         } else if (!strncmp(line, "uci", 3)) {
@@ -98,8 +207,14 @@ static void uci_loop(void) {
                 if (strstr(line, "name EvalFile")) {
                     if (!nnue_load(v)) printf("info string nie udalo sie wczytac sieci %s\n", v);
                 } else if (strstr(line, "name Hash")) {
-                    engine_free(E);
-                    E = engine_new(atoi(v));
+                    Engine *bigger = engine_new(atoi(v) > 0 ? atoi(v) : 1);
+                    if (bigger) { /* zachowujemy pozycję i ustawienie UseNNUE */
+                        bigger->pos = E->pos;
+                        engine_free(E);
+                        E = bigger;
+                    } else {
+                        printf("info string brak pamieci na Hash %s MB\n", v);
+                    }
                 } else if (strstr(line, "name UseNNUE")) {
                     E->pos.use_nnue = strstr(v, "true") != NULL;
                     pos_refresh_acc(&E->pos);
@@ -278,6 +393,10 @@ int main(int argc, char **argv) {
         if (slash) {
             strcpy(slash + 1, "tacticmind.nnue");
             nnue_load(path);
+            if (!NET_LOADED) { /* program w native/build/, sieć w native/ */
+                strcpy(slash + 1, "../tacticmind.nnue");
+                nnue_load(path);
+            }
         }
     }
     if (argc >= 2 && !strcmp(argv[1], "bench")) {

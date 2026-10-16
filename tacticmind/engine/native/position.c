@@ -126,8 +126,13 @@ int pos_set_fen(Position *pos, const char *fen) {
     pos->ep = -1;
     if (*p >= 'a' && *p <= 'h' && p[1] >= '1' && p[1] <= '8') {
         int sq = (p[1] - '1') * 8 + (p[0] - 'a');
-        /* Pole bicia w przelocie zapamiętujemy tylko, gdy bicie jest w ogóle możliwe (spójny hasz). */
-        if (PAWN_ATT[pos->side ^ 1][sq] & pos->pieces[PIECE(pos->side, PAWN)]) pos->ep = sq;
+        /* Pole bicia w przelocie zapamiętujemy tylko, gdy bicie jest naprawdę możliwe: właściwy rząd,
+           puste pole bicia i pole startowe piona, pion przeciwnika obok i nasz pion, który go zbije. */
+        int up = pos->side == WHITE ? 8 : -8;
+        if (RANK_OF(sq) == (pos->side == WHITE ? 5 : 2) && pos->board[sq] == NO_PIECE && pos->board[sq + up] == NO_PIECE &&
+            pos->board[sq - up] == PIECE(pos->side ^ 1, PAWN) &&
+            (PAWN_ATT[pos->side ^ 1][sq] & pos->pieces[PIECE(pos->side, PAWN)]))
+            pos->ep = sq;
         p += 2;
     } else if (*p) {
         p++;
@@ -338,7 +343,10 @@ int pos_is_repetition(const Position *pos, int search_ply) {
        sprzed korzenia — dopiero przy trzecim wystąpieniu. */
     int count = 0;
     int limit = pos->halfmove < pos->ply ? pos->halfmove : pos->ply;
-    for (int i = 4; i <= limit; i += 2) {
+    for (int i = 1; i <= limit; i++) {
+        /* Nie cofamy się poza ruch zerowy (null move) — pozycje sprzed niego nie wystąpiły w partii. */
+        if (pos->hist[pos->ply - i].move == 0) break;
+        if (i < 4 || (i & 1)) continue;
         if (pos->hist[pos->ply - i].key == pos->key) {
             if (i < search_ply) return 1;
             if (++count >= 2) return 1;

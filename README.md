@@ -516,7 +516,7 @@ a `engine/csearch.py` daje mu dokładnie ten sam interfejs co `Searcher` z Pytho
 taki sam `SearchInfo` (MultiPV, statystyki, mini-drzewo), więc panel „Mózg AI”, trener i ocena zadań działają bez zmian.
 
 **Plansza i ruchy.** Bitboardy (64-bitowa maska na każdy rodzaj figury), ataki gońców i wież z „magicznych”
-tablic (magiczne liczby wyszukiwane przy starcie), legalność sprawdzana bez wykonywania ruchu (czy po ruchu
+tablic (magiczne liczby znalezione losowaniem i zapisane w kodzie), legalność sprawdzana bez wykonywania ruchu (czy po ruchu
 coś atakuje króla). Perft zgadza się z wartościami referencyjnymi, np. Kiwipete na głębokości 5 = 193 690 690.
 
 **Wyszukiwanie** (`search.c`):
@@ -593,7 +593,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 156 testów, m.in.:
+`python -m pytest` — 158 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|

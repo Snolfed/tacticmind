@@ -198,6 +198,10 @@ int main(int argc, char **argv) {
     size_t nval = total / 100 < 200000 ? total / 100 : 200000;
     size_t ntrain = total - nval;
     PackedPos *val = data + ntrain;
+    if (ntrain < BATCH) {
+        fprintf(stderr, "za malo danych: %zu pozycji treningowych, potrzeba co najmniej %d\n", ntrain, BATCH);
+        return 1;
+    }
     fprintf(stderr, "pozycje: %zu (trening %zu, walidacja %zu), lambda %.2f\n", total, ntrain, nval, lambda_eval);
 
     /* Inicjalizacja wag */

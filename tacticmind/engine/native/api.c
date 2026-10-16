@@ -12,11 +12,14 @@
 #include <stdio.h>
 #include <string.h>
 
-TM_API int tm_version(void) { return 1; }
+TM_API int tm_version(void) { return 2; } /* = API_VERSION w native.py */
 
 TM_API int tm_hidden_size(void) { return NNUE_HIDDEN; }
 
 TM_API int tm_load_net(const char *path) { return nnue_load(path); }
+
+/* Sieć z pamięci: Python czyta plik sam (ścieżki z polskimi znakami na Windowsie). */
+TM_API int tm_load_net_memory(const unsigned char *data, size_t size) { return nnue_load_memory(data, size); }
 
 TM_API int tm_net_loaded(void) { return NET_LOADED; }
 

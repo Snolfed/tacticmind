@@ -299,8 +299,14 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
     }
     if (ply >= MAX_PLY - 1) return evaluate(pos);
 
-    /* Remisy: reguła 50 ruchów, powtórzenie, brak materiału. */
-    if (pos->halfmove >= 100 || pos_is_repetition(pos, ply) || pos_insufficient(pos)) return 0;
+    /* Remisy: powtórzenie, brak materiału, reguła 50 ruchów (ale mat w setnym półruchu wygrywa). */
+    if (pos_is_repetition(pos, ply) || pos_insufficient(pos)) return 0;
+    if (pos->halfmove >= 100) {
+        if (!pos_in_check(pos)) return 0;
+        MoveList legal;
+        gen_legal(pos, &legal);
+        return legal.count ? 0 : -MATE + ply;
+    }
 
     /* Mate distance pruning: nie szukaj mata dłuższego niż już znaleziony. */
     int ma = alpha > -MATE + ply ? alpha : -MATE + ply;
@@ -513,6 +519,8 @@ int engine_prepare(Engine *e, int multipv, int record_tree) {
     e->terminal = 0;
     e->depth = 0;
     pos_refresh_acc(&e->pos);
+    /* Ocena korzenia — punkt odniesienia dla „improving” na poziomie 2. */
+    e->static_eval[0] = pos_in_check(&e->pos) ? -INF : evaluate(&e->pos);
     score_moves(e, &list, 0, 0);
     for (int i = 0; i < list.count; i++) {
         Move m = pick(&list, i);

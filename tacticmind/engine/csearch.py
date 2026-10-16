@@ -59,7 +59,6 @@ class CSearcher:
         self.last_info: SearchInfo | None = None
         self.terminal: Terminal | None = None
         self._buffer = ctypes.create_string_buffer(REPORT_SIZE)
-        self._poll = POLL_FN(self._on_poll)
 
     def __del__(self) -> None:
         handle = getattr(self, "_handle", None)
@@ -103,7 +102,10 @@ class CSearcher:
             self.finished = True
             return None
         stop_after = float(self.limits.time_ms) if depth > 1 else -1.0
-        done = self._lib.lib.tm_iterate(self._handle, depth, stop_after, self._poll, None)
+        # Funkcja zwrotna tworzona na czas jednego wywołania: trzymana w atrybucie tworzyłaby cykl referencji
+        # (silnik → funkcja → metoda → silnik) i pamięć silnika w C czekałaby na odśmiecacz cykli.
+        poll = POLL_FN(self._on_poll)
+        done = self._lib.lib.tm_iterate(self._handle, depth, stop_after, poll, None)
         if not done:
             self.finished = True
             return None
