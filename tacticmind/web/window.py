@@ -73,10 +73,12 @@ def _borrow_system_gi() -> None:
 
 
 def _avoid_nvidia_wayland_crash() -> None:
-    """With the proprietary NVIDIA driver under Wayland, WebKitGTK's DMA-BUF renderer kills the window at once
-    ("Error 71 (Protocol error) dispatching to Wayland display"); its older renderer works. A value the player set wins."""
+    """With the proprietary NVIDIA driver under Wayland, the driver's explicit sync kills WebKitGTK's window at once
+    ("Error 71 (Protocol error) dispatching to Wayland display"). Turning explicit sync off keeps the fast DMA-BUF
+    renderer (60 FPS); WebKitGTK's fallback renderer (``WEBKIT_DISABLE_DMABUF_RENDERER=1``) also works, but measured
+    11–24 FPS at 2560×1440. A value the player set wins."""
     if os.environ.get("WAYLAND_DISPLAY") and os.environ.get("GDK_BACKEND", "wayland").startswith("wayland") and NVIDIA_DRIVER.exists():
-        os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+        os.environ.setdefault("__NV_DISABLE_EXPLICIT_SYNC", "1")
 
 
 def check() -> str | None:

@@ -791,11 +791,10 @@ input[type="range"]::-moz-range-thumb {
     opacity: 1;
   }
 }
+/* Fade only: a scale animation on SVG shapes left stray lines around the dots in WebKitGTK (the game window on Linux). */
 .dot {
   fill: rgba(15, 23, 42, 0.27);
-  animation: dot-in 0.22s cubic-bezier(0.3, 1.6, 0.5, 1);
-  transform-box: fill-box;
-  transform-origin: center;
+  animation: dot-in 0.18s ease-out;
 }
 .dot-capture {
   fill: none;
@@ -804,7 +803,7 @@ input[type="range"]::-moz-range-thumb {
 }
 @keyframes dot-in {
   from {
-    transform: scale(0);
+    opacity: 0;
   }
 }
 .arrow {

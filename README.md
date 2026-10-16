@@ -71,10 +71,10 @@ python scripts/build_engine.py     # library for the game + the tmengine UCI pro
 ([pywebview](https://pywebview.flowrl.com/) with the system's web engine: WebKitGTK on Linux, WebView2 on Windows,
 WKWebView on macOS), so no browser opens and nothing has to be built. Closing the window ends the game. On Linux the
 `.venv` uses the system PyGObject by itself, as long as it was created with the system Python; if anything is missing,
-`python main.py` prints what to install. Under Wayland with the proprietary NVIDIA driver the game turns off WebKitGTK's
-DMA-BUF renderer by itself (`WEBKIT_DISABLE_DMABUF_RENDERER=1`): with it the window closes at once with "Error 71 (Protocol
-error) dispatching to Wayland display". If the window stays blank on another setup, start the game with
-`WEBKIT_DISABLE_DMABUF_RENDERER=1 python main.py`.
+`python main.py` prints what to install. Under Wayland with the proprietary NVIDIA driver the game turns off the driver's
+explicit sync by itself (`__NV_DISABLE_EXPLICIT_SYNC=1`): with it the window closes at once with "Error 71 (Protocol error)
+dispatching to Wayland display". If the window still closes or stays blank, start the game with
+`WEBKIT_DISABLE_DMABUF_RENDERER=1 python main.py` (WebKitGTK's fallback renderer: it works everywhere, but is much slower).
 
 Tests:
 
@@ -721,7 +721,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
 | `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
-| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing), the message when the window cannot open and the NVIDIA + Wayland renderer switch |
+| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing), the message when the window cannot open and the NVIDIA + Wayland explicit sync switch |
 | `test_training.py` | puzzle modes: theme training draws only that theme, the review queue (order, clean solve removes, limit, missing puzzles, rebuilt from an old profile), Puzzle Rush gets harder without repeats and keeps the best score; on the puzzle screen: switching asks first, review is unrated, a whole Rush run (solve, 3 strikes, summary, again, back) and the clock running out |
 | `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
