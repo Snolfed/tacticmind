@@ -26,6 +26,14 @@ STRINGS: dict[str, str] = {
     "rating.caption": "Ranking ({system})",
     "rating.calibration": "kalibracja {n}/10",
     "rating.calibrating": "kalibracja",
+    "settings.title": "Ustawienia",
+    "settings.show_fps": "Licznik FPS",
+    "settings.fps_limit": "Limit klatek na sekundę",
+    "settings.on": "Wł.",
+    "settings.off": "Wył.",
+    "settings.hint": "F3 — szybkie włączenie licznika FPS",
+    "settings.tooltip": "Ustawienia",
+    "fps.overlay": "{fps} FPS · {ms} ms",
     # --- ekran startowy ---------------------------------------------------
     "home.tagline": "Zadania taktyczne i partie z trenerem — z AI, które myśli na głos",
     "home.desc": "Własny silnik (alfa-beta) pokazuje na żywo, co liczy. Ranking dopasowuje zadania do Twojego poziomu, a trener tłumaczy każdy ruch i uczy otwarć.",
@@ -380,7 +388,8 @@ STRINGS: dict[str, str] = {
     "howto.intro": (
         "TacticMind ma dwa elementy sztucznej inteligencji: własny silnik szachowy (przeszukiwanie drzewa gry "
         "algorytmem alfa-beta) oraz adaptacyjny dobór zadań (ranking Elo/Glicko-2 i model gracza). Silnik jest "
-        "napisany od zera w Pythonie — nie korzysta ze Stockfisha ani innego gotowego silnika."
+        "napisany od zera w C i ocenia pozycje siecią neuronową NNUE, wytrenowaną na jego własnych partiach. "
+        "Nie korzysta ze Stockfisha ani innego gotowego silnika. Poniższe porównanie liczy prostsza wersja w Pythonie."
     ),
     "compare.title": "Porównanie na żywo: minimaks vs alfa-beta",
     "compare.subtitle": "Ta sama pozycja, ta sama głębokość i funkcja oceny — różni się tylko liczba odwiedzonych węzłów.",

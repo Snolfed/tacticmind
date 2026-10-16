@@ -22,9 +22,11 @@ def test_engine_process_protocol() -> None:
     try:
         # 1) Długa analiza, przerwana nowym zapytaniem.
         first = client.analyze("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", time_ms=60_000)
-        time.sleep(0.5)
+        # Czekamy, aż pierwsza analiza naprawdę ruszy (start procesu na obciążonej maszynie bywa wolny),
+        # inaczej proces zobaczy od razu oba zapytania i słusznie pominie pierwsze.
+        early = wait_for(client, InfoEvent, first)
         second = client.analyze("6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1", time_ms=5_000, multi_pv=3)
-        events = wait_for(client, DoneEvent, second)
+        events = early + wait_for(client, DoneEvent, second)
         infos = [e.info for e in events if isinstance(e, InfoEvent) and e.id == second]
         assert infos, "silnik powinien wysłać info po każdej głębokości"
         assert [i.depth for i in infos] == list(range(1, len(infos) + 1))

@@ -11,7 +11,7 @@ Progi spadku szansy na wygraną (punkty procentowe):
 ==================  ===========  =================================================
 Klasa               Spadek       Uwagi
 ==================  ===========  =================================================
-genialny (!!)       ≤ 2          najlepszy lub prawie najlepszy ruch i poświęcenie figury
+genialny (!!)       ≤ 2          poświęcenie figury, bez którego pozycja nie była wygrana
 świetny (!)         0            jedyny dobry ruch: drugi najlepszy traci ≥ 15 pkt
 najlepszy           0            ruch wskazany przez silnik
 znakomity           ≤ 2
@@ -46,7 +46,8 @@ WEAK: frozenset[str] = frozenset({"inaccuracy", "mistake", "blunder"})
 
 GREAT_GAP = 15.0
 BRILLIANT_MAX_DROP = 2.0
-#: Poświęcenie w pozycji „wygranej na 97%” nie jest genialne — wygrywa wszystko.
+#: Poświęcenie nie jest genialne, gdy i bez niego pozycja jest wygrana na 97% — wtedy wygrywa wszystko.
+#: Liczy się drugi najlepszy ruch: poświęcenie, które samo prowadzi do mata, może być genialne.
 BRILLIANT_MAX_WIN = 97.0
 
 
@@ -96,12 +97,14 @@ def classify(
     :param book: ruch z teorii otwarć,
     :param sacrifice: ruch oddaje materiał (patrz ``puzzles.validator.is_sacrifice``),
     :param second_drop: o ile gorszy jest drugi najlepszy ruch (do „świetnego” ruchu),
-    :param win_before: szansa na wygraną przy najlepszej grze (genialne poświęcenie nie w pozycji już wygranej),
+    :param win_before: szansa na wygraną przy najlepszej grze; bez poświęcenia (przy drugim najlepszym ruchu,
+        ``win_before − second_drop``) pozycja nie może być już wygrana, a po ruchu nie może być przegrana,
     :param recapture: odbicie figury — oczywiste, więc nigdy nie jest „świetne”.
     """
     if book:
         return "book"
-    if sacrifice and drop <= BRILLIANT_MAX_DROP and win_before < BRILLIANT_MAX_WIN and win_before - drop > 40:
+    win_without = win_before - second_drop if second_drop is not None else win_before
+    if sacrifice and drop <= BRILLIANT_MAX_DROP and win_without < BRILLIANT_MAX_WIN and win_before - drop > 40:
         return "brilliant"
     if is_best:
         if second_drop is not None and second_drop >= GREAT_GAP and not recapture:

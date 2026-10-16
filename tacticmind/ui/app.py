@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import random
 
@@ -14,8 +15,9 @@ from ..engine.process import EngineClient, EngineEvent
 from ..puzzles.loader import load_puzzles, puzzle_source
 from ..rating.profile import PlayerProfile, load_profile, save_profile
 from . import fonts, gfx, sounds
-from .anim import ease_out_cubic
+from .anim import begin_frame, clock, ease_out_cubic
 from .icon import app_icon
+from .pacing import FpsCounter, FramePacer
 from .scale import compute_scale, set_scale
 from .screens.base import Screen
 from .screens.coach_game import CoachGameScreen
@@ -24,6 +26,7 @@ from .screens.home import HomeScreen
 from .screens.howto import HowToScreen
 from .screens.play import PlayScreen
 from .screens.stats import StatsScreen
+from .settings_panel import SettingsPanel
 from .sounds import Sounds
 from .topbar import TopBar
 
@@ -51,6 +54,8 @@ class App:
         self.puzzles = load_puzzles()
         self.puzzle_source = puzzle_source()
         self.rng = random.Random()
+        self.settings = SettingsPanel(self)
+        self.fps = FpsCounter()
         self.topbar = TopBar(self)
         self.screens: dict[str, Screen] = {
             "home": HomeScreen(self),
@@ -66,6 +71,9 @@ class App:
         self._transition_age = 0.0
         self.relayout()
         self.screens["home"].enter()
+        # Obiekty z wczytywania (zadania, czcionki, ekrany) żyją do końca gry — odsuwamy je od
+        # odśmiecacza, żeby pełne odśmiecanie nie zatrzymywało co jakiś czas klatki na kilkanaście ms.
+        gc.freeze()
 
     @property
     def current(self) -> Screen:
@@ -130,8 +138,14 @@ class App:
         for screen in self.screens.values():
             screen.on_engine(event)
 
-    def frame(self, dt: float) -> None:
+    def toggle_fps(self) -> None:
+        """F3: licznik FPS w rogu okna."""
+        self.profile.show_fps = not self.profile.show_fps
+        self.save()
+
+    def frame(self, dt: float, start: float | None = None) -> None:
         """Jedna klatka: zdarzenia, wiadomości silnika, logika, rysowanie."""
+        start = begin_frame(start)  # jeden wspólny czas dla wszystkich animacji w tej klatce
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -140,8 +154,12 @@ class App:
                 if w < MIN_SIZE[0] or h < MIN_SIZE[1]:
                     self.screen = pygame.display.set_mode((max(w, MIN_SIZE[0]), max(h, MIN_SIZE[1])), pygame.RESIZABLE)
                 self.relayout()
+            elif self.settings.handle(event):
+                continue
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11 or event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE and self.fullscreen and not self._escape_used():
                 self.toggle_fullscreen()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
+                self.toggle_fps()
             elif self.topbar.handle(event):
                 continue
             else:
@@ -150,7 +168,9 @@ class App:
             self.dispatch_engine(engine_event)
         self.topbar.update(dt)
         self.current.update(dt)
-        self.screen.blit(gfx.background(self.screen.get_size()), (0, 0))
+        # Pasek górny ma własne, nieprzezroczyste tło — pod nim tła aplikacji nie kopiujemy.
+        top = self.topbar.rect.height
+        self.screen.blit(gfx.background(self.screen.get_size()), (0, top), pygame.Rect(0, top, self.screen.get_width(), self.screen.get_height() - top))
         self.current.draw(self.screen)
         if self._transition is not None:
             # Przenikanie: stary ekran płynnie znika nad nowym.
@@ -162,14 +182,21 @@ class App:
                 self._transition.set_alpha(int(255 * fade))
                 self.screen.blit(self._transition, (0, 0))
         self.topbar.draw(self.screen)
+        self.settings.draw(self.screen)
+        if self.profile.show_fps:
+            self.fps.draw(self.screen, self.topbar.rect.height)
         pygame.display.flip()
+        self.fps.record(start, clock())
 
     def run(self) -> None:
-        clock = pygame.time.Clock()
+        pacer = FramePacer()
+        last = clock()
         try:
             while self.running:
-                dt = clock.tick(60) / 1000
-                self.frame(min(dt, 0.1))
+                pacer.wait(self.profile.fps_limit)
+                start = clock()
+                dt, last = start - last, start
+                self.frame(min(dt, 0.1), start)
         finally:
             self.shutdown()
 

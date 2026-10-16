@@ -5,9 +5,28 @@ from __future__ import annotations
 import math
 import time
 
+_frame_time: float | None = None
+
+
+def clock() -> float:
+    """Zegar wysokiej rozdzielczości (sekundy).
+
+    ``time.monotonic()`` na Windowsie (Python < 3.13) tyka co 15,6 ms — animacje liczone z niego
+    przeskakują co drugą klatkę. ``perf_counter`` ma rozdzielczość mikrosekund na każdym systemie.
+    """
+    return time.perf_counter()
+
+
+def begin_frame(t: float | None = None) -> float:
+    """Ustala czas bieżącej klatki — wszystkie animacje w tej klatce widzą ten sam moment."""
+    global _frame_time
+    _frame_time = clock() if t is None else t
+    return _frame_time
+
 
 def now() -> float:
-    return time.monotonic()
+    """Czas bieżącej klatki (albo zegar, gdy pętla gry jeszcze nie ruszyła)."""
+    return _frame_time if _frame_time is not None else clock()
 
 
 def clamp01(x: float) -> float:

@@ -117,6 +117,11 @@ def test_special_classes() -> None:
     assert review.classify(0, is_best=True, second_drop=20, recapture=True) == "best"
     assert review.classify(0, is_best=True, sacrifice=True, win_before=70) == "brilliant"
     assert review.classify(0, is_best=True, sacrifice=True, win_before=99) == "best"  # już i tak wygrane
+    # Poświęcenie prowadzące do mata jest genialne, jeśli bez niego pozycja nie była wygrana…
+    assert review.classify(0, is_best=True, sacrifice=True, win_before=100, second_drop=40) == "brilliant"
+    # …ale nie, gdy inne ruchy też wygrywają.
+    assert review.classify(0, is_best=True, sacrifice=True, win_before=100, second_drop=1) == "best"
+    assert review.classify(0, is_best=True, sacrifice=True, win_before=55, second_drop=30) == "brilliant"
     assert review.classify(30, is_best=False, book=True) == "book"
 
 
