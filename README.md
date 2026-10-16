@@ -14,8 +14,11 @@ dopasowaną do Twoich wyników i zmienia ją co 5 partii.
 
 ![Trener Maks](tacticmind/assets/coach.png)
 
-Stockfish ani żaden inny gotowy silnik **nie jest używany**. Biblioteka `python-chess` służy wyłącznie warstwie
-interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza); silnik ma własną planszę 0x88 i własny generator ruchów.
+Stockfish ani żaden inny gotowy silnik **nie jest używany** w grze. Silnik gry jest napisany od zera w **C**
+(bitboardy, alfa-beta w wariancie PVS) i ocenia pozycje **siecią neuronową NNUE**, wytrenowaną w tym projekcie
+na partiach silnika z samym sobą ([Silnik w C i sieć NNUE](#silnik-w-c-i-sieć-nnue)). Prostsza wersja silnika
+w Pythonie (plansza 0x88) zostaje jako zapas, gdy nie ma kompilatora C, i do demonstracji minimaks vs alfa-beta.
+Biblioteka `python-chess` służy wyłącznie warstwie interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza).
 
 ---
 
@@ -26,12 +29,13 @@ interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza); silnik ma własn
 3. [Gra z trenerem](#gra-z-trenerem)
 4. [Architektura](#architektura)
 5. [Algorytmy](#algorytmy)
-6. [Pomiary: minimaks vs alfa-beta](#pomiary-minimaks-vs-alfa-beta)
-7. [Testy](#testy)
-8. [Zadania z bazy Lichess](#zadania-z-bazy-lichess)
-9. [Decyzje projektowe](#decyzje-projektowe)
-10. [Etapy pracy](#etapy-pracy)
-11. [Źródła i licencje](#źródła-i-licencje)
+6. [Silnik w C i sieć NNUE](#silnik-w-c-i-sieć-nnue)
+7. [Pomiary: minimaks vs alfa-beta](#pomiary-minimaks-vs-alfa-beta)
+8. [Testy](#testy)
+9. [Zadania z bazy Lichess](#zadania-z-bazy-lichess)
+10. [Decyzje projektowe](#decyzje-projektowe)
+11. [Etapy pracy](#etapy-pracy)
+12. [Źródła i licencje](#źródła-i-licencje)
 
 ---
 
@@ -44,6 +48,15 @@ python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt    # pygame-ce, python-chess, pytest
 python main.py                     # albo: python -m tacticmind
+```
+
+Silnik w C kompiluje się sam przy pierwszym uruchomieniu (ok. 2 s), jeśli w systemie jest kompilator C:
+na Linuksie `gcc` (`sudo apt install build-essential`), na macOS `clang` (`xcode-select --install`). Na Windowsie
+bez kompilatora gra używa gotowej biblioteki z `tacticmind/engine/native/prebuilt/windows-x64/`. Gdy nic z tego
+nie zadziała, gra po cichu przełącza się na silnik w Pythonie (słabszy, ale działa tak samo). Ręcznie:
+
+```bash
+python scripts/build_engine.py     # biblioteka dla gry + program UCI tmengine
 ```
 
 Testy:
@@ -154,7 +167,12 @@ jest rysowany w kodzie (`ui/coach_avatar.py`), bez plików graficznych.
 ```
 main.py                     # start gry
 tacticmind/
-  engine/                   # WŁASNY SILNIK (czysty Python, bez pygame)
+  engine/                   # WŁASNY SILNIK
+    native/                 #   silnik w C: bitboard.c, position.c (make/unmake + akumulator NNUE),
+                            #   movegen.c (ruchy, SEE, perft), search.c (PVS), nnue.c, eval.c (ocena ręczna),
+                            #   api.c (dla ctypes), uci.c (program UCI tmengine), tacticmind.nnue (sieć)
+    native.py               #   kompilacja i ładowanie biblioteki C (ctypes)
+    csearch.py              #   CSearcher — silnik C z interfejsem Searcher; make_searcher() wybiera C albo Python
     constants.py            #   kody figur, kodowanie ruchów, tablice pól 0x88
     zobrist.py              #   klucze haszowania Zobrista
     board.py                #   plansza 0x88, FEN, make/unmake, przyrostowy hasz i ocena
@@ -184,6 +202,9 @@ tacticmind/
   assets/coach.png          # portret trenera (wygenerowany kodem: python -m tacticmind.ui.coach_avatar)
 scripts/build_puzzles.py    # budowa zestawu zadań z bazy Lichess
 scripts/benchmark.py        # pomiary do tabeli w README
+scripts/build_engine.py     # kompilacja silnika w C
+scripts/match.py            # mecze między silnikami (pomiar Elo)
+scripts/nnue/               # trener sieci NNUE (train.c) i opis cyklu uczenia
 tests/                      # pytest
 ```
 
@@ -206,7 +227,8 @@ flowchart LR
         Session --> PyChess["python-chess<br/>(tylko UI: SAN, legalność)"]
     end
     subgraph ENG["Proces silnika (multiprocessing)"]
-        Proc["engine/process.py"] --> Search["search.py<br/>negamax + alfa-beta"]
+        Proc["engine/process.py"] --> CSearch["csearch.py → native/ (C)<br/>PVS + NNUE"]
+        Proc -. "bez kompilatora C" .-> Search["search.py<br/>negamax + alfa-beta"]
         Proc --> Compare["compare.py<br/>minimaks vs alfa-beta"]
         Search --> Eval["evaluation.py"]
         Search --> TT["tt.py"]
@@ -485,6 +507,52 @@ ruchu. Po **10 partiach** „Twój poziom” = ranking zaokrąglony do 25 (w gra
 Przerwanie partii po co najmniej 5 ruchach liczy się jako poddanie (po potwierdzeniu); lekcje otwarć liczą się
 do poziomu dopiero wtedy, gdy po lekcji grasz dalej i partia się skończy.
 
+## Silnik w C i sieć NNUE
+
+Silnik gry (`tacticmind/engine/native/`) to ten sam pomysł co wersja w Pythonie — negamax z alfa-betą, iterative
+deepening, quiescence, tablica transpozycji, MultiPV — ale napisany w C i rozbudowany o techniki, które opłacają się
+dopiero przy milionach węzłów na sekundę. Gra ładuje go jako bibliotekę przez `ctypes` (`engine/native.py`),
+a `engine/csearch.py` daje mu dokładnie ten sam interfejs co `Searcher` z Pythona: po każdej głębokości powstaje
+taki sam `SearchInfo` (MultiPV, statystyki, mini-drzewo), więc panel „Mózg AI”, trener i ocena zadań działają bez zmian.
+
+**Plansza i ruchy.** Bitboardy (64-bitowa maska na każdy rodzaj figury), ataki gońców i wież z „magicznych”
+tablic (magiczne liczby wyszukiwane przy starcie), legalność sprawdzana bez wykonywania ruchu (czy po ruchu
+coś atakuje króla). Perft zgadza się z wartościami referencyjnymi, np. Kiwipete na głębokości 5 = 193 690 690.
+
+**Wyszukiwanie** (`search.c`):
+
+- **PVS** — pierwszy ruch liczymy pełnym oknem, a resztę „zerowym oknem” (czy jest lepsza od α?); pełne
+  przeliczenie tylko wtedy, gdy ruch zaskoczy. Przy dobrym porządku ruchów to kilka razy mniej węzłów,
+- **okno aspiracyjne** w korzeniu (wynik blisko poprzedniej głębokości),
+- **null move pruning** — jeśli nawet po oddaniu ruchu przeciwnikowi pozycja jest ≥ β, gałąź na pewno da cięcie,
+- **late move reductions** — późne, ciche ruchy liczymy płycej (redukcja rośnie z głębokością i numerem ruchu),
+- **reverse futility, futility i late move pruning, razoring** — w płytkich węzłach pomijamy ruchy bez szans na
+  poprawę α,
+- **SEE** (static exchange evaluation) — przycinanie przegrywających wymian i ich porządkowanie,
+- **singular extensions** — ruch z tablicy transpozycji wyraźnie lepszy od reszty liczymy głębiej,
+- porządkowanie: ruch z TT, dobre bicia (MVV-LVA + SEE), killery, counter-move, historia i historia kontynuacji.
+
+**NNUE** (`nnue.c`, `position.c`). Ocena to mała sieć neuronowa:
+
+```
+768 cech (kolor × figura × pole) z perspektywy strony na ruchu ──► 256 neuronów ─┐
+768 cech z perspektywy przeciwnika (te same wagi)               ──► 256 neuronów ─┴► SCReLU ─► 512 → 1
+```
+
+Trik NNUE: pierwsza warstwa (akumulator) to suma kolumn wag dla figur na planszy, a ruch zmienia tylko 2–4 figury.
+Zamiast liczyć 768 × 256 mnożeń, przy każdym ruchu dodajemy i odejmujemy 2–4 kolumny po 256 liczb. Wagi są
+skwantowane do liczb całkowitych (int16), więc ocena kosztuje mniej niż ręczna funkcja oceny — silnik z siecią
+liczy ok. 1,7 mln węzłów/s.
+
+**Skąd sieć?** Cała wytrenowana w tym projekcie (`scripts/nnue/`), bez cudzych sieci i bez ocen innych silników:
+
+1. silnik z ręczną oceną gra sam ze sobą (8–9 losowych półruchów na start, ok. 5000 węzłów na ruch);
+   zapisujemy spokojne pozycje z oceną z wyszukiwania,
+2. trener w C (`train.c`, Adam, OpenMP) uczy sieć przewidywać `sigmoid(ocena / 400)`,
+3. silnik z nową siecią znowu gra sam ze sobą — jego oceny są lepsze, więc kolejna sieć też.
+
+<!-- POMIARY-NNUE -->
+
 ## Pomiary: minimaks vs alfa-beta
 
 Ta sama pozycja, ta sama głębokość i ta sama funkcja oceny (bez quiescence i bez tablicy transpozycji),
@@ -525,12 +593,13 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 135 testów, m.in.:
+`python -m pytest` — 156 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|
 | `test_perft.py` | perft z pozycji startowej (1–4: 20, 400, 8 902, 197 281), Kiwipete (1–3: 48, 2 039, 97 862), pozycja 3 (1–4: 14, 191, 2 812, 43 238) oraz pozycje 4 i 5 z CPW; zgodność FEN i przyrostowego hasza/oceny |
 | `test_search.py` | maty w 1, 2 i 3 (pozycje klasyczne i z bazy Lichess, także dla czarnych), szybszy mat, pat/mat w korzeniu, MultiPV, statystyki, drzewo, przerwanie, minimaks = alfa-beta przy mniejszej liczbie węzłów |
+| `test_native.py` | silnik w C: perft (5 pozycji), maty w 1–3, pat/mat w korzeniu, MultiPV, statystyki i mini-drzewo, przerwanie i liczniki na żywo, symetria oceny NNUE, dołączona sieć, wybór silnika C |
 | `test_engine_process.py` | proces silnika: `info` po każdej głębokości, przerwanie nowym zapytaniem, tryb porównawczy |
 | `test_rating.py` | E i ΔR Elo dla przykładowych wartości, K w kalibracji, przykład Glicko-2 z artykułu, wynik S i kara za czas, profil i zapis |
 | `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
@@ -586,9 +655,9 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 5. **Przerwanie liczenia**: flaga `multiprocessing.Event` sprawdzana co 1024 węzły + wykrywanie nowego zapytania
    w kolejce. Przerwanie w środku drzewa cofa wszystkie wykonane ruchy, wynik ostatniej pełnej głębokości zostaje.
 6. **MultiPV w jednym przebiegu** (α = wynik 3. najlepszego ruchu) zamiast trzykrotnego liczenia korzenia.
-7. **Bez null-move pruning i LMR** — przyspieszyłyby silnik, ale utrudniają wyjaśnienie algorytmu i psują
-   zadania z zugzwangiem (częste w końcówkach). Zamiast tego: przedłużenie szacha, delta pruning i pomijanie
-   złych bić w quiescence.
+7. **Silnik w Pythonie bez null-move pruning i LMR** — ta wersja ma być czytelna i służy do wyjaśniania algorytmu.
+   Silnik w C ich używa, bo bez nich nie da się grać na poziomie mistrzowskim; null move jest wyłączony, gdy strona
+   na ruchu ma same piony (tam zugzwang jest najczęstszy).
 8. **Glicko-2 jako domyślny system** (bonus ze specyfikacji), z możliwością przełączenia na Elo w statystykach.
    Oba rankingi liczone są zawsze, więc przełączenie nie traci danych. Minimalne RD = 50 (bez tego po setkach
    zadań ranking prawie przestałby się zmieniać). „± RD” to jedno odchylenie standardowe.
@@ -660,9 +729,15 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
    języki), strzałki i zaznaczenia rysowane prawym przyciskiem myszy.
 9. **Gra z trenerem** — książka otwarć z objaśnieniami, siła gry zależna od Elo, klasy ruchów i celność, wyjaśnienia
    trenera, kalibracja i „Twój poziom” co 5 partii, portret trenera z minami, ekrany „Trener” i partii, testy.
+10. **Silnik w C z NNUE** — bitboardy, PVS z przycinaniem, sieć NNUE z przyrostową aktualizacją, własny generator
+    danych i trener sieci, kilka rund uczenia, mecze ze starym silnikiem i ze Stockfishem z ograniczoną siłą.
 
 ## Źródła i licencje
 
+- Silnik w C i sieć NNUE: kod i wagi napisane i wytrenowane w tym projekcie. Opisy technik (magiczne bitboardy,
+  PVS, null move, LMR, SEE, NNUE) — [Chess Programming Wiki](https://www.chessprogramming.org/). Stockfish
+  (GPL-3.0) jest używany wyłącznie jako przeciwnik w `scripts/match.py` do pomiaru siły; nie jest częścią gry
+  i nie dostarcza ocen do uczenia sieci.
 - Zadania: [baza zadań Lichess](https://database.lichess.org/#puzzles), licencja **CC0** (domena publiczna).
   Każde zadanie ma link do partii źródłowej (`url`).
 - Wartości perft: [Chess Programming Wiki — Perft Results](https://www.chessprogramming.org/Perft_Results).
