@@ -118,6 +118,13 @@ class WebApp:
         screen.start(color, elo, adaptive, lesson)
         self.go("coach_game")
 
+    def open_coach_review(self, index: int) -> None:
+        """Opens a saved game with the coach in the review."""
+        screen = self.screens["coach_game"]
+        assert isinstance(screen, CoachGameScreen)
+        if screen.open_archived(index):
+            self.go("coach_game")
+
     def on_rating_change(self, change: RatingChange) -> None:
         self.rating_delta = round(change.delta)
         self.delta_seq += 1

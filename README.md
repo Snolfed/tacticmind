@@ -218,6 +218,15 @@ is drawn in code (`ui/coach_avatar.py`), without image files.
 - **After the game**: a summary with your and the coach's **accuracy** (%), the number of moves in each class and the level change.
   With the ◀ ▶ buttons (or by clicking a move in the list) you review the game — each move brings back the coach's comment,
   and for weaker moves an arrow shows what was better. "Rematch" starts a new game with the same settings.
+- **Advantage graph and PGN**: after the game an "Advantage" graph shows White's winning chance after every move
+  (as in chess.com's Game Review), with dots on your inaccuracies, mistakes, blunders and great or brilliant moves; clicking
+  or dragging on the graph jumps to that move. "Copy PGN" and "Save PGN" export the game with the move classes as
+  annotation symbols (!!, !, ?!, ?, ??), the engine evaluation (`[%eval]`, read by Lichess and chess.com) and the coach's
+  comments; the file goes to the Downloads folder. The graph uses the analyses the coach already made during the game, so it costs no extra engine time.
+- **Your games**: the "Your games" tab on the coach screen lists your recent games (result, coach strength, opening,
+  accuracy, rating change). Clicking one opens it in the same review — board, badges, the coach's comments in the current
+  language, the graph and PGN. The newest 100 games keep their moves in the profile (`coach/archive.py`); games saved
+  before this feature only have their result.
 - **Opening lessons**: 15 openings — for White the Italian Game, Ruy Lopez, Scotch Game, Queen's Gambit, London System,
   English Opening; for Black the Sicilian Defence (Najdorf), French, Caro-Kann, Scandinavian, Two
   Knights, Slav, King's Indian, Nimzo-Indian and Grünfeld. You play the main-line moves, the coach replies
@@ -252,7 +261,8 @@ tacticmind/
                             #   coach_profile.py (coach games, calibration, "Your level", opening stars)
   coach/                    # GAME AGAINST THE COACH (no pygame): openings.py (opening book, opening names),
                             #   strength.py (playing strength by Elo), review.py (move classes, accuracy),
-                            #   advice.py (coach explanations), game.py (game and lesson flow)
+                            #   advice.py (coach explanations), game.py (game and lesson flow),
+                            #   archive.py (saved games for the review, advantage graph, PGN export)
   puzzles/                  # loader.py, themes.py (translations), validator.py, session.py
   brain/                    # notation.py (SAN in the interface language), thoughts.py (stream of thoughts), demo.py
   i18n/                     # translations: pl.py, en.py (one dictionary per language) + plurals, number formats;

@@ -6,7 +6,7 @@ import { CoachAvatar } from "../components/CoachAvatar";
 import { ConfirmDialog, Segmented } from "../components/Widgets";
 import { useKeys } from "../hooks";
 import { t, useLanguage } from "../i18n";
-import type { CoachMenuSnapshot } from "../types";
+import type { CoachMenuSnapshot, SavedGameRow } from "../types";
 
 const act = (name: string, data: Record<string, unknown> = {}): void => screenAction("coach", name, data);
 
@@ -22,10 +22,39 @@ function Stars({ count }: { count: number }): ReactElement {
   );
 }
 
+function GameRow({ game }: { game: SavedGameRow }): ReactElement {
+  return (
+    <button
+      type="button"
+      className={`game-row${game.reviewable ? "" : " disabled"}`}
+      disabled={!game.reviewable}
+      title={game.reviewable ? undefined : t("coach.games_old")}
+      onClick={() => act("review_game", { index: game.index })}
+    >
+      <span className={`side-dot big ${game.color}`} />
+      <span className="opening-text">
+        <span className={`game-result result-${game.result}`}>{t(`coach.result.${game.result}`)}</span>
+        <span className="opening-line">
+          {t("coach.name")} ({game.elo}){game.opening ? ` · ${game.opening}` : ""}
+        </span>
+        <span className="opening-line">
+          {game.date} · {t("coach.games_moves", { n: game.moves })}
+          {game.reviewable ? "" : ` · ${t("coach.games_old")}`}
+        </span>
+      </span>
+      <span className="game-stats">
+        {game.accuracy !== null && <strong>{game.accuracy}%</strong>}
+        <span className={game.delta > 0 ? "delta-up" : game.delta < 0 ? "delta-down" : "muted"}>{game.delta > 0 ? `+${game.delta}` : game.delta}</span>
+      </span>
+    </button>
+  );
+}
+
 export function CoachMenu({ view }: { view: CoachMenuSnapshot }): ReactElement {
   useLanguage();
   const [dragElo, setDragElo] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "white" | "black">("all");
+  const [tab, setTab] = useState<"openings" | "games">("openings");
   const [happy, setHappy] = useState(true); // the coach smiles as a greeting
   useEffect(() => {
     const timer = window.setTimeout(() => setHappy(false), 2500);
@@ -114,30 +143,56 @@ export function CoachMenu({ view }: { view: CoachMenuSnapshot }): ReactElement {
         </section>
       </div>
       <section className="card openings">
-        <header className="openings-head">
-          <h2>{t("coach.openings_title")}</h2>
-          <Segmented
-            options={(["all", "white", "black"] as const).map((value) => ({ value, label: t(`coach.filter.${value}`) }))}
-            value={filter}
-            onChange={setFilter}
-          />
-        </header>
-        <p className="muted small">{t("coach.openings_desc")}</p>
-        <div className="openings-list">
-          {openings.map((opening) => (
-            <button key={opening.id} type="button" className="opening-row" onClick={() => act("learn", { id: opening.id })}>
-              <span className={`side-dot big ${opening.side}`} />
-              <span className="opening-text">
-                <span className="opening-name">{t(`opening.${opening.id}.name`)}</span>
-                <span className="opening-line">
-                  {opening.eco} · {opening.line}
-                </span>
-                <span className="opening-desc">{t(`opening.${opening.id}.desc`)}</span>
-              </span>
-              <Stars count={opening.stars} />
+        <div className="menu-tabs" role="tablist">
+          {(["openings", "games"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              className={tab === value ? "selected" : ""}
+              onClick={() => setTab(value)}
+            >
+              {t(value === "openings" ? "coach.openings_title" : "coach.games_title")}
             </button>
           ))}
         </div>
+        {tab === "games" ? (
+          <>
+            <p className="muted small">{view.games.length ? t("coach.games_desc") : t("coach.games_empty")}</p>
+            <div className="openings-list">
+              {view.games.map((game) => (
+                <GameRow key={game.index} game={game} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <header className="openings-head">
+              <Segmented
+                options={(["all", "white", "black"] as const).map((value) => ({ value, label: t(`coach.filter.${value}`) }))}
+                value={filter}
+                onChange={setFilter}
+              />
+            </header>
+            <p className="muted small">{t("coach.openings_desc")}</p>
+            <div className="openings-list">
+              {openings.map((opening) => (
+                <button key={opening.id} type="button" className="opening-row" onClick={() => act("learn", { id: opening.id })}>
+                  <span className={`side-dot big ${opening.side}`} />
+                  <span className="opening-text">
+                    <span className="opening-name">{t(`opening.${opening.id}.name`)}</span>
+                    <span className="opening-line">
+                      {opening.eco} · {opening.line}
+                    </span>
+                    <span className="opening-desc">{t(`opening.${opening.id}.desc`)}</span>
+                  </span>
+                  <Stars count={opening.stars} />
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </section>
       {view.confirm && <ConfirmDialog text={view.confirm.text} yes={view.confirm.yes} onYes={() => act("confirm_yes")} onNo={() => act("confirm_no")} />}
     </div>

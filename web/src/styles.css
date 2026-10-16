@@ -1922,6 +1922,76 @@ button.candidate:hover {
   opacity: 1;
   margin-top: 4px;
 }
+/* tabs "Learn openings" / "Your games" */
+.menu-tabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.menu-tabs button {
+  padding: 0 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.menu-tabs button.selected {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.menu-tabs button:hover:not(.selected) {
+  color: var(--text-soft);
+}
+.game-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.game-row:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: rgba(45, 212, 191, 0.47);
+}
+.game-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.game-result {
+  font-weight: 700;
+  font-size: 15px;
+}
+.game-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+  font-size: 13px;
+}
+.game-stats strong {
+  font-size: 15px;
+}
+.delta-up {
+  color: var(--accent);
+  font-weight: 700;
+}
+.delta-down {
+  color: var(--red);
+  font-weight: 700;
+}
 .stars {
   display: inline-flex;
   gap: 3px;
@@ -2115,6 +2185,77 @@ button.candidate:hover {
 .card-buttons .btn {
   flex: 1;
   min-width: 0;
+}
+/* advantage graph after the game */
+.review-card {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.review-head h3 {
+  font-size: 15px;
+}
+.review-buttons {
+  display: flex;
+  gap: 6px;
+}
+.btn.compact {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  border-radius: 9px;
+}
+.eval-graph {
+  height: 84px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+}
+.eval-graph svg {
+  display: block;
+}
+.eval-graph-black {
+  fill: rgb(48, 52, 66);
+}
+.eval-graph-white {
+  fill: rgb(226, 230, 238);
+}
+.eval-graph-mid {
+  stroke: rgba(142, 150, 175, 0.55);
+  stroke-dasharray: 3 3;
+}
+.eval-graph-cursor {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.eval-graph-dot {
+  stroke: rgb(27, 31, 45);
+  stroke-width: 1.5;
+}
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px var(--shadow);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+  z-index: 50;
+  animation: slide-up 0.25s ease-out;
 }
 .move-list {
   flex: 1;
