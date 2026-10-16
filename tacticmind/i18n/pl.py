@@ -388,7 +388,8 @@ STRINGS: dict[str, str] = {
     "howto.intro": (
         "TacticMind ma dwa elementy sztucznej inteligencji: własny silnik szachowy (przeszukiwanie drzewa gry "
         "algorytmem alfa-beta) oraz adaptacyjny dobór zadań (ranking Elo/Glicko-2 i model gracza). Silnik jest "
-        "napisany od zera w Pythonie — nie korzysta ze Stockfisha ani innego gotowego silnika."
+        "napisany od zera w C i ocenia pozycje siecią neuronową NNUE, wytrenowaną na jego własnych partiach. "
+        "Nie korzysta ze Stockfisha ani innego gotowego silnika. Poniższe porównanie liczy prostsza wersja w Pythonie."
     ),
     "compare.title": "Porównanie na żywo: minimaks vs alfa-beta",
     "compare.subtitle": "Ta sama pozycja, ta sama głębokość i funkcja oceny — różni się tylko liczba odwiedzonych węzłów.",
