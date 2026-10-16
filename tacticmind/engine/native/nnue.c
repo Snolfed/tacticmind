@@ -8,12 +8,16 @@
  * position.c), bo ruch zmienia tylko 2–4 cechy.
  *
  * Ocena: [akumulator strony na ruchu, akumulator przeciwnika] → SCReLU
- * (clamp(x, 0, 1)²) → warstwa wyjściowa 512 → 1. Wagi są skwantowane do
- * liczb całkowitych (QA = 255, QB = 64), więc liczymy wyłącznie na int16/int32.
+ * (clamp(x, 0, 1)²) → warstwa wyjściowa 512 → 1. Warstw wyjściowych jest
+ * kilka („kubełki”): wybieramy ją według liczby figur na planszy, bo
+ * w końcówce te same cechy znaczą co innego niż w debiucie. Wagi są
+ * skwantowane do liczb całkowitych (QA = 255, QB = 64), więc liczymy
+ * wyłącznie na int16/int32.
  *
  * Format pliku (little-endian):
- *   "TMNN" | uint32 wersja = 1 | uint32 HIDDEN
- *   int16 ft_w[768 * HIDDEN] | int16 ft_b[HIDDEN] | int16 out_w[2 * HIDDEN] | int16 out_b
+ *   "TMNN" | uint32 wersja = 2 | uint32 HIDDEN | uint32 KUBEŁKI
+ *   int16 ft_w[768 * HIDDEN] | int16 ft_b[HIDDEN] | int16 out_w[KUBEŁKI][2 * HIDDEN] | int16 out_b[KUBEŁKI]
+ * Wersja 1 (bez pola KUBEŁKI, jedna warstwa wyjściowa) też jest czytana.
  */
 #include "tm.h"
 
@@ -40,12 +44,24 @@ int nnue_load_memory(const unsigned char *data, size_t size) {
     if (size < 12 || memcmp(p, "TMNN", 4) != 0) return 0;
     unsigned version = p[4] | (p[5] << 8) | (p[6] << 16) | ((unsigned)p[7] << 24);
     unsigned hidden = p[8] | (p[9] << 8) | (p[10] << 16) | ((unsigned)p[11] << 24);
-    if (version != 1 || hidden != NNUE_HIDDEN) return 0;
+    unsigned buckets = 1;
     p += 12;
-    static Network tmp;
-    if (!read_i16(&p, end, tmp.ft_w, NNUE_INPUTS * NNUE_HIDDEN) || !read_i16(&p, end, tmp.ft_b, NNUE_HIDDEN) ||
-        !read_i16(&p, end, tmp.out_w, 2 * NNUE_HIDDEN) || !read_i16(&p, end, &tmp.out_b, 1))
+    if (version == 2) {
+        if (size < 16) return 0;
+        buckets = p[0] | (p[1] << 8) | (p[2] << 16) | ((unsigned)p[3] << 24);
+        p += 4;
+    } else if (version != 1) {
         return 0;
+    }
+    if (hidden != NNUE_HIDDEN || buckets < 1 || buckets > NNUE_MAX_BUCKETS) return 0;
+    static Network tmp;
+    memset(&tmp, 0, sizeof tmp);
+    tmp.buckets = (int)buckets;
+    if (!read_i16(&p, end, tmp.ft_w, NNUE_INPUTS * NNUE_HIDDEN) || !read_i16(&p, end, tmp.ft_b, NNUE_HIDDEN))
+        return 0;
+    for (unsigned b = 0; b < buckets; b++)
+        if (!read_i16(&p, end, tmp.out_w[b], 2 * NNUE_HIDDEN)) return 0;
+    if (!read_i16(&p, end, tmp.out_b, buckets) || p != end) return 0;
     NET = tmp;
     NET_LOADED = 1;
     return 1;
@@ -114,7 +130,9 @@ static inline int32_t screlu_dot(const int16_t *v, const int16_t *w) {
 int nnue_evaluate(const Position *pos) {
     const Accumulator *acc = &pos->acc[pos->ply];
     int us = pos->side;
-    int64_t sum = (int64_t)screlu_dot(acc->v[us], NET.out_w) + screlu_dot(acc->v[us ^ 1], NET.out_w + NNUE_HIDDEN);
-    int64_t out = sum / NNUE_QA + NET.out_b;
+    int bucket = NNUE_BUCKET(popcount(pos->occupied), NET.buckets);
+    const int16_t *w = NET.out_w[bucket];
+    int64_t sum = (int64_t)screlu_dot(acc->v[us], w) + screlu_dot(acc->v[us ^ 1], w + NNUE_HIDDEN);
+    int64_t out = sum / NNUE_QA + NET.out_b[bucket];
     return (int)(out * NNUE_SCALE / (NNUE_QA * NNUE_QB));
 }

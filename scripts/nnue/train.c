@@ -1,7 +1,7 @@
 /*
  * Trener sieci NNUE dla TacticMind (CPU, OpenMP).
  *
- * Uczy sieć (768 → 256) × 2 → 1 z aktywacją SCReLU na pozycjach z gier
+ * Uczy sieć (768 → 256) × 2 → 1 (osobne wyjście dla 8 faz gry) z aktywacją SCReLU na pozycjach z gier
  * silnika z samym sobą (tmengine datagen). Cel uczenia to mieszanka:
  *   λ · sigmoid(ocena_silnika / 400) + (1 − λ) · wynik_partii
  * a funkcja straty to błąd kwadratowy między tym celem a sigmoid(wyjście sieci).
@@ -31,6 +31,11 @@
 #define SCALE 400.0f
 #define BATCH 16384
 #define CLIP 1.98f
+/* Kubełki wyjścia: osobna warstwa wyjściowa dla każdej fazy gry (liczby figur na planszy). */
+#ifndef BUCKETS
+#define BUCKETS 8
+#endif
+#define BUCKET(n) (((n) - 2) * BUCKETS / 31)
 
 typedef struct {
     uint64_t occ;
@@ -44,11 +49,11 @@ typedef struct {
 typedef struct {
     float ft_w[INPUTS * HIDDEN];
     float ft_b[HIDDEN];
-    float out_w[2 * HIDDEN];
-    float out_b;
+    float out_w[BUCKETS][2 * HIDDEN];
+    float out_b[BUCKETS];
 } Params;
 
-#define NPARAMS (INPUTS * HIDDEN + HIDDEN + 2 * HIDDEN + 1)
+#define NPARAMS (INPUTS * HIDDEN + HIDDEN + BUCKETS * (2 * HIDDEN + 1))
 
 static Params P, M1, M2;
 static float lambda_eval = 1.0f;
@@ -94,11 +99,13 @@ static float run(const PackedPos *p, Params *grad) {
         }
     }
     int us = p->stm, them = us ^ 1;
-    float out = P.out_b;
+    int bucket = BUCKET(n);
+    const float *ow = P.out_w[bucket];
+    float out = P.out_b[bucket];
     for (int j = 0; j < HIDDEN; j++) {
         float x = acc[us][j] < 0 ? 0 : acc[us][j] > 1 ? 1 : acc[us][j];
         float y = acc[them][j] < 0 ? 0 : acc[them][j] > 1 ? 1 : acc[them][j];
-        out += x * x * P.out_w[j] + y * y * P.out_w[HIDDEN + j];
+        out += x * x * ow[j] + y * y * ow[HIDDEN + j];
     }
     float score_stm = p->stm == 0 ? p->score : -p->score;
     float result_stm = p->stm == 0 ? p->result / 2.0f : 1.0f - p->result / 2.0f;
@@ -108,15 +115,16 @@ static float run(const PackedPos *p, Params *grad) {
     if (!grad) return err * err;
 
     float dout = 2 * err * pred * (1 - pred);
-    grad->out_b += dout;
+    grad->out_b[bucket] += dout;
+    float *gw = grad->out_w[bucket];
     float dacc[2][HIDDEN];
     for (int j = 0; j < HIDDEN; j++) {
         float x = acc[us][j], y = acc[them][j];
         float cx = x < 0 ? 0 : x > 1 ? 1 : x, cy = y < 0 ? 0 : y > 1 ? 1 : y;
-        grad->out_w[j] += dout * cx * cx;
-        grad->out_w[HIDDEN + j] += dout * cy * cy;
-        dacc[us][j] = (x > 0 && x < 1) ? dout * P.out_w[j] * 2 * x : 0;
-        dacc[them][j] = (y > 0 && y < 1) ? dout * P.out_w[HIDDEN + j] * 2 * y : 0;
+        gw[j] += dout * cx * cx;
+        gw[HIDDEN + j] += dout * cy * cy;
+        dacc[us][j] = (x > 0 && x < 1) ? dout * ow[j] * 2 * x : 0;
+        dacc[them][j] = (y > 0 && y < 1) ? dout * ow[HIDDEN + j] * 2 * y : 0;
     }
     for (int j = 0; j < HIDDEN; j++) grad->ft_b[j] += dacc[0][j] + dacc[1][j];
     for (int persp = 0; persp < 2; persp++) {
@@ -135,16 +143,19 @@ static void save(const char *path) {
         perror(path);
         exit(1);
     }
-    uint32_t hdr[2] = {1, HIDDEN};
+    uint32_t hdr[3] = {2, HIDDEN, BUCKETS};
     fwrite("TMNN", 1, 4, f);
-    fwrite(hdr, 4, 2, f);
+    fwrite(hdr, 4, 3, f);
     int16_t *q = malloc(sizeof(int16_t) * NPARAMS);
     size_t k = 0;
     for (int i = 0; i < INPUTS * HIDDEN; i++) q[k++] = (int16_t)lrintf(P.ft_w[i] * QA);
     for (int i = 0; i < HIDDEN; i++) q[k++] = (int16_t)lrintf(P.ft_b[i] * QA);
-    for (int i = 0; i < 2 * HIDDEN; i++) q[k++] = (int16_t)lrintf(P.out_w[i] * QB);
-    float ob = P.out_b * QA * QB;
-    q[k++] = (int16_t)(ob > 32767 ? 32767 : ob < -32768 ? -32768 : lrintf(ob));
+    for (int b = 0; b < BUCKETS; b++)
+        for (int i = 0; i < 2 * HIDDEN; i++) q[k++] = (int16_t)lrintf(P.out_w[b][i] * QB);
+    for (int b = 0; b < BUCKETS; b++) {
+        float ob = P.out_b[b] * QA * QB;
+        q[k++] = (int16_t)(ob > 32767 ? 32767 : ob < -32768 ? -32768 : lrintf(ob));
+    }
     fwrite(q, sizeof(int16_t), k, f); /* zakładamy little-endian (x86, ARM) */
     free(q);
     fclose(f);
@@ -202,14 +213,16 @@ int main(int argc, char **argv) {
         fprintf(stderr, "za malo danych: %zu pozycji treningowych, potrzeba co najmniej %d\n", ntrain, BATCH);
         return 1;
     }
-    fprintf(stderr, "pozycje: %zu (trening %zu, walidacja %zu), lambda %.2f\n", total, ntrain, nval, lambda_eval);
+    fprintf(stderr, "pozycje: %zu (trening %zu, walidacja %zu), lambda %.2f, %d neuronow, %d kubelkow\n", total, ntrain, nval,
+            lambda_eval, HIDDEN, BUCKETS);
 
     /* Inicjalizacja wag */
     if (init) {
         fprintf(stderr, "start z %s nieobslugiwany — losowa inicjalizacja\n", init);
     }
     for (int i = 0; i < INPUTS * HIDDEN; i++) P.ft_w[i] = (frand() * 2 - 1) * 0.1f;
-    for (int i = 0; i < 2 * HIDDEN; i++) P.out_w[i] = (frand() * 2 - 1) * 0.05f;
+    for (int b = 0; b < BUCKETS; b++)
+        for (int i = 0; i < 2 * HIDDEN; i++) P.out_w[b][i] = (frand() * 2 - 1) * 0.05f;
 
     int threads = 1;
 #ifdef _OPENMP

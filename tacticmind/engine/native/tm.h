@@ -91,6 +91,9 @@ static inline int pop_lsb(Bitboard *b) {
 #define NNUE_QA 255
 #define NNUE_QB 64
 #define NNUE_SCALE 400
+/* Kubełki wyjścia: osobna warstwa wyjściowa zależnie od liczby figur na planszy (faza gry). */
+#define NNUE_MAX_BUCKETS 8
+#define NNUE_BUCKET(pieces, buckets) (((pieces) - 2) * (buckets) / 31)
 
 typedef struct {
     int16_t v[2][NNUE_HIDDEN]; /* [perspektywa][neuron] */
@@ -99,8 +102,9 @@ typedef struct {
 typedef struct {
     int16_t ft_w[NNUE_INPUTS * NNUE_HIDDEN];
     int16_t ft_b[NNUE_HIDDEN];
-    int16_t out_w[2 * NNUE_HIDDEN];
-    int16_t out_b;
+    int16_t out_w[NNUE_MAX_BUCKETS][2 * NNUE_HIDDEN];
+    int16_t out_b[NNUE_MAX_BUCKETS];
+    int buckets;
 } Network;
 
 extern Network NET;
