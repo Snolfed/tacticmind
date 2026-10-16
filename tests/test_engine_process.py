@@ -1,6 +1,13 @@
-"""Engine process: messages after each depth, stop, and successive requests without restarting."""
+"""Engine process: messages after each depth, stop, successive requests without restarting, and no orphans."""
 
+import os
+import signal
+import subprocess
+import sys
 import time
+from pathlib import Path
+
+import pytest
 
 from tacticmind.engine.process import CompareEvent, DoneEvent, EngineClient, EngineEvent, InfoEvent
 
@@ -48,3 +55,51 @@ def test_engine_process_protocol() -> None:
         assert result.alpha_beta.nodes < result.minimax.nodes
     finally:
         client.close()
+
+
+#: Starts the engine, waits until it has answered once, prints its PID and that of multiprocessing's resource tracker,
+#: then kills itself the hard way, like a crash: no QuitRequest, no atexit handlers.
+CRASHING_GAME = """
+import os, signal, sys, time
+from multiprocessing import resource_tracker
+from tacticmind.engine.process import DoneEvent, EngineClient
+
+client = EngineClient()
+request = client.analyze("6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1", time_ms=200)
+deadline = time.monotonic() + 60
+while not any(isinstance(e, DoneEvent) and e.id == request for e in client.poll()):
+    assert time.monotonic() < deadline, "the engine did not answer"
+    time.sleep(0.01)
+print(client._process.pid, resource_tracker._resource_tracker._pid or 0, flush=True)
+os.kill(os.getpid(), signal.SIGKILL)
+"""
+
+
+def running(pid: int) -> bool:
+    """Whether the process exists and is not a zombie waiting to be reaped."""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except (OSError, IndexError):
+        return False
+    return state not in ("Z", "X")
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads process states from /proc")
+def test_engine_process_ends_when_the_game_crashes() -> None:
+    root = Path(__file__).resolve().parent.parent
+    # Only the first line is read: an orphaned engine would keep the pipe open, so waiting for its end would hang.
+    game = subprocess.Popen([sys.executable, "-c", CRASHING_GAME], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    assert game.stdout is not None
+    pids = [int(pid) for pid in game.stdout.readline().split() if int(pid)]
+    assert game.wait(timeout=120) == -9
+    assert pids
+    try:
+        deadline = time.monotonic() + 15
+        while any(running(pid) for pid in pids) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not any(running(pid) for pid in pids), "the engine process outlived the game"
+    finally:
+        for pid in pids:  # without the fix: clean up, so a failed run leaves nothing behind
+            if running(pid):
+                os.kill(pid, signal.SIGKILL)
+        game.stdout.close()
