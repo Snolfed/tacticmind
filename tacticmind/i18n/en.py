@@ -220,6 +220,8 @@ STRINGS: dict[str, str] = {
     "coach.level.intermediate": "Intermediate",
     "coach.level.advanced": "Advanced",
     "coach.level.expert": "Expert",
+    "coach.level.master": "Master",
+    "coach.level.engine": "Full engine strength",
     "cls.brilliant": "Brilliant",
     "cls.great": "Great",
     "cls.best": "Best",

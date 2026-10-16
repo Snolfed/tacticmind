@@ -69,6 +69,15 @@ export const IconChevronRight = (p: IconProps): ReactElement => (
   </Svg>
 );
 
+/** The evaluation bar (crossed out when it is hidden). */
+export const IconEvalBar = ({ off = false, ...p }: IconProps & { off?: boolean }): ReactElement => (
+  <Svg {...p}>
+    <rect x="8" y="3" width="8" height="18" rx="2" />
+    <path d="M8 12h8v7a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" fill="currentColor" stroke="none" />
+    {off && <path d="M4 4l16 16" />}
+  </Svg>
+);
+
 export const IconClose = (p: IconProps): ReactElement => (
   <Svg {...p}>
     <path d="M6 6l12 12M18 6L6 18" />

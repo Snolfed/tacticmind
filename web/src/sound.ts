@@ -1,10 +1,34 @@
-// Sounds synthesised in code on Web Audio — no recording files. The character follows the familiar online-chess set:
-//  - move: a short, bright wooden "tock" (a click of the piece and a hollow board), capture: a sharper double "clack",
-//  - check: a tock with a small high ring, castling: two quick tocks, promotion: a tock and a rising "shing",
-//  - success: a bright two-note chime, brilliant move: a sparkling arpeggio, mistake: a low, short "bwomp".
-// Board sounds stay dry (no echo) and keep their highs: crisp, not muffled.
+// Sounds synthesised in code on Web Audio — no recording files. They are modelled on real wooden ones: a short pulse
+// (how long the felt base or a mallet touches the wood decides how bright it sounds) rings a bank of resonators tuned
+// to the modes of a wooden board, a wooden piece or a marimba bar, each with its own damping.
+//  - move: a soft, round "thock" of a felted piece on the board; capture: a crisp "clack" of wood on wood, then the thock,
+//  - check: a thock and a marimba note; castling: two thocks; promotion: a thock and two rising marimba notes,
+//  - success and brilliant move: marimba arpeggios (brilliant ends on a glockenspiel sparkle), mistake: two low notes.
 
 type Samples = Float32Array;
+/** A mode of a resonating body: frequency (Hz), quality factor (higher rings longer) and level. */
+type Mode = [number, number, number];
+
+/** A wooden board under a felted piece: a low body, warm mids and a little top (lowest modes damp slowest). */
+const BOARD: Mode[] = [
+  [168, 12, 0.22],
+  [292, 14, 0.38],
+  [447, 18, 0.62],
+  [618, 24, 0.85],
+  [836, 28, 1.0],
+  [1094, 30, 0.9],
+  [1475, 40, 1.0],
+  [2040, 44, 0.9],
+  [2780, 46, 0.5],
+];
+/** A wooden piece knocked by another one: higher, brighter modes. */
+const PIECE: Mode[] = [
+  [930, 24, 0.55],
+  [1610, 28, 1.0],
+  [2330, 32, 0.8],
+  [3240, 36, 0.45],
+  [4350, 40, 0.2],
+];
 
 class Synth {
   private seed = 1234;
@@ -20,83 +44,65 @@ class Synth {
     return new Float32Array(Math.floor(this.rate * seconds));
   }
 
-  /** A piece set down on a wooden board: a sharp click of filtered noise and a short, hollow wooden body.
-   *  ``pitch`` scales the body's modes, ``click`` the loudness of the click. */
-  tock(out: Samples, start: number, gain = 1, pitch = 1, click = 1): void {
-    const rate = this.rate;
-    const modes: [number, number, number][] = [
-      [210, 45, 0.3], // the board's thump
-      [880 * pitch, 55, 0.75],
-      [1520 * pitch, 72, 1.0],
-      [2450 * pitch, 105, 0.6],
-      [3800 * pitch, 150, 0.3],
+  /** The force of an impact: a half-sine lasting ``contact`` seconds with a touch of grain. */
+  private pulse(contact: number, grain: number): Samples {
+    const n = Math.max(2, Math.round(contact * this.rate));
+    const pulse = new Float32Array(n);
+    for (let i = 0; i < n; i++) pulse[i] = Math.sin((Math.PI * (i + 0.5)) / n) * (1 + grain * this.random());
+    return pulse;
+  }
+
+  /** Rings each mode (a two-pole resonator) with the pulse and adds the result to ``out`` from ``start`` seconds. */
+  private ring(out: Samples, start: number, pulse: Samples, modes: Mode[], gain: number, pitch = 1): void {
+    const begin = Math.floor(start * this.rate);
+    for (const [base, q, level] of modes) {
+      const freq = base * pitch;
+      if (freq >= this.rate / 2.2) continue;
+      const w = (2 * Math.PI * freq) / this.rate;
+      const r = Math.exp(-w / (2 * q));
+      const a1 = 2 * r * Math.cos(w);
+      const a2 = -r * r;
+      const scale = gain * level * Math.sin(w); // unit-amplitude ringing for a unit impulse
+      const length = Math.min(out.length - begin, Math.ceil(Math.log(1e-4) / Math.log(r)));
+      let y1 = 0;
+      let y2 = 0;
+      for (let i = 0; i < length; i++) {
+        const y = a1 * y1 + a2 * y2 + (pulse[i] ?? 0);
+        y2 = y1;
+        y1 = y;
+        out[begin + i] = (out[begin + i] ?? 0) + scale * y;
+      }
+    }
+  }
+
+  /** A felted piece set down on the board. */
+  thock(out: Samples, start: number, gain = 1, pitch = 1): void {
+    this.ring(out, start, this.pulse(0.00045, 0.15), BOARD, gain, pitch);
+  }
+
+  /** Wood knocking on wood: a short contact, so the piece's high modes speak. */
+  clack(out: Samples, start: number, gain = 1, pitch = 1): void {
+    this.ring(out, start, this.pulse(0.00025, 0.3), PIECE, gain, pitch);
+  }
+
+  /** A marimba bar struck with a soft mallet: fundamental, the tuned 4th partial and a faint 10th. */
+  marimba(out: Samples, start: number, freq: number, gain = 1, ring = 0.45): void {
+    const modes: Mode[] = [
+      [freq, Math.PI * freq * ring, 1],
+      [freq * 3.98, Math.PI * freq * 3.98 * ring * 0.22, 0.28],
+      [freq * 9.9, Math.PI * freq * 9.9 * ring * 0.06, 0.08],
     ];
-    const begin = Math.floor(start * rate);
-    const length = Math.min(out.length - begin, Math.floor(0.12 * rate));
-    let low = 0;
-    for (let i = 0; i < length; i++) {
-      const t = i / rate;
-      const sag = 1 + 0.04 * Math.exp(-t * 90); // the wood "gives" for a moment: modes start slightly higher
-      let value = 0;
-      for (const [freq, decay, amp] of modes) value += amp * Math.exp(-t * decay) * Math.sin(2 * Math.PI * freq * sag * t);
-      const noise = this.random();
-      low += 0.25 * (noise - low);
-      value += click * 1.8 * (noise - low) * Math.exp(-t * 450); // high-passed noise: the click
-      const attack = Math.min(1, i / (0.0008 * rate));
-      out[begin + i] = (out[begin + i] ?? 0) + gain * attack * value;
-    }
+    this.ring(out, start, this.pulse(0.0016, 0.05), modes, gain);
   }
 
-  bell(out: Samples, start: number, freq: number, gain = 1, decay = 5, length = 0.6): void {
-    const rate = this.rate;
-    const partials: [number, number, number][] = [
-      [1, 1, 1],
-      [2, 0.25, 1.8],
-      [3, 0.08, 2.6],
-      [4.2, 0.04, 3.4], // a slightly inharmonic shimmer
+  /** A glockenspiel bar: bright and long, for the sparkle of a brilliant move. */
+  glock(out: Samples, start: number, freq: number, gain = 1): void {
+    const modes: Mode[] = [
+      [freq, Math.PI * freq * 0.7, 1],
+      [freq * 2.76, Math.PI * freq * 2.76 * 0.25, 0.35],
+      [freq * 5.4, Math.PI * freq * 5.4 * 0.08, 0.15],
     ];
-    const begin = Math.floor(start * rate);
-    const count = Math.min(out.length - begin, Math.floor(length * rate));
-    for (let i = 0; i < count; i++) {
-      const t = i / rate;
-      let value = 0;
-      for (const [ratio, amp, speed] of partials) value += amp * Math.exp(-t * decay * speed) * Math.sin(2 * Math.PI * freq * ratio * t);
-      const attack = Math.min(1, i / (0.004 * rate));
-      out[begin + i] = (out[begin + i] ?? 0) + gain * attack * value;
-    }
-  }
-
-  tone(out: Samples, start: number, f0: number, f1: number, length: number, gain: number, decay: number, attackTime = 0.006): void {
-    const rate = this.rate;
-    const begin = Math.floor(start * rate);
-    const count = Math.min(out.length - begin, Math.floor(length * rate));
-    let phase = 0;
-    for (let i = 0; i < count; i++) {
-      const t = i / rate;
-      const freq = f0 + (f1 - f0) * (i / Math.max(1, count - 1));
-      phase += (2 * Math.PI * freq) / rate;
-      const env = Math.exp(-t * decay) * Math.min(1, i / (attackTime * rate));
-      out[begin + i] = (out[begin + i] ?? 0) + gain * env * (Math.sin(phase) + 0.15 * Math.sin(2 * phase));
-    }
-  }
-
-  /** Noise swept upwards through a resonant band: the "shing" of a promotion. */
-  sweep(out: Samples, start: number, f0: number, f1: number, length: number, gain: number): void {
-    const rate = this.rate;
-    const begin = Math.floor(start * rate);
-    const count = Math.min(out.length - begin, Math.floor(length * rate));
-    let low = 0;
-    let band = 0;
-    for (let i = 0; i < count; i++) {
-      const p = i / Math.max(1, count - 1);
-      const freq = f0 * (f1 / f0) ** p;
-      const f = 2 * Math.sin((Math.PI * freq) / rate); // state-variable filter, Q ≈ 4
-      const high = this.random() - low - 0.25 * band;
-      band += f * high;
-      low += f * band;
-      const env = Math.sin(Math.PI * p) ** 2;
-      out[begin + i] = (out[begin + i] ?? 0) + gain * env * band;
-    }
+    this.ring(out, start, this.pulse(0.0006, 0.05), modes, gain);
   }
 }
 
@@ -130,44 +136,44 @@ function normalize(samples: Samples, peak: number): Samples {
   return samples;
 }
 
-/** Peak level, low-pass cutoff (Hz) and echo of each sound. */
+/** Peak level, low-pass cutoff (Hz) and echo (a small wooden room) of each sound. */
 const FINISH: Record<string, [number, number, number]> = {
-  move: [0.5, 9000, 0],
-  capture: [0.6, 10000, 0],
-  check: [0.52, 9000, 0.04],
-  castle: [0.5, 9000, 0],
-  promote: [0.5, 9000, 0.05],
-  success: [0.42, 7000, 0.1],
-  brilliant: [0.45, 8000, 0.12],
-  error: [0.36, 2500, 0.06],
+  move: [0.55, 7000, 0.05],
+  capture: [0.62, 9000, 0.05],
+  check: [0.55, 8000, 0.06],
+  castle: [0.55, 7000, 0.05],
+  promote: [0.55, 8000, 0.06],
+  success: [0.45, 8000, 0.08],
+  brilliant: [0.48, 9000, 0.1],
+  error: [0.42, 4000, 0.06],
 };
 
 export function buildSounds(rate: number): Record<string, Samples> {
   const s = new Synth(rate);
-  const move = s.buffer(0.13);
-  s.tock(move, 0);
+  const move = s.buffer(0.14);
+  s.thock(move, 0);
   const capture = s.buffer(0.16);
-  s.tock(capture, 0, 1, 1.15, 1.8);
-  s.tock(capture, 0.016, 0.7, 1.4, 1.3);
-  const check = s.buffer(0.42);
-  s.tock(check, 0, 1, 1.08, 1.2);
-  s.bell(check, 0.008, 1568, 0.22, 9, 0.4);
-  const castle = s.buffer(0.21);
-  s.tock(castle, 0, 0.9, 0.95);
-  s.tock(castle, 0.075, 1, 1.05);
-  const promote = s.buffer(0.42);
-  s.tock(promote, 0);
-  s.sweep(promote, 0.03, 1500, 6500, 0.24, 0.5);
-  s.bell(promote, 0.2, 1318.5, 0.22, 7, 0.22);
+  s.clack(capture, 0, 3);
+  s.thock(capture, 0.012, 1, 1.06);
+  const check = s.buffer(0.5);
+  s.thock(check, 0, 1, 1.03);
+  s.marimba(check, 0.012, 1318.5, 0.5, 0.25); // E6
+  const castle = s.buffer(0.24);
+  s.thock(castle, 0, 0.85, 0.94);
+  s.thock(castle, 0.085, 1, 1.05);
+  const promote = s.buffer(0.55);
+  s.thock(promote, 0);
+  s.marimba(promote, 0.06, 784, 0.55, 0.3); // G5
+  s.marimba(promote, 0.14, 1046.5, 0.65, 0.35); // C6
   const success = s.buffer(0.9);
-  s.bell(success, 0, 1046.5, 0.55, 5, 0.6);
-  s.bell(success, 0.1, 1568, 0.6, 4, 0.8);
-  const brilliant = s.buffer(1.1);
-  [1046.5, 1318.5, 1568, 2093].forEach((freq, i) => s.bell(brilliant, 0.055 * i, freq, i < 3 ? 0.45 : 0.55, 3.6, 1.1 - 0.055 * i));
-  s.sweep(brilliant, 0.18, 3000, 9000, 0.35, 0.18);
-  const error = s.buffer(0.38);
-  s.tone(error, 0, 233, 174, 0.3, 0.8, 9, 0.012);
-  s.tone(error, 0, 116.5, 87, 0.3, 0.35, 9, 0.012);
+  s.marimba(success, 0, 784, 0.7, 0.35); // G5
+  s.marimba(success, 0.09, 1046.5, 0.85, 0.45); // C6
+  const brilliant = s.buffer(1.2);
+  [523.25, 659.25, 784, 1046.5, 1318.5].forEach((freq, i) => s.marimba(brilliant, 0.055 * i, freq, 0.55 + 0.08 * i, 0.4));
+  s.glock(brilliant, 0.3, 2093, 0.3); // C7
+  const error = s.buffer(0.42);
+  s.marimba(error, 0, 220, 0.9, 0.18); // A3
+  s.marimba(error, 0.11, 174.6, 1, 0.22); // F3
   const raw: Record<string, Samples> = { move, capture, check, castle, promote, success, brilliant, error };
   const result: Record<string, Samples> = {};
   for (const [name, samples] of Object.entries(raw)) {

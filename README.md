@@ -7,7 +7,7 @@ a mini search tree and a "stream of thoughts" in plain language. The second AI c
 (Glicko-2 or Elo) with a **player model** that picks the next puzzles to match the player's current level and weak spots.
 
 The second game is a **game against the coach** (like "Play Coach" on chess.com): you play the coach at a chosen strength
-(400–2000 Elo), and after each of your moves it rates it (best, good, inaccuracy, mistake, blunder…),
+(400–2900 Elo, the top being the engine at full strength), and after each of your moves it rates it (best, good, inaccuracy, mistake, blunder…),
 explains what your move does and which move would have been better — and why. You can also **learn openings**: 15 lines
 with an explanation of every move. After 10 calibration games the **"Your level"** option appears — the coach plays at a
 strength matched to your results and adjusts it every 5 games.
@@ -112,7 +112,8 @@ npm run build                      # new build into tacticmind/web/static
 - **Start screen**: "Tactics puzzles", "Play the coach", "Statistics", "How does the AI work?". The same places
   are in the top bar: "Puzzles", "Coach", "Statistics", "How does the AI work?".
 - **Puzzle**: the opponent makes the first move (animated), then you look for the best move. The board is
-  flipped to your side. You move by dragging or click-click; dots show legal squares, and on promotion
+  flipped to your side. You move by dragging or click-click; dots pop up on legal squares (rings close in on pieces
+  you can capture), and on promotion
   a piece picker appears. The opponent's replies are played automatically after about 400 ms.
 - **Feedback**: a lime ✓ or a red ✗ on the target square and the messages "Best move!" /
   "Sorry, that's not it". After a mistake the engine calculates the opponent's reply, e.g. "After Rd1? the opponent plays Qxh2#. Mate.",
@@ -163,24 +164,27 @@ npm run build                      # new build into tacticmind/web/static
   two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
 - **Icon**: the window has its own icon (a white pawn on a tile): `web/public/icon.png`
   (on Linux the window uses its built copy, `tacticmind/web/static/icon.png`).
-- **Sounds (chess.com style)**: a short, dry wooden "tock" on a move (a piece set down on a board: a click and
-  a few wooden resonances that fade in about 50 ms), a heavier double tock on a capture, a tock with a bell on check,
-  two quick tocks on castling, a rising tone on promotion, a chime after solving a puzzle (brighter for a brilliant move)
-  and a soft "bonk" after a mistake. All of them are synthesized in code on Web Audio (`web/src/sound.ts`), so there are
-  no recordings under someone else's license.
+- **Sounds (chess.com style)**: a warm wooden "thock" on a move (a piece set down on a wooden board), a sharper
+  piece-on-piece click followed by the thock on a capture, a thock with a short marimba note on check, two quick thocks
+  on castling, rising marimba notes on promotion and after solving a puzzle (an arpeggio with a bell for a brilliant
+  move) and a soft low pair after a mistake. All of them are synthesized in code on Web Audio (`web/src/sound.ts`):
+  a short contact pulse rings a bank of resonators tuned like a wooden board, a piece and a marimba bar, so there
+  are no recordings under someone else's license.
 - **Volume**: the top bar has a volume slider (drag it, click it or scroll the mouse wheel over it);
   the speaker icon mutes/unmutes the sound. The volume is remembered in the profile.
 - **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode of the window.
 - **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it), an animation
   frame limit (60, 120, 144, 170, 240 or unlimited, as fast as the monitor refreshes), a dark or light theme and the
   board colours (green, terracotta or slate).
-- **Dragging with a "dead zone"**: a piece starts being dragged only once the mouse moves away from the click point
-  by about 1/5 of a square — a small twitch while clicking does not "grab" the piece, it just selects it (click-click).
+- **Dragging like on chess.com**: a grabbed piece jumps under the cursor at once and then chases it with a little
+  inertia, leaning into the motion; the cursor turns into an open hand while you hold a piece, and the square it would
+  land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
+  it down.
 - **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
   light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
   for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
-  and moves. The board is cream and green, with chunky pieces of our own (`scripts/make_pieces.py`). A grabbed piece
-  follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
+  and moves. The board is cream and green, with slim pieces of our own (`scripts/make_pieces.py`: a thin outline, a flat
+  fill and a shaded right edge). A grabbed piece follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
   (a captured piece disappears), a popping ✓/✗ with a ripple, a board shake after a mistake, confetti after solving,
   a pulsing hint and check, a springy evaluation bar, screen cross-fades, sliding toggle indicators.
 
@@ -189,8 +193,8 @@ npm run build                      # new build into tacticmind/web/static
 The **"Coach"** tab. The coach is called Maks — his portrait (with several facial expressions that change during the game)
 is drawn in SVG (`web/src/components/CoachAvatar.tsx`), without image files.
 
-- **Game settings**: the coach's strength set with a slider from 400 to 2000 Elo (with a label: beginner, amateur,
-  intermediate, advanced, expert), colour (white / random / black) and a "Play" button.
+- **Game settings**: the coach's strength set with a slider from 400 to 2900 Elo (with a label: beginner, amateur,
+  intermediate, advanced, expert, master and, at the top, full engine strength), colour (white / random / black) and a "Play" button.
 - **"Your level"**: the first 10 games are calibration (a "calibration 3/10" counter). After the 10th game
   a new difficulty level unlocks — the coach plays at a strength equal to your game rating. This level
   changes **every 5 games** (after the 15th, 20th, 25th …), and the game summary tells you when the next change will happen.
@@ -207,6 +211,8 @@ is drawn in SVG (`web/src/components/CoachAvatar.tsx`), without image files.
   it also works with transpositions.
 - **Player bars** above and below the board: the coach's portrait and your icon, whose turn it is, captured pieces
   and material advantage.
+- **Evaluation bar** beside the board: the engine's evaluation of the position on the board (also when stepping
+  through the game). The button with the bar icon under the board shows or hides it; the choice is remembered.
 - **After the game**: a summary with your and the coach's **accuracy** (%), the number of moves in each class and the level change.
   With the ◀ ▶ buttons (or by clicking a move in the list) you review the game — each move brings back the coach's comment,
   and for weaker moves an arrow shows what was better. "Rematch" starts a new game with the same settings.
@@ -547,11 +553,17 @@ A puzzle is treated as an opponent with the puzzle's rating.
 | 1200 | 3 | 1.6 s | 5 | 80 cp | 6% |
 | 1600 | 4 | 2.2 s | 4 | 24 cp | 1.6% |
 | 2000 | 5 | 2.8 s | 2 | 5 cp | 0% |
+| 2300 | 8 | 2.9 s | 1 | — | 0% |
+| 2600 | 12 | 3.1 s | 1 | — | 0% |
+| 2900 | full (time limit) | 3.2 s | 1 | — | 0% |
 
 From the candidates the coach samples a move with probability `p(move) ~ exp((score − best_score) / T)`
 (softmax with temperature T): with a large T a move half a pawn worse is almost as likely as the best one,
 with a small T the coach almost always plays the best move. A "random move" is a completely random legal move, like
 a beginner's blunder. In the opening the coach plays from the opening book (randomly, weighted by how many lines contain the move).
+Above 2000 the coach always plays the engine's best move and only searches deeper with every step (2100 = depth 6 …
+2500 = depth 10, then two plies a step); at 2900 it is the engine at full strength, which scored about 2890 against
+limited-strength Stockfish (see "Strength measurements"), at a faster time control than the coach's 3 s per move.
 The coach's Elo is **approximate** — exact calibration would require thousands of games against players with known ratings.
 
 ### Move classification and accuracy
@@ -724,7 +736,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 179 tests, including:
+`python -m pytest` — 181 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -735,9 +747,9 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_rating.py` | Elo E and ΔR for sample values, K during calibration, the Glicko-2 example from the paper, score S and the time penalty, profile and saving |
 | `test_selector.py` | the selector hits the target rating range, an easier puzzle after 3 failures, a bonus after 5 successes, ~30% weak themes, no repeats, variety |
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
-| `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
+| `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo up to the full engine (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
-| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing) and for a Chromium browser (app window, own profile, a second game gets a spare profile), the message when the window cannot open and the NVIDIA + Wayland explicit sync switch |
+| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions (with the evaluation bar), promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing) and for a Chromium browser (app window, own profile, a second game gets a spare profile), the message when the window cannot open and the NVIDIA + Wayland explicit sync switch |
 | `test_training.py` | puzzle modes: theme training draws only that theme, the review queue (order, clean solve removes, limit, missing puzzles, rebuilt from an old profile), Puzzle Rush gets harder without repeats and keeps the best score; on the puzzle screen: switching asks first, review is unrated, a whole Rush run (solve, 3 strikes, summary, again, back) and the clock running out |
 | `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
@@ -816,8 +828,8 @@ and the player plays the side to move after it (the board flips to that side).
 13. **Time penalty** computed from the average time of the last 20 solved puzzles (at least 3), linearly from
     3× to 6× the average (max. −0.2).
 14. **Our own SVG pieces and sounds synthesized in code** — in the chess.com style, but drawn and tuned here rather than
-    copied: the pieces come from a script (`scripts/make_pieces.py`: silhouettes, gradients, a bevel and a thick
-    outline), and the sounds from Web Audio (`web/src/sound.ts`), so there are no files under someone else's license. The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
+    copied: the pieces come from a script (`scripts/make_pieces.py`: slim silhouettes, a thin outline, a flat fill
+    with a shaded right edge), and the sounds from Web Audio (`web/src/sound.ts`), so there are no files under someone else's license. The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
     logarithmically — so half the slider is noticeably quieter, not almost as loud.
 15. **Notation in the interface language** (in English K, Q, R, B, N; in the Polish locale K, H, W, G, S) in the panel and messages;
     the engine and the protocol use UCI.
@@ -880,6 +892,9 @@ and the player plays the side to move after it (the board flips to that side).
 15. **A new look, pieces and sounds** — the "club poster" design with a light theme and three boards, our own
     chess.com-style pieces and a drier move sound; on Linux the game opens in a Chromium app window, so animations
     follow the monitor's refresh rate instead of WebKitGTK's 60 Hz timer.
+16. **Slimmer pieces, wooden sounds, a stronger coach** — neo-style pieces, resonator-based wooden and marimba sounds,
+    chess.com-style dragging (the piece jumps to the cursor and follows it with inertia), popping move dots, a coach
+    up to the engine's full strength (2900) and an evaluation bar in the coach game that can be hidden.
 
 ## Sources and licenses
 

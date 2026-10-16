@@ -35,7 +35,7 @@ function Screen({ state }: { state: AppState }): ReactElement {
     case "coach":
       return <CoachMenu view={state.view as CoachMenuSnapshot} />;
     case "coach_game":
-      return <CoachGame view={state.view as CoachGameSnapshot} />;
+      return <CoachGame view={state.view as CoachGameSnapshot} evalBar={state.settings.coachEval} />;
     case "stats":
       return <Stats view={state.view as StatsSnapshot} />;
     case "howto":

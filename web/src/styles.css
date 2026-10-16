@@ -972,17 +972,56 @@ input[type="range"]::-moz-range-thumb {
     opacity: 1;
   }
 }
-/* Fade only: a scale animation on SVG shapes left stray lines around the dots in WebKitGTK (the game window on Linux). */
-.dot {
-  fill: rgba(20, 16, 10, 0.3);
-  animation: dot-in 0.18s ease-out;
+/* Move hints: a dot pops up with a little overshoot, a capture ring closes in on its piece. */
+.hints {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
-.dot-capture {
-  fill: none;
-  stroke: rgba(20, 16, 10, 0.3);
-  stroke-width: 0.08;
+.hint {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
 }
-@keyframes dot-in {
+.hint-dot::after {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: rgba(20, 16, 10, 0.3);
+  animation: hint-pop 0.26s cubic-bezier(0.34, 1.7, 0.6, 1) both;
+  animation-delay: inherit;
+}
+.hint-capture::after {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 81%, rgba(20, 16, 10, 0.3) 82.5% 98%, transparent 100%);
+  animation: hint-close 0.28s cubic-bezier(0.25, 1.4, 0.5, 1) both;
+  animation-delay: inherit;
+}
+/* While dragging: the square the piece would land on gets a light frame. */
+.hint-drop {
+  box-shadow: inset 0 0 0 calc(var(--board, 480px) / 8 * 0.06) rgba(255, 255, 255, 0.75);
+  animation: hint-fade 0.12s ease-out;
+}
+@keyframes hint-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes hint-close {
+  from {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+@keyframes hint-fade {
   from {
     opacity: 0;
   }
@@ -1019,6 +1058,11 @@ input[type="range"]::-moz-range-thumb {
 .board.can-move {
   cursor: pointer;
 }
+/* Holding a piece: an open hand, like moving a window on the desktop. */
+html.holding-piece,
+html.holding-piece * {
+  cursor: grab !important;
+}
 /* Its own compositor layer: moving it only shifts the layer, the shadow is not repainted on every mouse move.
    It is in the page (hidden) from the moment a piece is picked, so its image is decoded before the drag starts. */
 .drag-piece {
@@ -1030,7 +1074,6 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
   z-index: 5;
   filter: drop-shadow(4px 8px 6px rgba(0, 0, 0, 0.35));
-  cursor: grabbing;
   will-change: transform;
   visibility: hidden;
 }
@@ -1161,7 +1204,7 @@ input[type="range"]::-moz-range-thumb {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
-  padding: 0 1px;
+  letter-spacing: -0.04em;
   overflow: hidden;
 }
 .eval-label.at-start {
@@ -1396,7 +1439,7 @@ input[type="range"]::-moz-range-thumb {
   gap: 28px;
   align-items: start;
   height: 100%;
-  --board: max(240px, min(calc(100cqh - 2 * var(--gutter) - 60px), calc(100cqw - 2 * var(--gutter) - 34px - 28px - clamp(380px, 36cqw, 560px)), 1000px));
+  --board: max(240px, min(calc(100cqh - 2 * var(--gutter) - 60px), calc(100cqw - 2 * var(--gutter) - 38px - 28px - clamp(380px, 36cqw, 560px)), 1000px));
 }
 .play-main {
   display: flex;
@@ -1408,10 +1451,11 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
 }
 .play .controls-row {
-  width: calc(var(--board) + 34px);
+  width: calc(var(--board) + 38px);
 }
+/* Wide enough for a label like "0.4" inside its outline. */
 .eval-vertical {
-  width: 22px;
+  width: 26px;
   height: var(--board);
   flex: none;
 }
@@ -2473,7 +2517,7 @@ button.candidate:hover {
   grid-template-columns: minmax(0, 1fr) clamp(360px, 36cqw, 520px);
   gap: var(--gutter);
   height: 100%;
-  --board: max(240px, min(calc(100cqh - 2 * var(--gutter) - 2 * 40px - 8px - 58px), calc(100cqw - 3 * var(--gutter) - clamp(360px, 36cqw, 520px)), 1000px));
+  --board: max(240px, min(calc(100cqh - 2 * var(--gutter) - 2 * 40px - 18px - 58px), calc(100cqw - 3 * var(--gutter) - 2 * 40px - clamp(360px, 36cqw, 520px)), 1000px));
 }
 .coach-game.loading {
   display: flex;
@@ -2488,6 +2532,20 @@ button.candidate:hover {
 }
 .game-main .controls-row {
   margin-top: 8px;
+}
+/* The board's hard shadow reaches 11px below it: the strip under it starts clear of it. The evaluation bar hangs
+   left of the board, so the board and its strips stay centred with the bar on or off. */
+.coach-board {
+  position: relative;
+  margin-bottom: 10px;
+}
+.coach-board .eval-vertical {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 14px);
+}
+.game-main .eval-horizontal {
+  margin: 2px 0 6px;
 }
 .strip {
   width: var(--board);

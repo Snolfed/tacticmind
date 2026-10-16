@@ -2,12 +2,13 @@
 // game summary.
 
 import { useEffect, useLayoutEffect, useRef, type ReactElement } from "react";
-import { go, screenAction } from "../api";
+import { go, screenAction, send } from "../api";
 import { BADGE_COLORS, Badge } from "../components/Badge";
 import { Board, pieceUrl } from "../components/Board";
 import { CoachAvatar } from "../components/CoachAvatar";
+import { EvalBar } from "../components/EvalBar";
 import { EvalGraph } from "../components/EvalGraph";
-import { IconChevronLeft, IconChevronRight } from "../components/Icons";
+import { IconChevronLeft, IconChevronRight, IconEvalBar } from "../components/Icons";
 import { ConfirmDialog } from "../components/Widgets";
 import { useKeys } from "../hooks";
 import { t, useLanguage } from "../i18n";
@@ -234,7 +235,7 @@ function Summary({ summary }: { summary: NonNullable<CoachGameSnapshot["summary"
   );
 }
 
-export function CoachGame({ view }: { view: CoachGameSnapshot }): ReactElement {
+export function CoachGame({ view, evalBar }: { view: CoachGameSnapshot; evalBar: boolean }): ReactElement {
   useLanguage();
   useKeys((event) => {
     if (!view.board || view.summary) return;
@@ -253,11 +254,24 @@ export function CoachGame({ view }: { view: CoachGameSnapshot }): ReactElement {
     );
   }
   const [top, bottom] = view.strips;
+  const evalProps = { hidden: false, score: view.eval.score, whiteBottom: view.eval.whiteBottom };
   return (
     <div className="screen coach-game">
       <div className="game-main">
         {top && <StripRow strip={top} expression={view.expression} />}
-        <Board board={view.board} name="coach" onMove={(uci) => act("move", { uci })} />
+        {evalBar && (
+          <div className="eval-horizontal">
+            <EvalBar {...evalProps} horizontal />
+          </div>
+        )}
+        <div className="coach-board">
+          {evalBar && (
+            <div className="eval-vertical">
+              <EvalBar {...evalProps} />
+            </div>
+          )}
+          <Board board={view.board} name="coach" onMove={(uci) => act("move", { uci })} />
+        </div>
         {bottom && <StripRow strip={bottom} expression={view.expression} />}
         <div className="controls-row">
           <button type="button" className="btn btn-secondary square" disabled={!view.nav.prev} onClick={() => act("step", { delta: -1 })} title={t("ui.prev")}>
@@ -265,6 +279,15 @@ export function CoachGame({ view }: { view: CoachGameSnapshot }): ReactElement {
           </button>
           <button type="button" className="btn btn-secondary square" disabled={!view.nav.next} onClick={() => act("step", { delta: 1 })} title={t("ui.next")}>
             <IconChevronRight />
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary square"
+            aria-pressed={evalBar}
+            onClick={() => send({ type: "settings", coachEval: !evalBar })}
+            title={t("ui.eval_bar")}
+          >
+            <IconEvalBar off={!evalBar} />
           </button>
           {view.controls.map((control) => (
             <button key={control.id} type="button" className={`btn btn-${control.style} grow`} disabled={!control.enabled} onClick={() => act(control.id)}>
