@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import hashlib
 import os
 import platform
 import shutil
@@ -52,12 +53,58 @@ def find_compiler() -> str | None:
     return None
 
 
+START_FEN = b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+STAMP = BUILD_DIR / "cpu.txt"
+
+
+def cpu_signature() -> str:
+    """Opis procesora: biblioteka zbudowana z -march=native nie zadziała na innym procesorze (SIGILL)."""
+    parts = [sys.platform, platform.machine()]
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8", errors="replace") as info:
+            for line in info:
+                if line.startswith(("model name", "flags", "Features", "CPU part")):
+                    parts.append(line.split(":", 1)[1].strip())
+                if len(parts) >= 5:
+                    break
+    except OSError:
+        parts.append(platform.processor())
+    return hashlib.sha1("|".join(parts).encode()).hexdigest()
+
+
 def _needs_build(target: Path) -> bool:
     if not target.exists():
+        return True
+    try:
+        if STAMP.read_text().strip() != cpu_signature():
+            return True
+    except OSError:
         return True
     mtime = target.stat().st_mtime
     sources = [NATIVE_DIR / s for s in LIB_SOURCES] + [NATIVE_DIR / "tm.h"]
     return any(src.exists() and src.stat().st_mtime > mtime for src in sources)
+
+
+_VERIFY_LIB = (
+    "import ctypes, sys\n"
+    "lib = ctypes.CDLL(sys.argv[1])\n"
+    "lib.tm_perft.restype = ctypes.c_ulonglong\n"
+    "lib.tm_perft.argtypes = [ctypes.c_char_p, ctypes.c_int]\n"
+    "sys.exit(0 if lib.tm_perft(sys.argv[2].encode(), 3) == 8902 else 1)\n"
+)
+
+
+def _works(path: Path, cli: bool) -> bool:
+    """Sprawdza zbudowany plik w osobnym procesie — nieobsługiwana instrukcja procesora nie wyłoży gry."""
+    if cli:
+        cmd = [str(path), "perft", "3"]
+    else:
+        cmd = [sys.executable, "-c", _VERIFY_LIB, str(path), START_FEN.decode()]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and (not cli or "8902" in result.stdout)
 
 
 def build(*, cli: bool = False, verbose: bool = False, portable: bool = False) -> Path | None:
@@ -86,13 +133,15 @@ def build(*, cli: bool = False, verbose: bool = False, portable: bool = False) -
         for extra in variants:
             cmd = [*base, *extra, *link, "-o", str(tmp), *[str(NATIVE_DIR / s) for s in sources], "-lm"]
             result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
+            if result.returncode == 0 and _works(tmp, cli):
                 os.replace(tmp, target)
+                if not cli:
+                    STAMP.write_text(cpu_signature())
                 if verbose:
                     print(" ".join(cmd))
                 return target
             if verbose:
-                print(result.stderr, file=sys.stderr)
+                print(result.stderr or f"{target.name}: test po kompilacji nie przeszedł ({extra})", file=sys.stderr)
         return None
     finally:
         if tmp.exists():
