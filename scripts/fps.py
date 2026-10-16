@@ -1,13 +1,13 @@
-"""Pomiar płynności interfejsu: średni czas klatki (ms) i FPS na każdym ekranie, w kilku rozdzielczościach.
+"""Interface smoothness measurement: average frame time (ms) and FPS on each screen, at several resolutions.
 
-Użycie::
+Usage::
 
-    python scripts/fps.py                      # prawdziwe okno, 1920×1080 i 2560×1440
-    python scripts/fps.py --size 3840x2160     # inna rozdzielczość (można podać kilka razy)
-    python scripts/fps.py --headless           # bez okna (SDL dummy) — sam koszt rysowania, bez flip()
+    python scripts/fps.py                      # real window, 1920×1080 and 2560×1440
+    python scripts/fps.py --size 3840x2160     # another resolution (can be given several times)
+    python scripts/fps.py --headless           # no window (SDL dummy) — drawing cost only, without flip()
 
-Klatki liczone są bez limitu 60 FPS, więc wynik pokazuje zapas mocy. Profil gracza
-trafia do katalogu tymczasowego, żeby pomiar nie zmieniał prawdziwych statystyk.
+Frames are measured without the 60 FPS cap, so the result shows the performance headroom. The player
+profile goes to a temporary directory so the measurement does not change real statistics.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ def parse_size(text: str) -> tuple[int, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--size", action="append", type=parse_size, help="rozdzielczość, np. 2560x1440")
-    parser.add_argument("--frames", type=int, default=240, help="liczba mierzonych klatek na ekran")
-    parser.add_argument("--headless", action="store_true", help="bez okna (SDL dummy)")
+    parser.add_argument("--size", action="append", type=parse_size, help="resolution, e.g. 2560x1440")
+    parser.add_argument("--frames", type=int, default=240, help="number of measured frames per screen")
+    parser.add_argument("--headless", action="store_true", help="no window (SDL dummy)")
     args = parser.parse_args()
     if args.headless:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -44,7 +44,7 @@ def main() -> None:
     from tacticmind.ui.app import App
 
     sizes = args.size or [(1920, 1080), (2560, 1440)]
-    print("| Rozdzielczość | " + " | ".join(SCREENS) + " |")
+    print("| Resolution | " + " | ".join(SCREENS) + " |")
     print("|---|" + "---:|" * len(SCREENS))
     for size in sizes:
         app = App(size)
@@ -53,7 +53,7 @@ def main() -> None:
             for name in SCREENS:
                 if name != app.current_name:
                     app.go(name)
-                for _ in range(40):  # rozgrzewka: przejście między ekranami, pamięć podręczna kształtów
+                for _ in range(40):  # warm-up: screen transition, shape cache
                     app.frame(1 / 60)
                 start = time.perf_counter()
                 for _ in range(args.frames):

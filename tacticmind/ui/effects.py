@@ -1,4 +1,4 @@
-"""Efekty wizualne: wybuch konfetti po rozwiązaniu zadania i rozchodzące się pierścienie."""
+"""Visual effects: a confetti burst after solving a puzzle and expanding rings."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class Effects:
         self._rng = random.Random()
 
     def burst(self, center: tuple[float, float], colors: list[tuple[int, int, int]], count: int = 46) -> None:
-        """Konfetti z punktu (np. z pola, na którym padł mat)."""
+        """Confetti from a point (e.g. the square where mate was delivered)."""
         for _ in range(count):
             angle = self._rng.uniform(-math.pi, 0) if self._rng.random() < 0.8 else self._rng.uniform(0, math.tau)
             speed = self._rng.uniform(px(160), px(520))

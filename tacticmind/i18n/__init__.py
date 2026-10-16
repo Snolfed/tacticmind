@@ -1,15 +1,15 @@
-"""Tłumaczenia interfejsu (i18n).
+"""User interface translations (i18n).
 
-Każdy język to osobny moduł z jednym słownikiem ``STRINGS`` (klucz → tekst
-z polami ``{nazwa}``). Żeby dodać język, wystarczy skopiować ``en.py`` jako np.
-``de.py``, przetłumaczyć wartości i dopisać kod języka do ``LANGUAGES``.
+Each language is a separate module with a single ``STRINGS`` dictionary (key → text
+with ``{name}`` fields). To add a language, copy ``en.py`` as e.g. ``de.py``,
+translate the values and add the language code to ``LANGUAGES``.
 
-Użycie::
+Usage::
 
     from tacticmind.i18n import t, tn
-    t("play.best_move")                      # „Najlepszy ruch!” / “Best move!”
-    t("thought.same", d=4, move="Hxf7+", score="+3.2")
-    tn("reason.easier", 3)                   # liczba mnoga zależna od języka
+    t("play.best_move")                      # "Best move!" / "Najlepszy ruch!"
+    t("thought.same", d=4, move="Qxf7+", score="+3.2")
+    tn("reason.easier", 3)                   # language-dependent plural
 """
 
 from __future__ import annotations
@@ -19,19 +19,19 @@ from types import ModuleType
 
 from . import en, pl
 
-#: Dostępne języki: kod → (nazwa własna, moduł z tekstami).
+#: Available languages: code → (native name, module with the texts).
 LANGUAGES: dict[str, tuple[str, ModuleType]] = {
-    "pl": ("Polski", pl),
     "en": ("English", en),
+    "pl": ("Polski", pl),
 }
-DEFAULT_LANGUAGE = "pl"
+DEFAULT_LANGUAGE = "en"
 
 _language = DEFAULT_LANGUAGE
 _listeners: list[Callable[[str], None]] = []
 
 
 def set_language(code: str) -> None:
-    """Zmienia język całej aplikacji (nieznany kod = język domyślny)."""
+    """Change the language of the whole application (unknown code = default language)."""
     global _language
     code = code if code in LANGUAGES else DEFAULT_LANGUAGE
     if code == _language:
@@ -46,7 +46,7 @@ def get_language() -> str:
 
 
 def on_change(listener: Callable[[str], None]) -> None:
-    """Rejestruje funkcję wywoływaną po zmianie języka."""
+    """Register a function to be called after the language changes."""
     _listeners.append(listener)
 
 
@@ -60,7 +60,7 @@ def has(key: str) -> bool:
 
 
 def t(key: str, **params: object) -> str:
-    """Tekst w bieżącym języku. Brakujący klucz: tekst polski, a w ostateczności sam klucz."""
+    """Text in the current language. Missing key: the default-language text, or as a last resort the key itself."""
     text = _strings(_language).get(key) or _strings(DEFAULT_LANGUAGE).get(key) or key
     if params:
         try:
@@ -71,7 +71,7 @@ def t(key: str, **params: object) -> str:
 
 
 def plural_form(n: int, code: str | None = None) -> str:
-    """Forma liczby mnogiej: 'one' | 'few' | 'many' (polski ma trzy formy, angielski dwie)."""
+    """Plural form: 'one' | 'few' | 'many' (Polish has three forms, English two)."""
     code = code or _language
     n = abs(n)
     if code == "pl":
@@ -84,7 +84,7 @@ def plural_form(n: int, code: str | None = None) -> str:
 
 
 def tn(key: str, n: int, **params: object) -> str:
-    """Tekst z liczbą: szuka klucza ``key.one`` / ``key.few`` / ``key.many``."""
+    """Text with a number: looks up the key ``key.one`` / ``key.few`` / ``key.many``."""
     form = plural_form(n)
     for candidate in (f"{key}.{form}", f"{key}.many", key):
         if has(candidate):
@@ -93,18 +93,18 @@ def tn(key: str, n: int, **params: object) -> str:
 
 
 def fmt_decimal(value: float, digits: int = 1) -> str:
-    """Liczba dziesiętna z separatorem właściwym dla języka (12,5 / 12.5)."""
+    """Decimal number with the language's decimal separator (12.5 / 12,5)."""
     text = f"{value:.{digits}f}"
     return text.replace(".", t("fmt.decimal"))
 
 
 def fmt_int(value: int) -> str:
-    """Liczba całkowita z separatorem tysięcy (12 345 / 12,345)."""
+    """Integer with a thousands separator (12,345 / 12 345)."""
     return f"{value:,}".replace(",", t("fmt.thousands_sep"))
 
 
 def fmt_compact(value: float) -> str:
-    """Krótki zapis dużych liczb: 12,3 tys. / 12.3k, 1,23 mln / 1.23M."""
+    """Compact form of large numbers: 12.3k / 12,3 tys., 1.23M / 1,23 mln."""
     if value >= 1_000_000:
         return fmt_decimal(value / 1_000_000, 2) + t("fmt.millions")
     if value >= 10_000:

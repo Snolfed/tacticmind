@@ -1,4 +1,4 @@
-"""Ekran statystyk: ranking w czasie, skuteczność w motywach, liczba zadań, najlepsza seria, średni czas."""
+"""Statistics screen: rating over time, accuracy per theme, puzzle count, best streak, average time."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ...puzzles.themes import theme_name
 from ...rating.profile import PlayerProfile
 from .base import WebScreen
 
-#: Pas niepewności przycięty do ±150, żeby początkowe RD = 350 nie spłaszczyło wykresu.
+#: Uncertainty band clipped to ±150 so that the initial RD = 350 does not flatten the chart.
 BAND_LIMIT = 150.0
 
 

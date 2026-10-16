@@ -1,9 +1,9 @@
-"""Stan szachownicy dla interfejsu w przeglądarce (odpowiednik ``ui/board_view.py`` bez rysowania).
+"""Board state for the browser interface (counterpart of ``ui/board_view.py`` without drawing).
 
-Python decyduje, co jest na szachownicy (pozycja, ostatni ruch, strzałki, znaczki, podpowiedź),
-a przeglądarka to rysuje i animuje. Każda zmiana pozycji dostaje nowy numer (``seq``) i rodzaj
-animacji: ``move`` (ruch do przodu), ``undo`` (cofnięcie — figura wraca, zbita pojawia się z powrotem)
-albo ``none`` (pozycja ustawiona bez animacji). Ruch gracza przychodzi z przeglądarki jako UCI.
+Python decides what is on the board (position, last move, arrows, badges, hint),
+and the browser draws and animates it. Every position change gets a new number (``seq``) and an
+animation kind: ``move`` (a move forward), ``undo`` (a take-back — the piece returns, a captured one reappears)
+or ``none`` (position set without animation). The player's move arrives from the browser as UCI.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ FxSink = Callable[[dict[str, Any]], None]
 
 @lru_cache(maxsize=256)
 def legal_moves(fen: str) -> tuple[str, ...]:
-    """Legalne ruchy (UCI) w pozycji — interfejs rysuje z nich kropki i okno promocji."""
+    """Legal moves (UCI) in the position — the interface draws the dots and the promotion dialog from them."""
     return tuple(move.uci() for move in chess.Board(fen).legal_moves)
 
 
@@ -38,19 +38,19 @@ class BoardModel:
         self.on_move: Callable[[chess.Move], None] | None = None
         self.last_move: chess.Move | None = None
         self.hint_square: chess.Square | None = None
-        #: Strzałki (od, do, kolor CSS).
+        #: Arrows (from, to, CSS colour).
         self.arrows: list[tuple[chess.Square, chess.Square, str]] = []
-        #: Znaczek w rogu pola: ok / bad / brilliant albo klasa ruchu (cls:best, cls:blunder…).
+        #: Badge in the square's corner: ok / bad / brilliant or a move class (cls:best, cls:blunder…).
         self.feedback: dict[str, Any] | None = None
         self.seq = 0
         self.anim = "none"
         self._feedback_seq = 0
 
-    # ------------------------------------------------------------ stan
+    # ------------------------------------------------------------ state
     def set_position(
         self, board: chess.Board, move: chess.Move | None = None, animate: bool = True, undo: chess.Move | None = None
     ) -> None:
-        """Nowa pozycja; ``move`` = ruch, który do niej prowadził; ``undo`` = właśnie cofany ruch."""
+        """New position; ``move`` = the move that led to it; ``undo`` = the move being taken back."""
         self.board = board.copy(stack=False)
         self.last_move = move
         self.seq += 1
@@ -62,12 +62,12 @@ class BoardModel:
             self.anim = "none"
 
     def show_feedback(self, square: chess.Square, ok: bool, brilliant: bool = False) -> None:
-        """✓ (dobry ruch), ✗ (błąd) albo !! (genialny ruch) w rogu pola docelowego."""
+        """✓ (good move), ✗ (mistake) or !! (brilliant move) in the corner of the target square."""
         kind = "brilliant" if ok and brilliant else "ok" if ok else "bad"
         self._set_feedback(square, kind, True)
 
     def show_badge(self, square: chess.Square, cls: str, effect: bool = True) -> None:
-        """Znaczek klasy ruchu (gra z trenerem): !!, !, ★, ✓, książka, ?!, ?, ??."""
+        """Move-class badge (game against the coach): !!, !, ★, ✓, book, ?!, ?, ??."""
         self._set_feedback(square, f"cls:{cls}", effect)
 
     def _set_feedback(self, square: chess.Square, kind: str, effect: bool) -> None:
@@ -78,18 +78,18 @@ class BoardModel:
         self.feedback = None
 
     def shake(self) -> None:
-        """Krótkie potrząśnięcie szachownicą po błędzie."""
+        """A short board shake after a mistake."""
         self._fx({"type": "shake", "board": self.name})
 
     def celebrate(self, square: chess.Square) -> None:
-        """Konfetti z pola, na którym rozwiązano zadanie."""
+        """Confetti from the square on which the puzzle was solved."""
         self._fx({"type": "celebrate", "board": self.name, "square": chess.square_name(square)})
 
     def can_move(self) -> bool:
         return self.interactive and self.board.turn == self.player_color
 
     def play(self, uci: str) -> bool:
-        """Ruch gracza z przeglądarki (UCI). Sprawdzamy, czy jest legalny i czy gracz może teraz ruszać."""
+        """Player's move from the browser (UCI). We check that it is legal and that the player may move now."""
         try:
             move = chess.Move.from_uci(uci)
         except ValueError:
@@ -100,7 +100,7 @@ class BoardModel:
             self.on_move(move)
         return True
 
-    # ------------------------------------------------------------ migawka
+    # ------------------------------------------------------------ snapshot
     def snapshot(self) -> dict[str, Any]:
         board = self.board
         fen = board.fen()

@@ -1,9 +1,9 @@
-"""Panel „Mózg AI” — dane do narysowania w przeglądarce (odpowiednik ``ui/brain_panel.py``).
+"""The "AI Brain" panel — data for drawing in the browser (counterpart of ``ui/brain_panel.py``).
 
-Tryby widoczności są te same co w pygame:
- - Ukryty: tylko liczniki i informacja, że AI liczy — ruchy i ocena ukryte,
- - Podpowiedź: podświetla figurę, którą trzeba ruszyć (zmniejsza nagrodę),
- - Pełny: wszystko widoczne, a po zadaniu AI tłumaczy rozwiązanie.
+The visibility modes are the same as in pygame:
+ - Hidden: only the counters and a note that the AI is thinking — moves and evaluation hidden,
+ - Hint: highlights the piece that has to move (reduces the reward),
+ - Full: everything visible, and after the puzzle the AI explains the solution.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from ..brain.thoughts import Thought
 from ..engine.types import EngineScore, SearchInfo, SearchProgress, TreeNode, format_score
 from ..i18n import fmt_compact, fmt_decimal, get_language, t
 
-#: Myśli widoczne w trybie ukrytym (nie zdradzają ruchów ani oceny).
+#: Thoughts visible in hidden mode (they reveal neither moves nor evaluation).
 HIDDEN_KINDS = ("prune", "tt", "done")
 
 
@@ -45,7 +45,7 @@ def score_json(score: EngineScore | None) -> dict[str, Any] | None:
 
 
 def counters(state: BrainState) -> list[dict[str, str]]:
-    """Liczniki na żywo: głębokość, węzły, węzły/s, cięcia, trafienia w TT, czas."""
+    """Live counters: depth, nodes, nodes/s, cutoffs, TT hits, time."""
     info, progress = state.info, state.progress
     live = progress is not None and state.running
     source: SearchInfo | SearchProgress | None = progress if live else info
@@ -64,7 +64,7 @@ def counters(state: BrainState) -> list[dict[str, str]]:
 
 
 def candidates(state: BrainState) -> list[dict[str, Any]] | None:
-    """3 najlepsze ruchy kandydujące z oceną i wariantem SAN (None = ukryte)."""
+    """The 3 best candidate moves with evaluation and SAN line (None = hidden)."""
     if not state.reveal:
         return None
     info = state.info
@@ -80,7 +80,7 @@ _tree_cache: dict[tuple[int, str], list[dict[str, Any]]] = {}
 
 
 def tree(info: SearchInfo | None) -> list[dict[str, Any]] | None:
-    """Mini-drzewo przeszukiwania: pierwsze 8 ruchów i ich odpowiedzi (z SAN i oceną)."""
+    """Mini search tree: the first 8 moves and their replies (with SAN and evaluation)."""
     if info is None or not info.tree:
         return None
     key = (id(info), get_language())

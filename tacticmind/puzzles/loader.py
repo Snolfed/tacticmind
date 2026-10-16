@@ -1,4 +1,4 @@
-"""Wczytywanie zadań: pełny zestaw (``puzzles.json``) albo dołączony zestaw startowy."""
+"""Puzzle loading: the full set (``puzzles.json``) or the bundled starter set."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ STARTER_SET = DATA_DIR / "starter_puzzles.json"
 
 @dataclass(frozen=True)
 class Puzzle:
-    """Zadanie w formacie Lichess.
+    """A puzzle in Lichess format.
 
-    Uwaga: ``fen`` to pozycja PRZED ruchem przeciwnika. Pierwszy ruch z ``moves``
-    wykonuje przeciwnik, dopiero potem gracz zaczyna rozwiązywać. Ruchy są w UCI.
+    Note: ``fen`` is the position BEFORE the opponent's move. The first move in ``moves``
+    is played by the opponent, only then does the player start solving. Moves are in UCI.
     """
 
     id: str
@@ -34,24 +34,24 @@ class Puzzle:
 
     @cached_property
     def player_color(self) -> chess.Color:
-        """Gracz gra stroną, która jest na ruchu po pierwszym ruchu przeciwnika."""
+        """The player plays the side to move after the opponent's first move."""
         return not chess.Board(self.fen).turn
 
     @cached_property
     def start_fen(self) -> str:
-        """Pozycja, w której gracz zaczyna rozwiązywać (po ruchu przeciwnika)."""
+        """The position in which the player starts solving (after the opponent's move)."""
         board = chess.Board(self.fen)
         board.push_uci(self.moves[0])
         return board.fen()
 
     @property
     def player_moves(self) -> int:
-        """Liczba ruchów do znalezienia przez gracza."""
+        """Number of moves the player has to find."""
         return len(self.moves) // 2
 
 
 def as_int(value: object, default: int = 0) -> int:
-    """Liczba z danych JSON (z bezpiecznym domyślnym wynikiem)."""
+    """A number from JSON data (with a safe default)."""
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, (int, float, str)):
@@ -81,7 +81,7 @@ def puzzle_from_dict(data: dict[str, object]) -> Puzzle:
 
 
 def load_puzzles(path: Path | None = None) -> list[Puzzle]:
-    """Wczytuje zadania. Bez argumentu: pełny zestaw, a gdy go nie ma — zestaw startowy."""
+    """Loads puzzles. Without an argument: the full set, or the starter set when it is missing."""
     if path is None:
         path = FULL_SET if FULL_SET.exists() else STARTER_SET
     with path.open(encoding="utf-8") as handle:
@@ -90,7 +90,7 @@ def load_puzzles(path: Path | None = None) -> list[Puzzle]:
 
 
 def puzzle_source(path: Path | None = None) -> str:
-    """Źródło zadań: ``"full"`` (pełny zestaw) albo ``"starter"`` (zestaw startowy)."""
+    """Puzzle source: ``"full"`` (full set) or ``"starter"`` (starter set)."""
     if path is None:
         path = FULL_SET if FULL_SET.exists() else STARTER_SET
     return "full" if path == FULL_SET else "starter"

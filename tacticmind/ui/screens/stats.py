@@ -1,4 +1,4 @@
-"""Ekran statystyk: ranking w czasie, skuteczność w motywach, liczba zadań, najlepsza seria, średni czas."""
+"""Statistics screen: rating over time, success rate per motif, puzzle count, best streak, average time."""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ class StatsScreen(Screen):
         values = [history[0].rating_before] + [h.rating_after for h in history] if history else []
         band = None
         if profile.system == "glicko" and history and all(h.rd_after is not None for h in history):
-            # Pas niepewności przycięty do ±150, żeby początkowe RD = 350 nie spłaszczyło wykresu.
+            # Uncertainty band clipped to ±150 so the initial RD = 350 doesn't flatten the chart.
             band = [150.0] + [min(150.0, float(h.rd_after or 0)) for h in history]
         line_chart(surface, left, values, theme.ACCENT, band if band and len(band) == len(values) else None)
 

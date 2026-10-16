@@ -1,15 +1,15 @@
-"""Poziom gracza w partiach z trenerem: kalibracja, „Twój poziom” i postępy w otwarciach.
+"""The player's level in games against the coach: calibration, "Your level" and opening progress.
 
-Wynik każdej partii księgujemy w osobnym rankingu Glicko-2 (przeciwnik = trener o wybranym Elo,
-z niepewnością RD = 80, bo Elo trenera jest przybliżone). Nie pokazujemy go jednak od razu:
+The result of every game is recorded in a separate Glicko-2 rating (opponent = the coach at the chosen Elo,
+with uncertainty RD = 80, because the coach's Elo is approximate). We do not show it right away, though:
 
- - przez pierwsze 10 partii trwa **kalibracja** — ranking dopiero „poznaje” gracza,
- - po 10. partii pojawia się nowy poziom trudności **„Twój poziom”**: trener gra z siłą równą
-   rankingowi gracza (zaokrągloną do 25, w zakresie 400–2000),
- - potem ten poziom zmienia się **co 5 partii** (po 15., 20., 25. …), a nie po każdej partii —
-   dzięki temu przeciwnik jest stabilny i postęp widać „skokami”, jak awans na kolejny stopień.
+ - the first 10 games are **calibration** — the rating is only "getting to know" the player,
+ - after the 10th game a new difficulty level appears, **"Your level"**: the coach plays at a strength equal
+   to the player's rating (rounded to 25, within 400–2000),
+ - after that the level changes **every 5 games** (after the 15th, 20th, 25th …), not after every game —
+   this keeps the opponent stable and progress shows in "steps", like being promoted a rank.
 
-Pomoc trenera kosztuje: każde cofnięcie ruchu i każda podpowiedź obniżają wynik partii o 0,1.
+The coach's help has a cost: every take-back and every hint lowers the game result by 0.1.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from . import glicko2
 
 CALIBRATION_GAMES = 10
 UPDATE_EVERY = 5
-#: Niepewność Elo trenera (jego siła jest przybliżona).
+#: Uncertainty of the coach's Elo (its strength is approximate).
 TRAINER_RD = 80.0
 MIN_RD = 50.0
 DEFAULT_ELO = 800
@@ -52,7 +52,7 @@ class OpeningProgress:
 
     @property
     def stars(self) -> int:
-        """0 — nieukończone, 1 — ukończone, 2 — raz bez błędu, 3 — trzy razy bez błędu."""
+        """0 — not completed, 1 — completed, 2 — once without a mistake, 3 — three times without a mistake."""
         if self.completed == 0:
             return 0
         if self.flawless >= 3:
@@ -62,11 +62,11 @@ class OpeningProgress:
 
 @dataclass
 class LevelChange:
-    """Wynik zaksięgowania partii."""
+    """Result of recording a game."""
 
     rating_before: float
     rating_after: float
-    #: Poziom „Twój poziom” przed i po (None przed końcem kalibracji).
+    #: The "Your level" level before and after (None before calibration ends).
     level_before: int | None
     level_after: int | None
     calibrated_now: bool
@@ -80,15 +80,15 @@ def level_from_rating(rating: float) -> int:
 class CoachProfile:
     rating: glicko2.Glicko2Rating = field(default_factory=glicko2.Glicko2Rating)
     games: list[CoachGameRecord] = field(default_factory=list)
-    #: „Twój poziom” — siła trenera dopasowana do gracza (None w trakcie kalibracji).
+    #: "Your level" — the coach strength matched to the player (None during calibration).
     level: int | None = None
     openings: dict[str, OpeningProgress] = field(default_factory=dict)
-    #: Ostatnie ustawienia (pamiętane między uruchomieniami).
+    #: Last settings (remembered between runs).
     elo: int = DEFAULT_ELO
     use_level: bool = False
     color: str = "white"
 
-    # ------------------------------------------------------------ kalibracja
+    # ------------------------------------------------------------ calibration
     @property
     def calibrated(self) -> bool:
         return len(self.games) >= CALIBRATION_GAMES
@@ -97,7 +97,7 @@ class CoachProfile:
         return min(len(self.games), CALIBRATION_GAMES)
 
     def games_to_update(self) -> int:
-        """Ile partii zostało do następnej zmiany „Twojego poziomu” (albo do końca kalibracji)."""
+        """How many games are left until the next change of "Your level" (or until calibration ends)."""
         n = len(self.games)
         if n < CALIBRATION_GAMES:
             return CALIBRATION_GAMES - n
@@ -155,12 +155,12 @@ class CoachProfile:
         return progress.stars if progress else 0
 
     def results(self) -> tuple[int, int, int]:
-        """(wygrane, remisy, porażki)."""
+        """(wins, draws, losses)."""
         wins = sum(1 for g in self.games if g.result == "win")
         draws = sum(1 for g in self.games if g.result == "draw")
         return wins, draws, len(self.games) - wins - draws
 
-    # ------------------------------------------------------------ zapis
+    # ------------------------------------------------------------ persistence
     def to_json(self) -> dict[str, object]:
         return {
             "rating": asdict(self.rating),

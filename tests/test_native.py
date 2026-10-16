@@ -1,6 +1,6 @@
-"""Silnik w C (bitboardy + NNUE): perft, maty, MultiPV, drzewo, przerwanie, symetria oceny.
+"""C engine (bitboards + NNUE): perft, mates, MultiPV, tree, stopping, evaluation symmetry.
 
-Testy są pomijane, gdy biblioteki nie da się zbudować (brak kompilatora C).
+The tests are skipped when the library can't be built (no C compiler).
 """
 
 import pytest
@@ -13,7 +13,7 @@ from tacticmind.engine.search import SearchLimits
 from .test_search import MATE_CASES, mate_for_side_to_move
 
 LIB = load()
-pytestmark = pytest.mark.skipif(LIB is None, reason="silnik w C niedostępny (brak kompilatora)")
+pytestmark = pytest.mark.skipif(LIB is None, reason="C engine unavailable (no compiler)")
 
 PERFT = [
     ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, 4_865_609),
@@ -59,16 +59,16 @@ def test_wins_hanging_queen() -> None:
 
 
 def test_mate_beats_fifty_move_rule() -> None:
-    # Mat w setnym półruchu kończy partię matem, nie remisem — silnik nie może go oddać.
+    # A mate on the hundredth ply ends the game in checkmate, not a draw; the engine must not give it away.
     info = searcher().search("7k/8/6K1/8/8/8/8/R7 w - - 99 120", SearchLimits(max_depth=6, time_ms=10_000))
     assert info.best_move == "a1a8" and info.mate_in == 1
-    # Obrona: czarne nie mogą wejść w mata, licząc na remis z reguły 50 ruchów.
+    # Defence: Black must not walk into mate counting on a 50-move-rule draw.
     info = searcher().search("6k1/8/6K1/8/8/8/8/R7 b - - 98 120", SearchLimits(max_depth=6, time_ms=10_000))
     assert info.best_move == "g8f8"
 
 
 def test_impossible_en_passant_square_is_ignored() -> None:
-    # Pole e6 z FEN, choć nie ma czarnego piona na e5 — bicie w przelocie byłoby niemożliwe.
+    # e6 square in the FEN although there is no black pawn on e5, so en passant would be impossible.
     assert LIB is not None
     bogus = LIB.lib.tm_perft(b"4k3/8/8/3P4/8/8/8/4K3 w - e6 0 1", 3)
     assert bogus == LIB.lib.tm_perft(b"4k3/8/8/3P4/8/8/8/4K3 w - - 0 1", 3)
@@ -99,7 +99,7 @@ def test_stop_and_progress() -> None:
 
     def should_stop() -> bool:
         calls["n"] += 1
-        return calls["n"] > 10  # ok. 200 ms
+        return calls["n"] > 10  # ~200 ms
 
     def on_progress(_p: object) -> None:
         calls["progress"] += 1

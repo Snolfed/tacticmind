@@ -1,7 +1,8 @@
-"""Selektor zadań: strefa flow, ochrona przed frustracją, bonus, słabe motywy, brak powtórek."""
+"""Puzzle selector: flow zone, frustration guard, bonus, weak themes, no repeats."""
 
 import random
 
+from tacticmind.i18n import set_language
 from tacticmind.puzzles.loader import Puzzle
 from tacticmind.rating.profile import PlayerProfile, PuzzleRecord
 from tacticmind.rating.selector import FLOW_OFFSET, FLOW_SPREAD, select_next
@@ -10,7 +11,7 @@ THEMES = ["fork", "pin", "skewer", "mateIn2", "deflection", "attraction", "sacri
 
 
 def synthetic_puzzles() -> list[Puzzle]:
-    """Zadania co 5 punktów rankingu 600–2800, z rotującymi motywami."""
+    """Puzzles every 5 rating points from 600–2800, with rotating themes."""
     return [
         Puzzle(f"p{r}", "6k1/5ppp/8/8/8/8/5PPP/3R2K1 b - - 0 1", ("g8h8", "d1d8"), r, 75, (THEMES[(r // 5) % len(THEMES)], "short"))
         for r in range(600, 2800, 5)
@@ -25,6 +26,7 @@ def profile_with(rating: float, **kwargs: int) -> PlayerProfile:
 
 
 def test_selector_hits_flow_window() -> None:
+    set_language("pl")
     puzzles = synthetic_puzzles()
     rng = random.Random(1)
     for rating in (800, 1200, 1500, 2100):
@@ -65,6 +67,7 @@ def test_no_repeats() -> None:
 
 
 def test_weak_theme_gets_priority() -> None:
+    set_language("pl")
     profile = profile_with(1500)
     for success in (False, False, False, True):
         profile.model.record(["pin"], success, float(success))
@@ -73,7 +76,7 @@ def test_weak_theme_gets_priority() -> None:
     rng = random.Random(5)
     picks = [select_next(synthetic_puzzles(), profile, rng) for _ in range(300)]
     weakness = [s for s in picks if s.mode == "weakness"]
-    assert 0.2 < len(weakness) / len(picks) < 0.4  # ok. 30% zadań
+    assert 0.2 < len(weakness) / len(picks) < 0.4  # ~30% of puzzles
     assert all("pin" in s.puzzle.themes for s in weakness)
     assert any("słaba strona" in reason for reason in weakness[0].reason_texts())
 

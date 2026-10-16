@@ -1,4 +1,4 @@
-"""Ekran „Trener”: siła trenera (Elo albo „Twój poziom”), kolor i otwarcia do nauki."""
+"""The "Coach" screen: coach strength (Elo or "Your level"), colour and openings to learn."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class CoachMenuScreen(WebScreen):
         return chess.WHITE if choice == "white" else chess.BLACK
 
     def _start(self, action: Callable[[], None]) -> None:
-        """Nowa partia; rozpoczęta partia (od 5 ruchów) liczy się wtedy jako przegrana — po potwierdzeniu."""
+        """New game; a game in progress (from 5 moves on) then counts as a loss — after confirmation."""
         game = self._game_screen().game
         if self.game_in_progress() and game is not None and game.abandon_counts():
             self.pending = action
@@ -63,7 +63,7 @@ class CoachMenuScreen(WebScreen):
         elo, adaptive = self.chosen_elo()
         self._start(lambda: self.app.start_coach_game(opening.side, elo, adaptive, opening))
 
-    # ------------------------------------------------------------ akcje
+    # ------------------------------------------------------------ actions
     def action(self, name: str, data: dict[str, Any]) -> None:
         coach = self.app.profile.coach
         if self.pending is not None:
@@ -104,7 +104,7 @@ class CoachMenuScreen(WebScreen):
                 return
             self.learn(opening)
 
-    # ------------------------------------------------------------ migawka
+    # ------------------------------------------------------------ snapshot
     def _greeting(self) -> str:
         coach = self.app.profile.coach
         if not coach.games:

@@ -1,13 +1,13 @@
-"""Stałe silnika: kody figur, kodowanie ruchów, tablice pól planszy 0x88.
+"""Engine constants: piece codes, move encoding, 0x88 board square tables.
 
-Plansza 0x88 to tablica 128 pól (16 kolumn × 8 rzędów), z których używamy
-tylko lewej połowy (kolumny 0–7). Indeks pola = rząd * 16 + kolumna, gdzie
-a1 = 0, h1 = 7, a8 = 112. Sztuczka 0x88: pole leży na planszy wtedy i tylko
-wtedy, gdy ``(pole & 0x88) == 0`` — wyjście poza planszę wykrywamy jedną
-operacją bitową.
+The 0x88 board is an array of 128 squares (16 files x 8 ranks), of which only
+the left half (files 0-7) is used. Square index = rank * 16 + file, where
+a1 = 0, h1 = 7, a8 = 112. The 0x88 trick: a square is on the board if and only
+if ``(square & 0x88) == 0``, so leaving the board is detected with a single
+bitwise operation.
 
-Figury kodujemy jako ``kolor * 8 + typ`` (typ: 1 = pion … 6 = król,
-kolor: 0 = białe, 1 = czarne). Puste pole = 0.
+Pieces are encoded as ``color * 8 + type`` (type: 1 = pawn ... 6 = king,
+color: 0 = white, 1 = black). Empty square = 0.
 """
 
 WHITE = 0
@@ -23,7 +23,7 @@ KING = 6
 
 PIECE_CHARS = " pnbrqk"
 
-# Prawa do roszady jako bity.
+# Castling rights as bits.
 CASTLE_WK = 1
 CASTLE_WQ = 2
 CASTLE_BK = 4
@@ -32,9 +32,9 @@ CASTLE_BQ = 8
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 # ---------------------------------------------------------------------------
-# Kodowanie ruchu w jednej liczbie całkowitej (brak obiektów = szybciej):
-# bity 0–6: pole startowe, 7–13: pole docelowe, 14–16: typ figury promocji,
-# bity 17+: flagi.
+# A move encoded in a single integer (no objects = faster):
+# bits 0-6: origin square, 7-13: target square, 14-16: promotion piece type,
+# bits 17+: flags.
 # ---------------------------------------------------------------------------
 FLAG_CAPTURE = 1 << 17
 FLAG_EP = 1 << 18
@@ -68,7 +68,7 @@ def is_capture(move: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Pola
+# Squares
 # ---------------------------------------------------------------------------
 def on_board(sq: int) -> bool:
     return (sq & 0x88) == 0
@@ -84,7 +84,7 @@ def parse_square(name: str) -> int:
     return (int(name[1]) - 1) * 16 + "abcdefgh".index(name[0])
 
 
-#: 64 prawdziwe pola planszy (indeksy 0x88) — pętle po planszy omijają niewidzialną połowę.
+#: The 64 real board squares (0x88 indices); board loops skip the invisible half.
 SQUARES = [sq for sq in range(128) if on_board(sq)]
 
 KNIGHT_OFFSETS = (33, 31, 18, 14, -33, -31, -18, -14)
@@ -110,14 +110,14 @@ def _rays(sq: int, dirs: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
     return tuple(rays)
 
 
-# Tablice liczone raz przy starcie (dzięki sztuczce 0x88). W pętlach generatora
-# używamy gotowych list pól zamiast za każdym razem sprawdzać krawędzie planszy.
+# Tables computed once at startup (thanks to the 0x88 trick). The generator loops
+# use ready-made square lists instead of checking the board edges every time.
 KNIGHT_TARGETS = [_targets(sq, KNIGHT_OFFSETS) if on_board(sq) else () for sq in range(128)]
 KING_TARGETS = [_targets(sq, KING_OFFSETS) if on_board(sq) else () for sq in range(128)]
 BISHOP_RAYS = [_rays(sq, BISHOP_DIRS) if on_board(sq) else () for sq in range(128)]
 ROOK_RAYS = [_rays(sq, ROOK_DIRS) if on_board(sq) else () for sq in range(128)]
 QUEEN_RAYS = [BISHOP_RAYS[sq] + ROOK_RAYS[sq] for sq in range(128)]
-#: Pola, z których pion danego koloru atakuje pole sq (biały pion z sq-15/sq-17).
+#: Squares from which a pawn of the given color attacks square sq (a white pawn from sq-15/sq-17).
 PAWN_ATTACKERS = (
     [_targets(sq, (-15, -17)) if on_board(sq) else () for sq in range(128)],
     [_targets(sq, (15, 17)) if on_board(sq) else () for sq in range(128)],

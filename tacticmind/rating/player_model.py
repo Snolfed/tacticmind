@@ -1,8 +1,8 @@
-"""Model gracza: skuteczność w każdym motywie taktycznym.
+"""Player model: accuracy in each tactical theme.
 
-To drugi element „AI” w grze: zamiast tylko jednej liczby (rankingu) system
-pamięta, w których motywach (widełki, związania, maty…) gracz radzi sobie
-gorzej, i podsuwa mu takie zadania częściej.
+This is the second "AI" element in the game: instead of a single number (the rating) the system
+remembers in which themes (forks, pins, mates…) the player does worse,
+and offers such puzzles more often.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 from ..puzzles.themes import skill_themes
 
-#: Wygładzanie Bayesa: zakładamy, że „na start” gracz ma ok. 65% skuteczności,
-#: warte tyle co 2 zadania. Dzięki temu jedno nieudane zadanie nie robi z motywu „słabej strony”.
+#: Bayesian smoothing: we assume the player starts at ~65% accuracy,
+#: worth as much as 2 puzzles. This way one failed puzzle does not turn a theme into a "weakness".
 PRIOR_RATE = 0.65
 PRIOR_WEIGHT = 2.0
 
@@ -25,12 +25,12 @@ class ThemeStat:
 
     @property
     def rate(self) -> float:
-        """Surowa skuteczność (do wyświetlania)."""
+        """Raw accuracy (for display)."""
         return self.successes / self.attempts if self.attempts else 0.0
 
     @property
     def smoothed_rate(self) -> float:
-        """Skuteczność wygładzona (do porównywania motywów)."""
+        """Smoothed accuracy (for comparing themes)."""
         return (self.successes + PRIOR_RATE * PRIOR_WEIGHT) / (self.attempts + PRIOR_WEIGHT)
 
 
@@ -55,10 +55,10 @@ class PlayerModel:
         return successes / attempts if attempts else PRIOR_RATE
 
     def weakest(self, min_attempts: int = 2, limit: int = 3) -> list[tuple[str, float]]:
-        """Najsłabsze motywy (z co najmniej ``min_attempts`` próbami), od najgorszego.
+        """The weakest themes (with at least ``min_attempts`` attempts), worst first.
 
-        Zwraca pary (motyw, surowa skuteczność). Bierzemy tylko motywy poniżej
-        przeciętnej skuteczności gracza — „słaba strona” musi być naprawdę słabsza.
+        Returns pairs (theme, raw accuracy). We take only themes below the player's
+        average accuracy — a "weakness" has to be genuinely weaker.
         """
         overall = self.overall_rate()
         candidates = [

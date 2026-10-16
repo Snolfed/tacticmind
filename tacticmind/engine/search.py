@@ -1,19 +1,19 @@
-"""Wyszukiwanie najlepszego ruchu: negamax z cięciami alfa-beta.
+"""Best move search: negamax with alpha-beta cutoffs.
 
-Najważniejsze elementy (szczegóły i pseudokod w README):
- - negamax: minimaks zapisany jedną funkcją; wynik dla przeciwnika to wynik
-   dla nas ze zmienionym znakiem: max(a, b) = -min(-a, -b),
- - alfa-beta: przestajemy przeglądać ruchy, gdy wiadomo, że przeciwnik i tak
-   nie dopuści do tej pozycji (cięcie beta),
- - iterative deepening: liczymy głębokość 1, 2, 3… aż skończy się czas;
-   wynik płytszej iteracji porządkuje ruchy w głębszej,
- - quiescence search: w liściach dogrywamy bicia, żeby nie oceniać pozycji
-   w połowie wymiany (efekt horyzontu),
- - porządkowanie ruchów: ruch z PV/TT, bicia wg MVV-LVA, ruchy killer,
+Key elements (details and pseudocode in the README):
+ - negamax: minimax written as a single function; the opponent's score is our
+   score with the sign flipped: max(a, b) = -min(-a, -b),
+ - alpha-beta: we stop examining moves once it is known that the opponent
+   won't allow this position anyway (beta cutoff),
+ - iterative deepening: search depth 1, 2, 3... until time runs out;
+   the result of a shallower iteration orders the moves in the deeper one,
+ - quiescence search: at the leaves we play out captures so as not to evaluate
+   a position in the middle of an exchange (horizon effect),
+ - move ordering: PV/TT move, MVV-LVA captures, killer moves,
    history heuristic,
- - tablica transpozycji z haszem Zobrista,
- - wyniki matowe z odległością do mata (szybszy mat = lepszy),
- - MultiPV: 3 najlepsze ruchy z dokładnymi ocenami.
+ - transposition table with Zobrist hashing,
+ - mate scores with distance to mate (faster mate = better),
+ - MultiPV: the 3 best moves with exact scores.
 """
 
 from __future__ import annotations
@@ -47,13 +47,13 @@ INF = INFINITY
 
 @dataclass(slots=True)
 class SearchLimits:
-    #: Maksymalna głębokość iteracji (w półruchach).
+    #: Maximum iteration depth (in plies).
     max_depth: int = 64
-    #: Limit czasu w milisekundach.
+    #: Time limit in milliseconds.
     time_ms: int = 2000
-    #: Liczba linii kandydujących (MultiPV).
+    #: Number of candidate lines (MultiPV).
     multi_pv: int = 1
-    #: Czy zapisywać mini-drzewo (dwa pierwsze poziomy) do wizualizacji.
+    #: Whether to record the mini tree (first two levels) for visualisation.
     record_tree: bool = False
 
 
@@ -61,30 +61,30 @@ class SearchLimits:
 class RootMove:
     move: int
     score: int = -INF
-    #: Czy wynik jest dokładny (a nie tylko górnym ograniczeniem po fail-low).
+    #: Whether the score is exact (and not just an upper bound after a fail-low).
     exact: bool = False
     pv: list[int] = field(default_factory=list)
 
 
 class SearchStopped(Exception):
-    """Przerwanie wyszukiwania (czas minął albo przyszła komenda stop)."""
+    """Search interrupted (time ran out or a stop command arrived)."""
 
 
 class Searcher:
-    """Silnik wyszukiwania z iterative deepening; jedna instancja na wiele zapytań."""
+    """Search engine with iterative deepening; one instance serves many queries."""
 
     def __init__(self, tt_entries: int = 400_000) -> None:
         self.tt = TranspositionTable(tt_entries)
-        #: Zwraca True, gdy trzeba przerwać liczenie (komenda stop z interfejsu).
+        #: Returns True when the search must stop (stop command from the UI).
         self.should_stop: Callable[[], bool] | None = None
-        #: Wywoływane co ok. 100 ms w trakcie liczenia (liczniki na żywo).
+        #: Called every ~100 ms during the search (live counters).
         self.on_progress: Callable[[SearchProgress], None] | None = None
 
-        # Dwa ruchy killer na każdy poziom: ciche ruchy, które ostatnio dały cięcie.
+        # Two killer moves per ply: quiet moves that recently caused a cutoff.
         self.killers = [[0, 0] for _ in range(MAX_PLY + 1)]
-        # History heuristic: jak często ruch (figura, pole docelowe) dawał cięcie.
+        # History heuristic: how often a move (piece, target square) caused a cutoff.
         self.history = [0] * (16 * 128)
-        # Trójkątna tablica głównego wariantu: pv_table[ply] = najlepsza linia od poziomu ply.
+        # Triangular principal variation table: pv_table[ply] = best line from ply onwards.
         self.pv_table: list[list[int]] = [[] for _ in range(MAX_PLY + 1)]
 
         self.board = Board()
@@ -103,7 +103,7 @@ class Searcher:
         self.last_info: SearchInfo | None = None
         self.terminal: Terminal | None = None
 
-        # Statystyki
+        # Statistics
         self.nodes = 0
         self.qnodes = 0
         self.cutoffs = 0
@@ -112,14 +112,14 @@ class Searcher:
         self.pruned_moves = 0
         self.seldepth = 0
 
-        # Rejestrowanie mini-drzewa
+        # Mini tree recording
         self.recording = False
         self.tree_root: list[TreeNode] = []
         self.current_root_node: TreeNode | None = None
 
     # ------------------------------------------------------------------ API
     def start(self, board: Board, limits: SearchLimits) -> None:
-        """Przygotowuje wyszukiwanie dla pozycji (plansza jest modyfikowana i przywracana)."""
+        """Prepare a search for the position (the board is modified and restored)."""
         self.board = board
         self.limits = limits
         self.root_side = board.side
@@ -131,7 +131,7 @@ class Searcher:
         self.stopped = False
         self.last_info = None
         self.killers = [[0, 0] for _ in range(MAX_PLY + 1)]
-        # Historię „postarzamy” zamiast zerować — wiedza z poprzedniej pozycji wciąż się przydaje.
+        # "Age" the history instead of clearing it; knowledge from the previous position is still useful.
         self.history = [h >> 2 for h in self.history]
         self.tt.new_search()
         self.start_time = time.perf_counter()
@@ -149,19 +149,19 @@ class Searcher:
         return self.finished
 
     def result(self) -> SearchInfo:
-        """Ostatnia ukończona głębokość (albo informacja o macie/pacie w korzeniu)."""
+        """The last completed depth (or checkmate/stalemate info at the root)."""
         return self.last_info if self.last_info is not None else self._terminal_info()
 
     def iterate(self) -> SearchInfo | None:
-        """Liczy kolejną głębokość (jeden krok iterative deepening).
+        """Search the next depth (one iterative deepening step).
 
-        Zwraca informacje o ukończonej głębokości albo None, gdy wyszukiwanie się skończyło.
+        Return info about the completed depth, or None when the search has finished.
         """
         if self.finished:
             return None
         depth = self.depth_done + 1
         elapsed = time.perf_counter() - self.start_time
-        # Nie zaczynaj nowej głębokości, gdy zużyto ponad połowę czasu — i tak by się nie skończyła.
+        # Don't start a new depth once over half the time is used; it would not finish anyway.
         if depth > self.limits.max_depth or (depth > 1 and elapsed > self.limits.time_ms / 1000 * 0.5):
             self.finished = True
             return None
@@ -171,7 +171,7 @@ class Searcher:
         try:
             self._search_root(depth)
         except SearchStopped:
-            # Przerwanie w środku drzewa: cofnij ruchy, które zostały na planszy.
+            # Interrupted mid-tree: undo the moves left on the board.
             while len(self.board.stack) > root_stack:
                 self.board.unmake_move()
             self.current_root_node = None
@@ -181,8 +181,8 @@ class Searcher:
         info = self._build_info(depth)
         self.last_info = info
 
-        # Na głębokości d pełne przeszukanie widzi każdego mata w co najwyżej d półruchach,
-        # więc znaleziony mat już się nie poprawi — kończymy wcześniej.
+        # At depth d a full search sees every mate in at most d plies,
+        # so the mate found won't improve any more: stop early.
         best = self.root_moves[0]
         if abs(best.score) > MATE_BOUND and depth >= MATE - abs(best.score):
             self.finished = True
@@ -191,7 +191,7 @@ class Searcher:
     def search(
         self, board: Board, limits: SearchLimits, on_info: Callable[[SearchInfo], None] | None = None
     ) -> SearchInfo:
-        """Wyszukiwanie synchroniczne do końca (testy, skrypty, benchmark)."""
+        """Synchronous search to completion (tests, scripts, benchmark)."""
         self.start(board, limits)
         while not self.finished:
             info = self.iterate()
@@ -199,13 +199,13 @@ class Searcher:
                 on_info(info)
         return self.result()
 
-    # ------------------------------------------------------- korzeń (MultiPV)
+    # ------------------------------------------------------- root (MultiPV)
     def _search_root(self, depth: int) -> None:
-        """Przeszukanie korzenia na danej głębokości.
+        """Search the root at the given depth.
 
-        MultiPV realizujemy jednym przebiegiem: alfa dla kolejnego ruchu to wynik
-        K-tego najlepszego ruchu znalezionego do tej pory. Ruchy z pierwszej
-        trójki dostają więc dokładne oceny, a gorsze są szybko odcinane (fail-low).
+        MultiPV is done in a single pass: alpha for the next move is the score of
+        the K-th best move found so far. Moves in the top three thus get exact
+        scores, while worse ones are cut off quickly (fail-low).
         """
         board = self.board
         k = min(self.limits.multi_pv, len(self.root_moves))
@@ -230,7 +230,7 @@ class Searcher:
                 node.bound = "exact" if rm.exact else "upper"
                 tree.append(node)
             if rm.exact:
-                # Wariant = ruch z korzenia + to, co wróciło z poziomu 1.
+                # Line = root move + whatever came back from ply 1.
                 rm.pv = [rm.move] + self.pv_table[1]
                 top.append(rm)
                 top.sort(key=lambda r: r.score, reverse=True)
@@ -238,7 +238,7 @@ class Searcher:
                     top.pop()
         self.current_root_node = None
 
-        # Kolejność na następną iterację: najlepsze dokładne wyniki na początku.
+        # Order for the next iteration: best exact scores first.
         self.root_moves.sort(key=lambda r: (r.score, r.exact), reverse=True)
         best = self.root_moves[0]
         self.tt.store(board.hash, depth, TT_EXACT, best.score, best.move)
@@ -247,20 +247,20 @@ class Searcher:
             tree.sort(key=lambda n: sign * n.score.value if n.score else -INF, reverse=True)
             self.tree_root = tree
 
-    # ------------------------------------------------- negamax z alfa-betą
+    # ------------------------------------------------- negamax with alpha-beta
     def _negamax(self, depth: int, alpha: int, beta: int, ply: int) -> int:
         board = self.board
         self.pv_table[ply] = []
         if ply >= MAX_PLY - 1:
             return evaluate(board)
 
-        # Remisy: powtórzenie pozycji i reguła 50 ruchów (brak materiału wykrywa funkcja oceny).
+        # Draws: repetition and the 50-move rule (insufficient material is detected by the evaluation).
         if board.halfmove >= 100 or board.is_repetition():
             return 0
 
         checked = in_check(board)
         if checked:
-            depth += 1  # przedłużenie szacha: nie urywaj liczenia w trakcie ataku na króla
+            depth += 1  # check extension: don't cut the search short during an attack on the king
         if depth <= 0:
             return self._quiesce(alpha, beta, ply)
 
@@ -270,7 +270,7 @@ class Searcher:
         if ply > self.seldepth:
             self.seldepth = ply
 
-        # Tablica transpozycji: może od razu dać wynik albo przynajmniej najlepszy ruch.
+        # Transposition table: may give the result right away, or at least the best move.
         tt_move = 0
         entry = self.tt.probe(board.hash)
         if entry is not None:
@@ -314,7 +314,7 @@ class Searcher:
                     alpha = score
                     self.pv_table[ply] = [move] + self.pv_table[ply + 1]
                     if score >= beta:
-                        # Cięcie beta: przeciwnik ma już lepszą alternatywę, reszta ruchów jest zbędna.
+                        # Beta cutoff: the opponent already has a better alternative; the remaining moves are unnecessary.
                         self.cutoffs += 1
                         self.pruned_moves += count - i - 1
                         if record:
@@ -324,7 +324,7 @@ class Searcher:
                         break
 
         if legal == 0:
-            # Brak legalnych ruchów: mat (im bliżej korzenia, tym gorzej) albo pat.
+            # No legal moves: checkmate (the closer to the root, the worse) or stalemate.
             return -MATE + ply if checked else 0
 
         flag = TT_LOWER if best >= beta else TT_EXACT if best > original_alpha else TT_UPPER
@@ -332,9 +332,9 @@ class Searcher:
         return best
 
     def _quiesce(self, alpha: int, beta: int, ply: int) -> int:
-        """Quiescence search: w liściu dogrywamy tylko bicia (i promocje), aż pozycja się uspokoi.
+        """Quiescence search: at a leaf, play out only captures (and promotions) until the position is quiet.
 
-        „Stand pat” = ocena statyczna; strona na ruchu nie musi bić, jeśli bicia jej szkodzą.
+        "Stand pat" = static evaluation; the side to move doesn't have to capture if captures hurt it.
         """
         board = self.board
         self.nodes += 1
@@ -357,7 +357,7 @@ class Searcher:
                 alpha = stand_pat
             best = stand_pat
 
-        # W szachu trzeba rozważyć wszystkie odpowiedzi — inaczej przeoczylibyśmy mata.
+        # In check all replies must be considered, otherwise we would miss mates.
         moves = generate_moves(board, captures_only=not checked)
         scores = self._score_moves(moves, 0, ply)
         sq = board.sq
@@ -368,10 +368,10 @@ class Searcher:
             if not checked and not (move >> 14) & 7:
                 to = (move >> 7) & 0x7F
                 victim = piece_value(PAWN if move & FLAG_EP else sq[to] & 7)
-                # Delta pruning: nawet zbicie tej figury z zapasem nie podniesie alfy.
+                # Delta pruning: even capturing this piece with a margin won't raise alpha.
                 if best + victim + 200 < alpha:
                     continue
-                # Złe bicie: droższa figura bije tańszą na bronionym polu — w liściu to strata.
+                # Bad capture: a more valuable piece takes a cheaper one on a defended square; at a leaf that's a loss.
                 if piece_value(sq[move & 0x7F] & 7) > victim + 50 and is_square_attacked(board, to, them):
                     continue
             if not make_legal_move(board, move):
@@ -390,11 +390,11 @@ class Searcher:
             return -MATE + ply
         return best
 
-    # ------------------------------------------------- porządkowanie ruchów
+    # ------------------------------------------------- move ordering
     def _score_moves(self, moves: list[int], tt_move: int, ply: int) -> list[int]:
-        """Oceny ruchów do sortowania. Im lepszy ruch na początku, tym więcej cięć alfa-beta.
+        """Move scores for sorting. The better the first move, the more alpha-beta cutoffs.
 
-        Kolejność: ruch z TT/PV > bicia wg MVV-LVA > promocje > killery > history.
+        Order: TT/PV move > MVV-LVA captures > promotions > killers > history.
         """
         sq = self.board.sq
         killer1, killer2 = self.killers[ply]
@@ -406,7 +406,7 @@ class Searcher:
                 continue
             promo = (move >> 14) & 7
             if move & CAPTURE_MASK:
-                # MVV-LVA: najcenniejsza ofiara, najtańszy napastnik.
+                # MVV-LVA: most valuable victim, least valuable attacker.
                 victim = PAWN if move & FLAG_EP else sq[(move >> 7) & 0x7F] & 7
                 score = 1_000_000 + victim * 100 - (sq[move & 0x7F] & 7)
                 if promo == QUEEN:
@@ -414,7 +414,7 @@ class Searcher:
             elif promo == QUEEN:
                 score = 950_000
             elif promo:
-                score = -100_000  # słaba promocja (wieża/goniec/skoczek) na koniec
+                score = -100_000  # underpromotion (rook/bishop/knight) last
             elif move == killer1:
                 score = 900_000
             elif move == killer2:
@@ -429,13 +429,13 @@ class Searcher:
         if killers[0] != move:
             killers[1] = killers[0]
             killers[0] = move
-        # Ruch został już cofnięty, więc figura stoi na polu startowym.
+        # The move has already been undone, so the piece stands on its origin square.
         idx = self.board.sq[move & 0x7F] * 128 + ((move >> 7) & 0x7F)
         self.history[idx] += depth * depth
         if self.history[idx] > 400_000:
             self.history = [h >> 1 for h in self.history]
 
-    # ------------------------------------------- czas, statystyki, mini-drzewo
+    # ------------------------------------------- time, statistics, mini tree
     def _check_time(self) -> None:
         now = time.perf_counter()
         if self.should_stop is not None and self.should_stop():
@@ -460,16 +460,16 @@ class Searcher:
             raise SearchStopped
 
     def _record_child(self, move: int, score: int, alpha: int, beta: int) -> None:
-        """Zapisuje odpowiedź przeciwnika (poziom 2 drzewa) do mini-drzewa."""
+        """Record the opponent's reply (tree level 2) in the mini tree."""
         node = self.current_root_node
         if node is None:
             return
-        # ``score`` jest z perspektywy strony na ruchu na poziomie 1 (przeciwnika korzenia).
+        # ``score`` is from the perspective of the side to move at ply 1 (the root's opponent).
         bound: Bound = "upper" if score <= alpha else "lower" if score >= beta else "exact"
         node.children.append(TreeNode(move_to_uci(move), to_white_score(score, self.root_side ^ 1), bound))
 
     def _record_pruned(self, moves: list[int], start: int) -> None:
-        """Ruchy, których alfa-beta w ogóle nie sprawdziła (po cięciu)."""
+        """Moves that alpha-beta never examined (after a cutoff)."""
         node = self.current_root_node
         if node is None:
             return
@@ -480,7 +480,7 @@ class Searcher:
                 node.children.append(TreeNode(move_to_uci(move), None, pruned=True))
 
     def _extend_pv(self, pv: list[int], max_length: int) -> list[int]:
-        """Gdy wariant jest krótszy niż głębokość (np. przez cięcie z TT), dociągamy go z tablicy transpozycji."""
+        """When the line is shorter than the depth (e.g. due to a TT cutoff), extend it from the transposition table."""
         board = self.board
         result = list(pv)
         for move in pv:
@@ -533,7 +533,7 @@ class Searcher:
         )
 
     def _terminal_info(self) -> SearchInfo:
-        """Mat lub pat już w korzeniu (albo przerwanie przed ukończeniem głębokości 1)."""
+        """Checkmate or stalemate at the root (or interruption before depth 1 completed)."""
         mated = self.terminal == "checkmate"
         if mated:
             value = -MATE if self.root_side == 0 else MATE
@@ -564,9 +564,9 @@ class Searcher:
 
 
 def _pick_move(moves: list[int], scores: list[int], start: int) -> int:
-    """Wybiera najlepiej oceniony z pozostałych ruchów (sortowanie przez wybór, leniwie).
+    """Pick the highest-scored remaining move (lazy selection sort).
 
-    Leniwie, bo po cięciu beta reszty listy i tak nie potrzebujemy sortować.
+    Lazy, because after a beta cutoff the rest of the list doesn't need sorting anyway.
     """
     best_index = start
     best_score = scores[start]
@@ -581,7 +581,7 @@ def _pick_move(moves: list[int], scores: list[int], start: int) -> int:
 
 
 def _score_to_tt(score: int, ply: int) -> int:
-    """Wynik matowy w TT zapisujemy względem bieżącego węzła, a nie korzenia."""
+    """Mate scores are stored in the TT relative to the current node, not the root."""
     if score > MATE_BOUND:
         return score + ply
     if score < -MATE_BOUND:
@@ -598,7 +598,7 @@ def _score_from_tt(score: int, ply: int) -> int:
 
 
 def find_best_move(fen_or_board: str | Board, **limits: int | bool) -> SearchInfo:
-    """Wygodna funkcja: najlepszy ruch dla pozycji (testy, skrypty)."""
+    """Convenience function: the best move for a position (tests, scripts)."""
     board = fen_or_board if isinstance(fen_or_board, Board) else Board(fen_or_board)
     params = SearchLimits(max_depth=64, time_ms=5000, multi_pv=1)
     for key, value in limits.items():

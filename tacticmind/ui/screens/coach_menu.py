@@ -1,4 +1,4 @@
-"""Ekran „Trener”: wybór siły trenera (Elo albo „Twój poziom”), koloru i otwarcia do nauki."""
+"""The "Coach" screen: choosing the coach's strength (Elo or "Your level"), colour and an opening to learn."""
 
 from __future__ import annotations
 
@@ -63,13 +63,13 @@ class CoachMenuScreen(Screen):
         self.coach_rect = pygame.Rect(0, 0, 0, 0)
         self.setup_rect = pygame.Rect(0, 0, 0, 0)
         self.list_rect = pygame.Rect(0, 0, 0, 0)
-        # Wąski układ: cała strona przewija się w pionie.
+        # Narrow layout: the whole page scrolls vertically.
         self.page: pygame.Surface | None = None
         self.page_h = 0
         self.scroll_y = 0.0
         self.rng = random.Random()
 
-    # ------------------------------------------------------------ ustawienia
+    # ------------------------------------------------------------ settings
     @staticmethod
     def _elo_to_value(elo: int) -> float:
         return (elo - ELO_MIN) / (ELO_MAX - ELO_MIN)
@@ -130,7 +130,7 @@ class CoachMenuScreen(Screen):
         return self._game_screen().in_progress()
 
     def _start(self, action: Callable[[], None]) -> None:
-        """Nowa partia; rozpoczęta partia (od 5 ruchów) liczy się wtedy jako przegrana — po potwierdzeniu."""
+        """New game; a started game (from move 5) then counts as a loss — after confirmation."""
         game = self._game_screen().game
         if self.game_in_progress() and game is not None and game.abandon_counts():
             self.pending = action
@@ -164,7 +164,7 @@ class CoachMenuScreen(Screen):
         color = chess.WHITE if side == "white" else chess.BLACK
         return [o for o in OPENINGS if o.side == color]
 
-    # ------------------------------------------------------------ cykl życia
+    # ------------------------------------------------------------ lifecycle
     def enter(self) -> None:
         self.clock = 0.0
         coach = self.app.profile.coach
@@ -191,7 +191,7 @@ class CoachMenuScreen(Screen):
             self.page_h = self.list_rect.bottom + g
             self.scroll_y = min(self.scroll_y, max(0, self.page_h - rect.height))
 
-    # ------------------------------------------------------------ zdarzenia
+    # ------------------------------------------------------------ events
     def _to_page(self, pos: tuple[int, int]) -> tuple[int, int]:
         return (pos[0] - self.rect.x, pos[1] - self.rect.y + int(self.scroll_y))
 
@@ -248,7 +248,7 @@ class CoachMenuScreen(Screen):
         self.play_button.label = _tx("coach.new_game") if self.resume_button.visible else _tx("coach.play")
         self.level_button.active = coach.use_level and self.level_button.enabled
 
-    # ------------------------------------------------------------ rysowanie
+    # ------------------------------------------------------------ drawing
     def draw(self, screen: pygame.Surface) -> None:
         surface = screen
         if not self.wide:
@@ -408,7 +408,7 @@ class CoachMenuScreen(Screen):
             draw_star(surface, center, px(8), theme.AMBER if i < stars else theme.SURFACE)
 
     def _draw_tooltip(self, surface: pygame.Surface, opening: Opening, row: pygame.Rect) -> None:
-        """Krótki opis otwarcia pod wskazanym wierszem (nad nim, gdy brakuje miejsca)."""
+        """Short opening description below the hovered row (above it when there is no room)."""
         desc = t(f"opening.{opening.id}.desc")
         height = wrapped_height(desc, row.width - px(60), fs(12)) + px(18)
         box = pygame.Rect(row.x + px(30), row.bottom + px(4), row.width - px(30), height)

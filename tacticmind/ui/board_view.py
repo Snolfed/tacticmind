@@ -1,12 +1,12 @@
-"""Szachownica: rysowanie, przeciąganie i klik-klik, kropki legalnych ruchów, promocja, animacje,
-strzałki silnika oraz strzałki i zaznaczenia rysowane prawym przyciskiem myszy.
+"""Chessboard: drawing, drag-and-drop and click-click, legal-move dots, promotion, animations,
+engine arrows, and arrows and square marks drawn with the right mouse button.
 
-Prawy przycisk (jak na chess.com / lichess):
- - przeciągnięcie z pola na pole rysuje strzałkę (dla ruchu skoczka w kształcie litery L),
- - kliknięcie zaznacza pole,
- - ponowne narysowanie tej samej strzałki / zaznaczenia usuwa je,
- - Shift = czerwony, Ctrl = niebieski, Alt = turkusowy (domyślnie bursztynowy),
- - lewy klik na szachownicy albo wykonanie ruchu czyści rysunki.
+Right button (as on chess.com / lichess):
+ - dragging from square to square draws an arrow (L-shaped for a knight move),
+ - clicking marks a square,
+ - drawing the same arrow / mark again removes it,
+ - Shift = red, Ctrl = blue, Alt = teal (amber by default),
+ - a left click on the board or making a move clears the drawings.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class _Anim:
     captured: tuple[chess.Piece, chess.Square] | None
     start: float
     duration: float
-    #: True przy cofaniu ruchu: zbita figura nie znika, tylko płynnie wraca na planszę.
+    #: True when undoing a move: the captured piece does not vanish but smoothly returns to the board.
     restore: bool = False
 
 
@@ -48,7 +48,7 @@ class _Promotion:
 
 
 def drawing_color(mods: int) -> Color:
-    """Kolor strzałki/zaznaczenia zależnie od wciśniętego klawisza."""
+    """Arrow/mark colour depending on the modifier key held."""
     if mods & pygame.KMOD_SHIFT:
         return theme.USER_ARROW_SHIFT
     if mods & pygame.KMOD_CTRL:
@@ -74,18 +74,18 @@ class BoardView:
         self.on_move: Callable[[chess.Move], None] | None = None
         self.last_move: chess.Move | None = None
         self.hint_square: chess.Square | None = None
-        #: Strzałki silnika (od, do, kolor).
+        #: Engine arrows (from, to, colour).
         self.arrows: list[tuple[chess.Square, chess.Square, Color]] = []
-        #: Rysunki gracza (prawy przycisk myszy).
+        #: Player drawings (right mouse button).
         self.user_arrows: dict[Arrow, Color] = {}
         self.marks: dict[chess.Square, Color] = {}
-        #: Znaczek na polu docelowym: (pole, rodzaj „ok” / „bad” / „brilliant”, czas pojawienia się).
+        #: Badge on the target square: (square, kind "ok" / "bad" / "brilliant", time it appeared).
         self.feedback: tuple[chess.Square, str, float] | None = None
         self.selected: chess.Square | None = None
         self.selected_at = 0.0
         self.drag_square: chess.Square | None = None
         self.drag_pos: tuple[int, int] = (0, 0)
-        #: Miejsce, w którym wciśnięto przycisk — przeciąganie zaczyna się dopiero po wyjściu poza „martwą strefę”.
+        #: Where the button was pressed — dragging starts only after leaving the dead zone.
         self.drag_origin: tuple[int, int] = (0, 0)
         self.drag_moved = False
         self.promotion: _Promotion | None = None
@@ -100,14 +100,14 @@ class BoardView:
         self._engine_key: tuple[object, ...] = ()
         self._engine_since = 0.0
         self.clock = 0.0
-        # Pamięć podręczna: warstwa pól ze współrzędnymi (zmienia się tylko przy zmianie rozmiaru/obrotu)
-        # i płótno wielokrotnego użytku — nie tworzymy nowych powierzchni w każdej klatce.
+        # Cache: the squares-and-coordinates layer (changes only when size/orientation changes)
+        # and a reusable canvas — no new surfaces are created every frame.
         self._base: pygame.Surface | None = None
         self._base_key: tuple[int, bool] = (0, True)
         self._canvas: pygame.Surface | None = None
         self._tints: dict[tuple[int, tuple[int, ...]], pygame.Surface] = {}
 
-    # ------------------------------------------------------------ geometria
+    # ------------------------------------------------------------ geometry
     @property
     def square_size(self) -> int:
         return self.rect.width // 8
@@ -132,14 +132,14 @@ class BoardView:
         rank = 7 - row if self.orientation == chess.WHITE else row
         return chess.square(file, rank)
 
-    # ------------------------------------------------------------ stan
+    # ------------------------------------------------------------ state
     def set_position(
         self, board: chess.Board, move: chess.Move | None = None, animate: bool = True, undo: chess.Move | None = None
     ) -> None:
-        """Nowa pozycja; ``move`` = ruch, który do niej prowadził (podświetlenie i animacja).
+        """New position; ``move`` = the move that led to it (highlight and animation).
 
-        ``undo`` = ruch, który właśnie cofamy (◀): figura płynnie wraca na pole startowe,
-        a zbita figura pojawia się z powrotem.
+        ``undo`` = the move being undone (◀): the piece smoothly returns to its start square
+        and the captured piece reappears.
         """
         previous = self.board
         self.board = board.copy(stack=False)
@@ -174,7 +174,7 @@ class BoardView:
         self._skip_next_animation = False
 
     def _undo_animation(self, after: chess.Board, before: chess.Board, move: chess.Move) -> _Anim | None:
-        """Animacja cofnięcia ruchu ``move``: z pozycji ``after`` z powrotem do ``before``."""
+        """Animation undoing ``move``: from position ``after`` back to ``before``."""
         moving = before.piece_at(move.from_square)
         if moving is None or after.piece_at(move.to_square) is None:
             return None
@@ -197,7 +197,7 @@ class BoardView:
         return _Anim(pieces, captured, self.clock, ANIMATION_TIME, restore=True)
 
     def show_feedback(self, square: chess.Square, ok: bool, brilliant: bool = False) -> None:
-        """✓ (dobry ruch), ✗ (błąd) albo !! (genialny ruch — poświęcenie) w rogu pola docelowego."""
+        """✓ (good move), ✗ (mistake) or !! (brilliant move — a sacrifice) in the corner of the target square."""
         kind = "brilliant" if ok and brilliant else "ok" if ok else "bad"
         self.feedback = (square, kind, self.clock)
         rect = self.square_rect(square)
@@ -205,12 +205,12 @@ class BoardView:
         color = {"ok": theme.ACCENT, "bad": theme.RED, "brilliant": theme.BRILLIANT}[kind]
         self.effects.ring(center, self.square_size * 0.3, color)
         if kind == "brilliant":
-            # Genialny ruch: druga, większa fala i iskry w kolorze „!!”.
+            # Brilliant move: a second, larger wave and sparks in the "!!" colour.
             self.effects.ring(center, self.square_size * 0.55, theme.BRILLIANT, 0.9)
             self.effects.burst(center, [theme.BRILLIANT, (255, 255, 255), theme.ACCENT], count=22)
 
     def show_badge(self, square: chess.Square, cls: str, effect: bool = True) -> None:
-        """Znaczek klasy ruchu (gra z trenerem): !!, !, ★, ✓, książka, ?!, ?, ??."""
+        """Move-class badge (coach game): !!, !, ★, ✓, book, ?!, ?, ??."""
         self.feedback = (square, f"cls:{cls}", self.clock if effect else self.clock - 1.0)
         if effect:
             rect = self.square_rect(square)
@@ -222,11 +222,11 @@ class BoardView:
                 self.effects.burst(center, [theme.BRILLIANT, (255, 255, 255), theme.ACCENT], count=22)
 
     def shake(self) -> None:
-        """Krótkie potrząśnięcie szachownicą po błędzie."""
+        """A short board shake after a mistake."""
         self._shake_at = self.clock
 
     def celebrate(self, square: chess.Square) -> None:
-        """Konfetti z pola, na którym rozwiązano zadanie."""
+        """Confetti from the square where the puzzle was solved."""
         center = self.square_rect(square).center
         self.effects.burst(center, [theme.ACCENT, theme.VIOLET, theme.AMBER, theme.ROSE, theme.BLUE, (255, 255, 255)])
 
@@ -240,7 +240,7 @@ class BoardView:
     def _can_move(self) -> bool:
         return self.interactive and self.board.turn == self.player_color and self.anim is None
 
-    # ------------------------------------------------------------ zdarzenia
+    # ------------------------------------------------------------ events
     def handle(self, event: pygame.event.Event) -> bool:
         if event.type == pygame.MOUSEMOTION:
             self.hover_pos = event.pos
@@ -256,7 +256,7 @@ class BoardView:
         if event.type == pygame.MOUSEMOTION and self.drag_square is not None:
             buttons = getattr(event, "buttons", (1, 0, 0))
             if not buttons[0]:
-                # Przycisk puszczono poza oknem — kończymy przeciąganie, figura zostaje zaznaczona.
+                # The button was released outside the window — end the drag, the piece stays selected.
                 self.drag_square = None
                 self.drag_moved = False
                 return True
@@ -272,12 +272,12 @@ class BoardView:
                 self._skip_next_animation = True
                 self._attempt(source, target)
             elif self.drag_moved and target != source:
-                self.selected = None  # upuszczona na niedozwolone pole — wraca na miejsce
+                self.selected = None  # dropped on an illegal square — goes back
             return True
         return False
 
     def drag_deadzone(self) -> float:
-        """Martwa strefa przeciągania: drobne drgnięcie myszy przy kliknięciu nie „łapie” figury."""
+        """Drag dead zone: a slight mouse twitch while clicking does not pick up the piece."""
         return max(px(10), self.square_size * 0.2)
 
     def _right_down(self, pos: tuple[int, int]) -> bool:
@@ -342,7 +342,7 @@ class BoardView:
             self.on_move(moves[0])
 
     def _promotion_squares(self, promotion: _Promotion) -> list[tuple[chess.PieceType, pygame.Rect]]:
-        """Kolumna 4 pól z figurami do wyboru, od pola promocji w stronę środka planszy."""
+        """A column of 4 squares with pieces to choose from, from the promotion square towards the board centre."""
         target = self.square_rect(promotion.to_square)
         s = self.square_size
         downwards = target.y < self.rect.centery
@@ -363,7 +363,7 @@ class BoardView:
                     self.on_move(move)
                 return
 
-    # ------------------------------------------------------------ rysowanie
+    # ------------------------------------------------------------ drawing
     def update(self, dt: float) -> None:
         self.clock += dt
         if self.anim is not None and self.clock - self.anim.start >= self.anim.duration:
@@ -371,7 +371,7 @@ class BoardView:
         self.effects.update(dt)
 
     def arrow_points(self, from_sq: chess.Square, to_sq: chess.Square) -> list[tuple[float, float]]:
-        """Punkty strzałki w układzie szachownicy; ruch skoczka jako litera L."""
+        """Arrow points in board coordinates; a knight move as an L."""
         s = self.square_size
         a = self._local_rect(from_sq).center
         b = self._local_rect(to_sq).center
@@ -392,14 +392,14 @@ class BoardView:
         radius = max(4, px(12))
         clock = self.clock
         gfx.shadow(surface, pygame.Rect(self.rect.topleft, size), radius, px(22), 150, (0, px(10)), covered=True)
-        # Potrząśnięcie po błędzie przesuwa całą szachownicę w poziomie.
+        # The shake after a mistake moves the whole board horizontally.
         shake_age = clock - self._shake_at
         offset = round(math.sin(shake_age * 48) * px(9) * (1 - shake_age / 0.4)) if shake_age < 0.4 else 0
         target = pygame.Rect((self.rect.x + offset, self.rect.y), size)
 
-        # Rysujemy prosto na ekran (bez pośredniego płótna wielkości szachownicy — to dwa kopiowania
-        # miliona pikseli mniej na klatkę w 1440p); zaokrąglone rogi poprawiamy potem na małych wycinkach.
-        direct = surface.get_clip().contains(target)  # podpowierzchnia nie respektuje obszaru przycięcia
+        # Draw straight to the screen (no intermediate board-sized canvas — that's two fewer copies of
+        # a million pixels per frame at 1440p); the rounded corners are fixed up afterwards on small patches.
+        direct = surface.get_clip().contains(target)  # a subsurface does not respect the clip area
         if direct:
             corners = gfx.corner_areas(size, radius)
             behind = [surface.subsurface(area.move(target.topleft)).copy() for area in corners]
@@ -441,7 +441,7 @@ class BoardView:
         self.effects.draw(surface)
 
     def _base_layer(self, s: int) -> pygame.Surface:
-        """Pola i współrzędne — rysowane raz dla danego rozmiaru i obrotu szachownicy."""
+        """Squares and coordinates — drawn once per board size and orientation."""
         key = (s, self.orientation == chess.WHITE)
         if self._base is not None and self._base_key == key:
             return self._base
@@ -469,7 +469,7 @@ class BoardView:
         return base
 
     def _tint(self, canvas: pygame.Surface, square: chess.Square, color: tuple[int, ...]) -> None:
-        """Półprzezroczyste podświetlenie pola (gotowa powierzchnia z pamięci podręcznej)."""
+        """Semi-transparent square highlight (a ready surface from the cache)."""
         s = self.square_size
         surf = self._tints.get((s, color))
         if surf is None:
@@ -488,7 +488,7 @@ class BoardView:
             r = self._local_rect(square).inflate(-px(4), -px(4))
             gfx.rrect(canvas, (*color[:3], 120), r, px(8))
             gfx.rrect(canvas, (*color[:3], 230), r, px(8), max(2, px(3)))
-        # Podpowiedź: pulsujący fioletowy pierścień; szach: czerwona poświata.
+        # Hint: a pulsing violet ring; check: a red glow.
         if self.hint_square is not None:
             pulse = 0.5 + 0.5 * math.sin(clock * 5)
             c = self._local_rect(self.hint_square).center
@@ -507,14 +507,14 @@ class BoardView:
         if anim is not None:
             hidden = {to for _, _, to in anim.pieces}
             if anim.restore and anim.captured is not None:
-                hidden.add(anim.captured[1])  # wracająca figura jest rysowana niżej, z przenikaniem
+                hidden.add(anim.captured[1])  # the returning piece is drawn underneath, fading in
         if self.drag_square is not None and self.drag_moved:
             hidden.add(self.drag_square)
         for square, piece in self.board.piece_map().items():
             if square not in hidden:
                 img = piece_surface(piece, s)
                 canvas.blit(img, img.get_rect(center=self._local_rect(square).center))
-        # Kropki legalnych ruchów (pojawiają się płynnie)
+        # Legal-move dots (fade in smoothly)
         if self.selected is not None and self._can_move():
             appear = ease_out_back((clock - self.selected_at) / 0.22)
             for target in self.legal_targets(self.selected):
@@ -523,7 +523,7 @@ class BoardView:
                     gfx.circle(canvas, theme.DOT, c, s * 0.46, max(3, int(s * 0.08)))
                 else:
                     gfx.circle(canvas, theme.DOT, c, max(1.0, s * 0.16 * appear))
-        # Animacja ruchu: bita figura znika, ruszana płynnie się przesuwa
+        # Move animation: the captured piece fades out, the moving one slides smoothly
         if anim is not None:
             if anim.captured is not None:
                 victim, square = anim.captured
@@ -539,7 +539,7 @@ class BoardView:
                 canvas.blit(img, img.get_rect(center=(round(pos[0]), round(pos[1]))))
 
     def _draw_arrows(self, canvas: pygame.Surface, s: int, clock: float) -> None:
-        engine_key = tuple((f, to) for f, to, _ in self.arrows)  # zmiana koloru nie restartuje animacji
+        engine_key = tuple((f, to) for f, to, _ in self.arrows)  # a colour change does not restart the animation
         if engine_key != self._engine_key:
             self._engine_key = engine_key
             self._engine_since = clock
@@ -573,7 +573,7 @@ class BoardView:
             canvas.blit(img, img.get_rect(center=local.center))
 
     def _draw_feedback(self, surface: pygame.Surface, s: int, clock: float, offset: int) -> None:
-        """✓ / ✗ w rogu pola docelowego (wyskakuje ze sprężystym efektem)."""
+        """✓ / ✗ in the corner of the target square (pops in with a springy effect)."""
         if self.feedback is None:
             return
         square, kind, started = self.feedback
@@ -588,7 +588,7 @@ class BoardView:
             return
         gfx.circle(surface, (*theme.SHADOW, 120), (center[0], center[1] + px(2)), radius + px(2))
         if kind == "brilliant":
-            # „!!” — lekko pulsuje, żeby wyróżniał się na tle zwykłego ✓.
+            # "!!" — pulses slightly so it stands out from a plain ✓.
             glow = 0.5 + 0.5 * math.sin((clock - started) * 6)
             gfx.ring_glow(surface, theme.BRILLIANT, center, radius * (2.4 + 0.3 * glow), int(120 + 60 * glow))
             gfx.circle(surface, theme.BRILLIANT, center, radius * 1.12)

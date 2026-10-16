@@ -1,7 +1,7 @@
-"""Profil gracza: ranking (Elo i Glicko-2), serie, historia, model gracza i zapis na dysk.
+"""Player profile: rating (Elo and Glicko-2), streaks, history, player model and saving to disk.
 
-Postępy zapisujemy w pliku JSON (odpowiednik localStorage w przeglądarce):
-``~/.tacticmind/profile.json`` albo w katalogu z zmiennej środowiskowej ``TACTICMIND_HOME``.
+Progress is saved in a JSON file (the counterpart of localStorage in the browser):
+``~/.tacticmind/profile.json`` or in the directory from the ``TACTICMIND_HOME`` environment variable.
 """
 
 from __future__ import annotations
@@ -21,23 +21,23 @@ from .player_model import PlayerModel
 
 RatingSystem = Literal["glicko", "elo"]
 
-#: Minimalne RD w Glicko-2 — bez tego ranking po setkach zadań prawie przestałby się zmieniać.
+#: Minimum RD in Glicko-2 — without it the rating would almost stop changing after hundreds of puzzles.
 MIN_RD = 50.0
-#: Kara za bardzo długi czas: od 3× przeciętnego czasu, liniowo do −0.2 przy 6×.
+#: Penalty for a very long time: from 3× the average time, linearly down to −0.2 at 6×.
 SLOW_FACTOR = 3.0
 MAX_TIME_PENALTY = 0.2
-#: Dostępne limity klatek na sekundę (ustawienia) i wartość domyślna.
+#: Available frames-per-second limits (settings) and the default value.
 FPS_LIMITS = (60, 120, 144, 170, 240)
 DEFAULT_FPS_LIMIT = 60
 
 
 def puzzle_score(outcome: PuzzleOutcome, average_time_s: float | None) -> float:
-    """Wynik S zadania (nie zero-jedynkowy).
+    """Puzzle score S (not just zero or one).
 
-     - 1.0: rozwiązane bez błędu i bez podpowiedzi,
-     - 0.5: rozwiązane z podpowiedzią,
-     - 0.0: błędny ruch (nawet jeśli gracz potem dokończył) albo pokazane rozwiązanie,
-     - lekka kara za bardzo długi czas (> 3× przeciętnego czasu gracza), maksymalnie −0.2.
+     - 1.0: solved without a mistake and without a hint,
+     - 0.5: solved with a hint,
+     - 0.0: a wrong move (even if the player finished afterwards) or the solution was shown,
+     - a slight penalty for a very long time (> 3× the player's average time), at most −0.2.
     """
     if not outcome.solved or outcome.mistake or outcome.revealed:
         return 0.0
@@ -86,24 +86,24 @@ class PlayerProfile:
     history: list[PuzzleRecord] = field(default_factory=list)
     seen: list[str] = field(default_factory=list)
     sound: bool = True
-    #: Głośność dźwięków 0..1 (suwak w górnym pasku).
+    #: Sound volume 0..1 (slider in the top bar).
     volume: float = 0.7
-    language: str = "pl"
-    #: Licznik FPS w rogu okna i limit klatek na sekundę (okno ustawień, F3).
+    language: str = "en"
+    #: FPS counter in the window corner and frames-per-second limit (settings window, F3).
     show_fps: bool = False
     fps_limit: int = DEFAULT_FPS_LIMIT
-    #: Partie z trenerem i nauka otwarć (osobny ranking i „Twój poziom”).
+    #: Games against the coach and opening study (a separate rating and "Your level").
     coach: CoachProfile = field(default_factory=CoachProfile)
 
-    # ------------------------------------------------------------ ranking
+    # ------------------------------------------------------------ rating
     @property
     def rating(self) -> float:
-        """Ranking w aktywnym systemie."""
+        """Rating in the active system."""
         return self.glicko.rating if self.system == "glicko" else self.elo_rating
 
     @property
     def rd(self) -> float | None:
-        """Odchylenie rankingu (tylko Glicko-2)."""
+        """Rating deviation (Glicko-2 only)."""
         return self.glicko.rd if self.system == "glicko" else None
 
     @property
@@ -111,12 +111,12 @@ class PlayerProfile:
         return self.games < elo.CALIBRATION_GAMES
 
     def average_time(self, last: int = 20) -> float | None:
-        """Przeciętny czas rozwiązania (z ostatnich udanych zadań), gdy są co najmniej 3."""
+        """Average solving time (from recent solved puzzles), when there are at least 3."""
         times = [r.time_s for r in self.history[-last:] if r.solved]
         return sum(times) / len(times) if len(times) >= 3 else None
 
     def apply(self, puzzle: Puzzle, outcome: PuzzleOutcome, mode: str = "flow") -> RatingChange:
-        """Księguje wynik zadania: oba rankingi, serie, model gracza i historię."""
+        """Records a puzzle result: both ratings, streaks, the player model and history."""
         score = puzzle_score(outcome, self.average_time())
         before = self.rating
 
@@ -156,7 +156,7 @@ class PlayerProfile:
         )
         return RatingChange(before, after, after - before, score, self.rd)
 
-    # ------------------------------------------------------------ zapis
+    # ------------------------------------------------------------ persistence
     def to_json(self) -> dict[str, object]:
         return {
             "version": 1,
@@ -180,7 +180,7 @@ class PlayerProfile:
 
     @classmethod
     def from_json(cls, data: dict[str, object]) -> PlayerProfile:
-        """Odczyt z JSON-a z kontrolą typów (uszkodzony plik nie wywraca gry)."""
+        """Reading from JSON with type checks (a corrupted file does not crash the game)."""
         g = data.get("glicko")
         g = g if isinstance(g, dict) else {}
         themes = data.get("themes")
@@ -218,7 +218,7 @@ def data_dir() -> Path:
     if "TACTICMIND_HOME" in os.environ:
         return Path(os.environ["TACTICMIND_HOME"])
     path = Path.home() / ".tacticmind"
-    old = Path.home() / ".taktykai"  # katalog sprzed zmiany nazwy gry — przenosimy postępy
+    old = Path.home() / ".taktykai"  # directory from before the game was renamed — migrate the progress
     if not path.exists() and old.is_dir():
         try:
             old.rename(path)
@@ -246,4 +246,4 @@ def save_profile(profile: PlayerProfile, path: Path | None = None) -> None:
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as handle:
         json.dump(profile.to_json(), handle, ensure_ascii=False, indent=1)
-    tmp.replace(path)  # zapis atomowy: przerwany zapis nie zniszczy profilu
+    tmp.replace(path)  # atomic write: an interrupted write will not destroy the profile

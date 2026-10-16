@@ -1,4 +1,4 @@
-// Statystyki: kafelki z liczbami, ranking w czasie i skuteczność w motywach.
+// Statistics: number tiles, rating over time and accuracy per theme.
 
 import type { ReactElement } from "react";
 import { go, screenAction } from "../api";

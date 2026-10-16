@@ -1,4 +1,4 @@
-"""Główna pętla gry (pygame): okno, skalowanie, ekrany z płynnymi przejściami, język, proces silnika."""
+"""Main game loop (pygame): window, scaling, screens with smooth transitions, language, engine process."""
 
 from __future__ import annotations
 
@@ -37,13 +37,13 @@ TRANSITION = 0.22
 
 class App:
     def __init__(self, size: tuple[int, int] = DEFAULT_SIZE) -> None:
-        sounds.pre_init()  # stereo + mały bufor — przed pygame.init(), które otwiera dźwięk
+        sounds.pre_init()  # stereo + small buffer — before pygame.init(), which opens audio
         pygame.init()
         fonts.reset()
         self.profile: PlayerProfile = load_profile()
         i18n.set_language(self.profile.language)
         pygame.display.set_caption(i18n.t("app.caption"))
-        pygame.display.set_icon(app_icon(128))  # przed set_mode — na niektórych systemach inaczej nie działa
+        pygame.display.set_icon(app_icon(128))  # before set_mode — otherwise it doesn't work on some systems
         self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
         self.fullscreen = False
         self.windowed_size = size
@@ -71,8 +71,8 @@ class App:
         self._transition_age = 0.0
         self.relayout()
         self.screens["home"].enter()
-        # Obiekty z wczytywania (zadania, czcionki, ekrany) żyją do końca gry — odsuwamy je od
-        # odśmiecacza, żeby pełne odśmiecanie nie zatrzymywało co jakiś czas klatki na kilkanaście ms.
+        # Objects created while loading (puzzles, fonts, screens) live until the game ends — we move them out of
+        # the garbage collector's reach so full collections don't stall a frame for a dozen-plus ms now and then.
         gc.freeze()
 
     @property
@@ -80,7 +80,7 @@ class App:
         return self.screens[self.current_name]
 
     def go(self, name: str) -> None:
-        """Przejście do innego ekranu z płynnym przenikaniem."""
+        """Switches to another screen with a smooth cross-fade."""
         if name == self.current_name:
             return
         self._transition = self.screen.copy()
@@ -91,14 +91,14 @@ class App:
         self.current.enter()
 
     def start_coach_game(self, color: chess.Color, elo: int, adaptive: bool, lesson: Opening | None) -> None:
-        """Nowa partia z trenerem albo lekcja otwarcia (z ekranu „Trener”)."""
+        """A new coach game or opening lesson (from the "Coach" screen)."""
         screen = self.screens["coach_game"]
         assert isinstance(screen, CoachGameScreen)
         screen.start(color, elo, adaptive, lesson)
         self.go("coach_game")
 
     def set_language(self, code: str) -> None:
-        """Zmiana języka interfejsu (zapamiętywana w profilu)."""
+        """Changes the UI language (remembered in the profile)."""
         i18n.set_language(code)
         self.profile.language = i18n.get_language()
         pygame.display.set_caption(i18n.t("app.caption"))
@@ -108,7 +108,7 @@ class App:
         self.relayout()
 
     def toggle_fullscreen(self) -> None:
-        """F11: pełny ekran w rozdzielczości pulpitu i z powrotem do okna o poprzednim rozmiarze."""
+        """F11: fullscreen at desktop resolution and back to a window of the previous size."""
         if not self.fullscreen:
             self.windowed_size = self.screen.get_size()
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -130,7 +130,7 @@ class App:
             screen.layout(content)
 
     def _escape_used(self) -> bool:
-        """Esc zamyka najpierw podgląd wariantu na ekranie gry, a dopiero potem pełny ekran."""
+        """Esc first closes the variation preview on the game screen, and only then exits fullscreen."""
         play = self.screens.get("play")
         return self.current_name == "play" and getattr(play, "preview", None) is not None
 
@@ -139,13 +139,13 @@ class App:
             screen.on_engine(event)
 
     def toggle_fps(self) -> None:
-        """F3: licznik FPS w rogu okna."""
+        """F3: FPS counter in the window corner."""
         self.profile.show_fps = not self.profile.show_fps
         self.save()
 
     def frame(self, dt: float, start: float | None = None) -> None:
-        """Jedna klatka: zdarzenia, wiadomości silnika, logika, rysowanie."""
-        start = begin_frame(start)  # jeden wspólny czas dla wszystkich animacji w tej klatce
+        """One frame: events, engine messages, logic, drawing."""
+        start = begin_frame(start)  # one shared time for all animations in this frame
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -168,12 +168,12 @@ class App:
             self.dispatch_engine(engine_event)
         self.topbar.update(dt)
         self.current.update(dt)
-        # Pasek górny ma własne, nieprzezroczyste tło — pod nim tła aplikacji nie kopiujemy.
+        # The top bar has its own opaque background — the app background is not copied under it.
         top = self.topbar.rect.height
         self.screen.blit(gfx.background(self.screen.get_size()), (0, top), pygame.Rect(0, top, self.screen.get_width(), self.screen.get_height() - top))
         self.current.draw(self.screen)
         if self._transition is not None:
-            # Przenikanie: stary ekran płynnie znika nad nowym.
+            # Cross-fade: the old screen fades out over the new one.
             self._transition_age += dt
             fade = 1 - ease_out_cubic(self._transition_age / TRANSITION)
             if fade <= 0.01:

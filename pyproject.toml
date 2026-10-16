@@ -1,7 +1,7 @@
 [project]
 name = "tacticmind"
 version = "1.0.0"
-description = "TacticMind — trener taktyki szachowej z własnym silnikiem AI, który myśli na głos"
+description = "TacticMind — a chess tactics trainer with its own AI engine that thinks out loud"
 requires-python = ">=3.11"
 dependencies = ["pygame-ce>=2.5", "chess>=1.10"]
 
@@ -15,5 +15,5 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "B", "UP", "SIM", "I"]
-# SIM109/SIM110: w gorących pętlach silnika jawne porównania i pętle są szybsze niż any()/krotki.
+# SIM109/SIM110: in the engine's hot loops, explicit comparisons and loops are faster than any()/tuples.
 ignore = ["E501", "SIM108", "SIM109", "SIM110", "B023", "B905"]

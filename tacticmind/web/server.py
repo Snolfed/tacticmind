@@ -1,15 +1,15 @@
-"""Lokalny serwer HTTP interfejsu (tylko biblioteka standardowa, nasłuch wyłącznie na 127.0.0.1).
+"""Local HTTP server for the interface (standard library only, listening on 127.0.0.1 only).
 
-Adresy:
- - ``GET /`` i pliki interfejsu — zbudowany interfejs w TypeScript (``tacticmind/web/static``),
- - ``GET /fonts/…`` — fonty Noto z ``tacticmind/assets/fonts``,
- - ``GET /api/strings`` — tłumaczenia wszystkich języków (interfejs sam formatuje stałe napisy),
- - ``GET /api/events`` — strumień Server-Sent Events: ``state`` (migawka stanu) i ``fx`` (dźwięki, efekty),
- - ``POST /api/action`` — akcja z przeglądarki (JSON).
+Routes:
+ - ``GET /`` and interface files — the built TypeScript interface (``tacticmind/web/static``),
+ - ``GET /fonts/…`` — Noto fonts from ``tacticmind/assets/fonts``,
+ - ``GET /api/strings`` — translations for all languages (the interface formats static strings itself),
+ - ``GET /api/events`` — a Server-Sent Events stream: ``state`` (state snapshot) and ``fx`` (sounds, effects),
+ - ``POST /api/action`` — an action from the browser (JSON).
 
-Ochrona przed innymi stronami w przeglądarce: akcje wymagają nagłówka ``X-TacticMind`` (inna strona
-nie może go wysłać bez zgody CORS, której serwer nie daje), a nagłówek ``Host`` musi wskazywać
-na ten komputer (chroni przed „DNS rebinding”).
+Protection against other pages in the browser: actions require the ``X-TacticMind`` header (another page
+cannot send it without CORS permission, which the server never grants), and the ``Host`` header must point
+to this computer (protects against "DNS rebinding").
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ mimetypes.add_type("image/svg+xml", ".svg")
 
 _MISSING_BUILD = """<!doctype html><meta charset="utf-8"><title>TacticMind</title>
 <body style="font-family:sans-serif;background:#0f111a;color:#eef1f8;padding:40px">
-<h1>TacticMind</h1><p>Brak zbudowanego interfejsu w <code>tacticmind/web/static</code>.</p>
-<p>Zbuduj go poleceniem <code>cd web &amp;&amp; npm install &amp;&amp; npm run build</code>.</p></body>"""
+<h1>TacticMind</h1><p>No built interface found in <code>tacticmind/web/static</code>.</p>
+<p>Build it with <code>cd web &amp;&amp; npm install &amp;&amp; npm run build</code>.</p></body>"""
 
 
 def strings_payload() -> dict[str, Any]:
@@ -54,10 +54,10 @@ class _Handler(BaseHTTPRequestHandler):
     server: TacticMindServer
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 — nazwa z BaseHTTPRequestHandler
-        """Bez logowania każdego zapytania w konsoli."""
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 — name from BaseHTTPRequestHandler
+        """No logging of every request to the console."""
 
-    # ------------------------------------------------------------ pomocnicze
+    # ------------------------------------------------------------ helpers
     def _host_ok(self) -> bool:
         host = self.headers.get("Host", "")
         name = host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
@@ -77,7 +77,7 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
     # ------------------------------------------------------------ GET
-    def do_HEAD(self) -> None:  # noqa: N802 — nazwa z BaseHTTPRequestHandler
+    def do_HEAD(self) -> None:  # noqa: N802 — name from BaseHTTPRequestHandler
         self.do_GET()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -119,7 +119,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, _MISSING_BUILD.encode("utf-8"), "text/html; charset=utf-8")
 
     def _events(self) -> None:
-        """Strumień SSE: migawki stanu i zdarzenia ``fx`` aż do rozłączenia karty."""
+        """SSE stream: state snapshots and ``fx`` events until the tab disconnects."""
         app = self.server.app
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -134,7 +134,7 @@ class _Handler(BaseHTTPRequestHandler):
                 try:
                     message = subscriber.get(timeout=15)
                 except queue.Empty:
-                    message = ": ping\n\n"  # utrzymanie połączenia
+                    message = ": ping\n\n"  # keep-alive
                 if message is None:
                     break
                 self.wfile.write(message.encode("utf-8"))
@@ -182,7 +182,7 @@ class TacticMindServer(ThreadingHTTPServer):
         except OSError:
             if port == 0:
                 raise
-            # Port zajęty (np. druga kopia gry) — bierzemy dowolny wolny.
+            # Port taken (e.g. a second copy of the game) — take any free one.
             super().__init__(("127.0.0.1", 0), _Handler)
 
     @property

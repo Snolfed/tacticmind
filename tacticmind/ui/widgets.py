@@ -1,5 +1,5 @@
-"""Kontrolki interfejsu: tekst dopasowany do miejsca, karty, przyciski z animacją, przełącznik
-segmentowy, przewijanie i ikony rysowane wektorowo (wygładzone)."""
+"""UI widgets: text fitted to its space, cards, animated buttons, a segmented control,
+scrolling and anti-aliased vector icons."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def label_text(label: Label) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tekst
+# Text
 # ---------------------------------------------------------------------------
 def draw_text(
     surface: pygame.Surface,
@@ -35,7 +35,7 @@ def draw_text(
     max_width: int | None = None,
     min_size: int | None = None,
 ) -> pygame.Rect:
-    """Rysuje napis; z ``max_width`` zmniejsza czcionkę i w razie potrzeby skraca tekst „…”."""
+    """Draws text; with ``max_width`` it shrinks the font and truncates with "…" if needed."""
     if max_width is not None:
         text, size = fonts.fit(text, max(4, max_width), size, style, min_size)
     surf = fonts.render(text, size, color, style)
@@ -55,9 +55,9 @@ def draw_wrapped(
     max_lines: int | None = None,
     shrink: bool = False,
 ) -> int:
-    """Tekst zawijany w prostokącie; nigdy nie wychodzi poza ``rect`` (zmniejsza czcionkę albo skraca).
+    """Text wrapped inside a rectangle; never spills outside ``rect`` (shrinks the font or truncates).
 
-    Zwraca wysokość zajętą przez tekst.
+    Returns the height taken by the text.
     """
     gap = px(3) if gap is None else gap
     if shrink:
@@ -79,10 +79,10 @@ def wrapped_height(text: str, width: int, size: int, style: str = "regular", gap
 
 
 # ---------------------------------------------------------------------------
-# Karty i ikony
+# Cards and icons
 # ---------------------------------------------------------------------------
 def card(surface: pygame.Surface, rect: pygame.Rect, radius: int | None = None, color: Color = theme.SURFACE, elevated: bool = True) -> None:
-    """Karta: miękki cień, wypełnienie i subtelna ramka."""
+    """Card: soft shadow, fill and a subtle border."""
     radius = px(theme.RADIUS) if radius is None else radius
     if rect.width <= 0 or rect.height <= 0:
         return
@@ -92,7 +92,7 @@ def card(surface: pygame.Surface, rect: pygame.Rect, radius: int | None = None, 
     if len(color) == 4 and color[3] < 255:
         surface.blit(surf, (rect.x - pad, rect.y - pad))
         return
-    # Środek nieprzezroczystej karty to jednolity kolor: wypełnienie jest dużo tańsze niż kopiowanie pikseli.
+    # The middle of an opaque card is a solid colour: a fill is much cheaper than copying pixels.
     radius = max(0, min(radius, min(rect.size) // 2))
     inner = pygame.Rect(pad + border_w + 1, pad + radius + 1, rect.width - 2 * (border_w + 1), rect.height - 2 * (radius + 1))
     gfx.blit_frame(surface, surf, (rect.x - pad, rect.y - pad), inner)
@@ -152,7 +152,7 @@ def icon_speaker(surface: pygame.Surface, center: tuple[float, float], size: flo
 
 
 def icon_flame(surface: pygame.Surface, center: tuple[float, float], size: float, t: float = 0.0) -> None:
-    """Płomień serii — dwa wielokąty z lekkim „migotaniem”."""
+    """Streak flame — two polygons with a slight flicker."""
     cx, cy = center
     wobble = math.sin(t * 7) * size * 0.04
 
@@ -171,10 +171,10 @@ def icon_flame(surface: pygame.Surface, center: tuple[float, float], size: float
 
 
 # ---------------------------------------------------------------------------
-# Przycisk
+# Button
 # ---------------------------------------------------------------------------
 _STYLES: dict[str, tuple[Color, Color, Color]] = {
-    # (góra gradientu, dół gradientu, kolor tekstu)
+    # (gradient top, gradient bottom, text colour)
     "primary": (theme.ACCENT, theme.ACCENT_2, (8, 28, 34)),
     "violet": (theme.VIOLET, theme.VIOLET_2, (255, 255, 255)),
     "danger": (theme.ROSE, theme.RED, (255, 255, 255)),
@@ -191,10 +191,10 @@ class Button:
     style: str = "secondary"
     enabled: bool = True
     visible: bool = True
-    size: int = 15  # bazowy rozmiar czcionki (skalowany przez fs)
+    size: int = 15  # base font size (scaled by fs)
     icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit" | "settings"
     pill: bool = False
-    active: bool = False  # np. aktywna zakładka nawigacji
+    active: bool = False  # e.g. the active navigation tab
     hovered: bool = False
     _fader: Fader = field(default_factory=Fader)
     _pressed_at: float = -10.0
@@ -220,7 +220,7 @@ class Button:
         if not self.enabled:
             top = bottom = theme.SURFACE
             text_color = theme.DIM
-        # Krótkie „wciśnięcie” po kliknięciu.
+        # A short "press" after a click.
         press = max(0.0, 1 - (now() - self._pressed_at) / 0.16)
         rect = self.rect.inflate(-round(px(4) * press), -round(px(4) * press))
         radius = rect.height // 2 if self.pill else min(px(12), rect.height // 2)
@@ -251,13 +251,13 @@ class Button:
 
 
 # ---------------------------------------------------------------------------
-# Przełącznik segmentowy
+# Segmented control
 # ---------------------------------------------------------------------------
 @dataclass
 class Segmented:
-    """Przełącznik segmentowy z przesuwającym się wskaźnikiem (np. Ukryty / Podpowiedź / Pełny)."""
+    """Segmented control with a sliding indicator (e.g. Hidden / Hint / Full)."""
 
-    options: list[tuple[str, Label]]  # (wartość, etykieta)
+    options: list[tuple[str, Label]]  # (value, label)
     value: str
     on_change: Callable[[str], None]
     rect: pygame.Rect = field(default_factory=lambda: pygame.Rect(0, 0, 0, 0))
@@ -305,10 +305,10 @@ class Segmented:
 
 
 # ---------------------------------------------------------------------------
-# Przewijanie
+# Scrolling
 # ---------------------------------------------------------------------------
 class ScrollArea:
-    """Płynne pionowe przewijanie kółkiem myszy."""
+    """Smooth vertical scrolling with the mouse wheel."""
 
     def __init__(self, stick_to_bottom: bool = True) -> None:
         self.offset = 0.0
@@ -334,7 +334,7 @@ class ScrollArea:
         self.stick_to_bottom = False
 
     def follow(self) -> None:
-        """Wywoływane co klatkę po ustaleniu wysokości treści."""
+        """Called every frame after the content height is known."""
         t = now()
         dt = min(0.1, t - self._last)
         self._last = t
@@ -356,12 +356,12 @@ class ScrollArea:
 
 
 def fade_in(age: float, duration: float = 0.35) -> float:
-    """Współczynnik 0..1 do płynnego pojawiania się nowych elementów."""
+    """A 0..1 factor for smoothly fading in new items."""
     return ease_out_cubic(age / duration)
 
 
 def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color, active: bool) -> None:
-    """Ikona pełnego ekranu: narożniki skierowane na zewnątrz (włącz) albo do środka (wyłącz)."""
+    """Fullscreen icon: corners pointing outwards (enter) or inwards (exit)."""
     cx, cy = center
     d = size * 0.3
     arm = size * 0.16
@@ -369,7 +369,7 @@ def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: 
     for sx in (-1, 1):
         for sy in (-1, 1):
             corner = (cx + sx * d, cy + sy * d)
-            if active:  # narożniki do środka = wyjście z pełnego ekranu
+            if active:  # corners pointing inwards = exit fullscreen
                 tip = (cx + sx * (d - arm), cy + sy * (d - arm))
                 gfx.thick_line(surface, color, (tip[0], corner[1]), tip, w)
                 gfx.thick_line(surface, color, (corner[0], tip[1]), tip, w)
@@ -379,7 +379,7 @@ def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: 
 
 
 def icon_gear(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color) -> None:
-    """Ikona ustawień: koło zębate (pierścień i osiem zębów)."""
+    """Settings icon: a gear (a ring and eight teeth)."""
     cx, cy = center
     w = max(1.5, size * 0.16)
     for k in range(8):
@@ -391,7 +391,7 @@ def icon_gear(surface: pygame.Surface, center: tuple[float, float], size: float,
 
 @dataclass
 class Slider:
-    """Poziomy suwak 0..1 (np. głośność): przeciąganie, kliknięcie w pasek albo kółko myszy."""
+    """Horizontal 0..1 slider (e.g. volume): drag, click on the track or use the mouse wheel."""
 
     value: float
     on_change: Callable[[float], None]

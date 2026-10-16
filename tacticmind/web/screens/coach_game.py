@@ -1,11 +1,11 @@
-"""Partia z trenerem i lekcja otwarcia (odpowiednik ``ui/screens/coach_game.py`` bez rysowania).
+"""Game against the coach and opening lesson (counterpart of ``ui/screens/coach_game.py`` without drawing).
 
-Przebieg tury jest taki sam jak w wersji pygame:
- 1. **Ruch gracza** — silnik w tle analizuje pozycję (MultiPV 3); ruch z teorii jest od razu „z teorii”.
- 2. **Ocena** — klasa ruchu i komentarz trenera; po błędzie i przeoczeniu partia się zatrzymuje.
- 3. **Ruch trenera** — z książki otwarć albo z wyszukiwania o sile zależnej od Elo.
+The turn flow is the same as in the pygame version:
+ 1. **Player's move** — the engine analyses the position in the background (MultiPV 3); a theory move is "book" right away.
+ 2. **Evaluation** — move class and the coach's comment; after a mistake or a blunder the game pauses.
+ 3. **Coach's move** — from the opening book or from a search whose strength depends on Elo.
 
-Zapytania do silnika idą po kolei (kolejka zadań) — proces silnika liczy jedną rzecz naraz.
+Engine requests go one at a time (a job queue) — the engine process computes one thing at a time.
 """
 
 from __future__ import annotations
@@ -37,18 +37,18 @@ from .base import WebScreen
 if TYPE_CHECKING:
     from ..core import WebApp
 
-#: Analiza pozycji gracza (do oceny jego ruchu i podpowiedzi).
+#: Analysis of the player's position (to judge their move and for hints).
 COACH_DEPTH = 5
 PRE_TIME = 1600
 POST_TIME = 1000
-#: Trener „myśli” co najmniej tyle (s), nawet gdy policzy szybciej — gra wygląda naturalniej.
+#: The coach "thinks" at least this long (s), even when it computes faster — the game looks more natural.
 MIN_THINK = 0.7
-#: Przerwa między komentarzem do ruchu gracza a ruchem trenera.
+#: Pause between the comment on the player's move and the coach's move.
 TRAINER_PAUSE = 0.35
 LESSON_REPLY = 0.75
-#: Trener gra z książki otwarć najwyżej przez tyle półruchów.
+#: The coach plays from the opening book for at most this many plies.
 BOOK_PLIES = 24
-#: Podsumowanie partii pojawia się chwilę po jej końcu.
+#: The game summary appears shortly after the game ends.
 SUMMARY_DELAY = 0.9
 
 Text = Callable[[], str]
@@ -93,7 +93,7 @@ class _Judge:
 
 @dataclass
 class _TrainerRef:
-    """Najlepsza ocena trenera w pozycji po ruchu gracza — do oceny ruchu trenera."""
+    """The coach's best evaluation in the position after the player's move — to judge the coach's move."""
 
     fen: str
     value: int
@@ -119,7 +119,7 @@ class CoachGameScreen(WebScreen):
         self.rng = random.Random()
         self.phase = "idle"
         self.turn_started = 0.0
-        # Kolejka zadań silnika.
+        # Engine job queue.
         self.jobs: list[_Job] = []
         self.job: _Job | None = None
         self.job_id: int | None = None
@@ -128,7 +128,7 @@ class CoachGameScreen(WebScreen):
         self.trainer_ref: _TrainerRef | None = None
         self.pending_grade: tuple[MoveRecord, _TrainerRef] | None = None
         self.hint_pending = False
-        # Komentarze trenera: główny (o ruchu gracza) i boczny (o ruchu trenera).
+        # Coach comments: main (about the player's move) and side (about the coach's move).
         self.main: Comment = ()
         self.main_cls: str | None = None
         self.main_seq = 0
@@ -141,7 +141,7 @@ class CoachGameScreen(WebScreen):
         self.confirm: tuple[Text, Callable[[], None], str] | None = None
         self.game_seq = 0
 
-    # ================================================================ start i cykl życia
+    # ================================================================ start and lifecycle
     def start(self, color: chess.Color, elo: int, adaptive: bool, lesson: Opening | None) -> None:
         self._reset_engine()
         self.timers.clear()
@@ -179,12 +179,12 @@ class CoachGameScreen(WebScreen):
     def rematch(self) -> None:
         color, elo, adaptive, lesson = self.settings
         if lesson is None and adaptive and self.app.profile.coach.level is not None:
-            elo = self.app.profile.coach.level  # „Twój poziom” mógł się właśnie zmienić
+            elo = self.app.profile.coach.level  # "Your level" may have just changed
         self.start(color, elo, adaptive, lesson)
 
     def enter(self) -> None:
         if self.job is not None:
-            # Wróciliśmy na ekran: przerwane zadanie silnika liczymy od nowa.
+            # We are back on the screen: restart the interrupted engine job.
             self.jobs.insert(0, self.job)
             self.job = None
             self.job_id = None
@@ -196,7 +196,7 @@ class CoachGameScreen(WebScreen):
     def in_progress(self) -> bool:
         return self.game is not None and not self.game.over and self.phase != "idle"
 
-    # ================================================================ komentarze i mina trenera
+    # ================================================================ comments and the coach's expression
     def say(self, comment: Comment, cls: str | None = None) -> None:
         self.main = comment
         self.main_cls = cls
@@ -216,7 +216,7 @@ class CoachGameScreen(WebScreen):
             return "thinking"
         return "neutral"
 
-    # ================================================================ silnik (kolejka zadań)
+    # ================================================================ engine (job queue)
     def _reset_engine(self) -> None:
         self.jobs.clear()
         self.job = None
@@ -261,7 +261,7 @@ class CoachGameScreen(WebScreen):
             self.hint_pending = False
             self._show_hint()
 
-    # ================================================================ tury
+    # ================================================================ turns
     def next_turn(self) -> None:
         game = self.game
         if game is None:
@@ -292,7 +292,7 @@ class CoachGameScreen(WebScreen):
         self.board_view.set_position(after, move, animate)
         self.play_sound(board_before, move)
 
-    # ---------------------------------------------------------------- ruch gracza
+    # ---------------------------------------------------------------- player's move
     def on_player_move(self, move: chess.Move) -> None:
         game = self.game
         if game is None or self.phase != "player" or game.over or not game.player_to_move or self.view_index is not None:
@@ -415,7 +415,7 @@ class CoachGameScreen(WebScreen):
         self.phase = "waiting"
         self.next_turn()
 
-    # ---------------------------------------------------------------- lekcja otwarcia
+    # ---------------------------------------------------------------- opening lesson
     def _lesson_move(self, board_before: chess.Board, move: chess.Move) -> None:
         game = self.game
         assert game is not None and game.lesson is not None
@@ -484,7 +484,7 @@ class CoachGameScreen(WebScreen):
         self.say((Phrase("coach.lesson_continue"),), None)
         self.next_turn()
 
-    # ---------------------------------------------------------------- ruch trenera
+    # ---------------------------------------------------------------- coach's move
     def begin_trainer_turn(self) -> None:
         game = self.game
         assert game is not None
@@ -552,7 +552,7 @@ class CoachGameScreen(WebScreen):
         self.next_turn()
 
     def _grade_trainer_move(self, fen: str, info: SearchInfo | None) -> None:
-        """Ocena ruchu trenera, gdy znamy ocenę pozycji po nim (analiza na turę gracza)."""
+        """Evaluates the coach's move once the evaluation after it is known (analysis on the player's turn)."""
         pending = self.pending_grade
         if pending is None or info is None or not info.depth:
             return
@@ -562,13 +562,13 @@ class CoachGameScreen(WebScreen):
         if after.fen() != fen:
             return
         self.pending_grade = None
-        value = score_for(info.score, after.turn) * -1  # ocena z perspektywy trenera
+        value = score_for(info.score, after.turn) * -1  # evaluation from the coach's perspective
         is_best = record.uci == ref.best_uci
         drop = 0.0 if is_best else win_drop(ref.value, value)
         record.classification = classify(drop, is_best=is_best)
         record.accuracy = move_accuracy(drop)
 
-    # ---------------------------------------------------------------- pomoc trenera
+    # ---------------------------------------------------------------- coach's help
     def hint(self) -> None:
         game = self.game
         if game is None or self.phase != "player" or game.over or self.view_index is not None:
@@ -640,7 +640,7 @@ class CoachGameScreen(WebScreen):
         self.phase = "waiting"
         self.schedule(0.3 * len(undone), self.begin_player_turn)
 
-    # ---------------------------------------------------------------- koniec partii
+    # ---------------------------------------------------------------- end of game
     def ask_resign(self) -> None:
         if self.in_progress() and self.game is not None and not self.game.lesson_active:
             self.confirm = (tx("coach.resign_confirm"), self._resign, "coach.resign_yes")
@@ -653,7 +653,7 @@ class CoachGameScreen(WebScreen):
         self.finish()
 
     def leave_game(self) -> None:
-        """Przycisk „Menu”: porzucenie zaczętej partii liczy się jako poddanie (od 5 ruchów)."""
+        """The "Menu" button: abandoning a started game counts as resigning (from 5 moves on)."""
         game = self.game
         if game is not None and game.abandon_counts():
             self.confirm = (tx("coach.abandon_confirm"), self._abandon, "coach.abandon_yes")
@@ -668,7 +668,7 @@ class CoachGameScreen(WebScreen):
             self.phase = "idle"
 
     def abandon_and_record(self) -> None:
-        """Rozpoczęcie nowej partii z menu: obecna (od 5 ruchów) liczy się jako poddana."""
+        """Starting a new game from the menu: the current one (from 5 moves on) counts as resigned."""
         game = self.game
         if game is not None and not game.over and game.abandon_counts():
             game.resign()
@@ -739,7 +739,7 @@ class CoachGameScreen(WebScreen):
     def summary_visible(self) -> bool:
         return self.summary is not None and 0 <= self.summary.opened_at <= self.clock
 
-    # ================================================================ przeglądanie ruchów (◀ ▶)
+    # ================================================================ browsing moves (◀ ▶)
     def view_board(self, index: int) -> chess.Board:
         assert self.game is not None
         board = chess.Board(self.game.start_fen)
@@ -810,7 +810,7 @@ class CoachGameScreen(WebScreen):
             return None
         return self.game.records[self.view_index - 1]
 
-    # ================================================================ akcje z przeglądarki
+    # ================================================================ actions from the browser
     def action(self, name: str, data: dict[str, Any]) -> None:
         if self.confirm is not None:
             if name == "confirm_yes":
@@ -853,13 +853,13 @@ class CoachGameScreen(WebScreen):
         elif name in handlers:
             handlers[name]()
 
-    # ================================================================ aktualizacja
+    # ================================================================ update
     def update(self, dt: float) -> None:
         super().update(dt)
         game = self.game
         if game is None:
             return
-        # Strzałki: lepszy ruch przy przeglądaniu partii albo podpowiedź / propozycja trenera na żywo.
+        # Arrows: the better move when browsing the game, or the coach's live hint / suggestion.
         visible_fen = self.board_view.board.fen()
         arrows: list[tuple[chess.Square, chess.Square, str]] = []
         record = self.viewed_record()
@@ -872,7 +872,7 @@ class CoachGameScreen(WebScreen):
             arrows.append((move.from_square, move.to_square, color))
         self.board_view.arrows = arrows
 
-    # ================================================================ migawka
+    # ================================================================ snapshot
     def _controls(self) -> list[dict[str, Any]]:
         game = self.game
         if game is None:
@@ -923,7 +923,7 @@ class CoachGameScreen(WebScreen):
         return t("coach.trainer_elo", elo=game.elo, level=t(describe_level(game.elo)))
 
     def _strips(self, game: CoachGame) -> list[dict[str, Any]]:
-        """Paski graczy nad i pod szachownicą: kto gra, kto jest na ruchu, zbite figury, przewaga."""
+        """Player bars above and below the board: who plays, whose turn it is, captured pieces, material advantage."""
         board = self.board_view.board
         player = game.player_color
         top_is_player = self.board_view.orientation != player
@@ -957,7 +957,7 @@ class CoachGameScreen(WebScreen):
 
     def _moves(self, game: CoachGame) -> dict[str, Any]:
         records = game.records
-        offset = 1 if records and not chess.Board(records[0].fen_before).turn else 0  # partia od ruchu czarnych
+        offset = 1 if records and not chess.Board(records[0].fen_before).turn else 0  # game starting with Black to move
         current = (len(records) if self.view_index is None else self.view_index) - 1
         return {
             "first": chess.Board(game.start_fen).fullmove_number,

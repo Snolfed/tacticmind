@@ -1,4 +1,4 @@
-"""Wspólne ustawienia testów: każdy test zaczyna się z językiem polskim (domyślnym)."""
+"""Shared test setup: every test starts in the default language (English)."""
 
 from collections.abc import Iterator
 

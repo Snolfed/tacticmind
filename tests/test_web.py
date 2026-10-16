@@ -1,4 +1,4 @@
-"""Interfejs w przeglądarce: logika ekranów bez pygame, migawki stanu, serwer HTTP i tryb ``--server`` (Tauri)."""
+"""Browser interface: screen logic without pygame, state snapshots, the HTTP server and ``--server`` mode (Tauri)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StubEngine:
-    """Silnik, który nic nie liczy — do testów serwera (bez osobnego procesu)."""
+    """An engine that computes nothing — for server tests (no separate process)."""
 
     def __init__(self) -> None:
         self.requests = 0
@@ -68,15 +68,15 @@ def wait_until(app: WebApp, condition: Any, timeout: float = 30.0) -> dict[str, 
         state = view(app)
         if condition(state):
             return state
-    raise AssertionError(f"warunek niespełniony w {timeout} s; stan: {json.dumps(state)[:600]}")
+    raise AssertionError(f"condition not met within {timeout} s; state: {json.dumps(state)[:600]}")
 
 
 def test_settings_file_is_validated(home: Path) -> None:
     path = home / "ui_settings.json"
-    assert load_settings(path) == DEFAULT_SETTINGS  # brak pliku
-    path.write_text("{to nie json", encoding="utf-8")
+    assert load_settings(path) == DEFAULT_SETTINGS  # no file
+    path.write_text("{not json", encoding="utf-8")
     assert load_settings(path) == DEFAULT_SETTINGS
-    path.write_text(json.dumps({"showFps": "tak", "fpsLimit": 999}), encoding="utf-8")
+    path.write_text(json.dumps({"showFps": "yes", "fpsLimit": 999}), encoding="utf-8")
     assert load_settings(path) == DEFAULT_SETTINGS
     path.write_text(json.dumps({"showFps": True, "fpsLimit": 144}), encoding="utf-8")
     assert load_settings(path) == {"showFps": True, "fpsLimit": 144}
@@ -85,7 +85,7 @@ def test_settings_file_is_validated(home: Path) -> None:
 def test_settings_actions_are_saved(home: Path) -> None:
     app = WebApp(engine=StubEngine())  # type: ignore[arg-type]
     app.dispatch({"type": "settings", "showFps": True, "fpsLimit": 240})
-    app.dispatch({"type": "settings", "fpsLimit": 75})  # spoza listy — ignorujemy
+    app.dispatch({"type": "settings", "fpsLimit": 75})  # not in the list — ignored
     assert view(app)["settings"] == {"showFps": True, "fpsLimit": 240}
     assert load_settings(home / "ui_settings.json") == {"showFps": True, "fpsLimit": 240}
     app.dispatch({"type": "sound", "volume": 0.3})
@@ -93,7 +93,7 @@ def test_settings_actions_are_saved(home: Path) -> None:
     state = view(app)
     assert state["topbar"]["volume"] == pytest.approx(0.3)
     assert state["lang"] == "en"
-    app.dispatch({"type": "language", "code": "xx"})  # nieznany język — bez zmian
+    app.dispatch({"type": "language", "code": "xx"})  # unknown language — no change
     assert view(app)["lang"] == "en"
     app.stop()
 
@@ -101,14 +101,14 @@ def test_settings_actions_are_saved(home: Path) -> None:
 def test_navigation_and_snapshots(home: Path) -> None:
     app = WebApp(engine=StubEngine())  # type: ignore[arg-type]
     assert view(app)["screen"] == "home"
-    app.dispatch({"type": "go", "screen": "coach_game"})  # nie ma jeszcze partii
+    app.dispatch({"type": "go", "screen": "coach_game"})  # there is no game yet
     assert view(app)["screen"] == "home"
     for screen in ("play", "coach", "stats", "howto", "home"):
         app.dispatch({"type": "go", "screen": screen})
         state = view(app)
         assert state["screen"] == screen
         assert state["view"] is not None
-    # Akcja dla ekranu, który nie jest otwarty, nic nie robi.
+    # An action for a screen that is not open does nothing.
     app.dispatch({"type": "screen", "screen": "stats", "name": "reset"})
     app.dispatch({"type": "go", "screen": "stats"})
     assert view(app)["view"]["confirm"] is False
@@ -124,7 +124,7 @@ def test_puzzle_solved_through_actions(home: Path) -> None:
         state = wait_until(app, lambda s: s["view"].get("board", {}).get("interactive"))
         board = state["view"]["board"]
         assert board["legal"] and board["fen"]
-        assert state["view"]["brain"]["candidates"] is None  # tryb ukryty
+        assert state["view"]["brain"]["candidates"] is None  # hidden mode
         fx: list[dict[str, Any]] = []
         subscriber = app.subscribe()
         play = app.screens["play"]
@@ -165,12 +165,12 @@ def test_coach_game_through_actions(home: Path) -> None:
         first = state["view"]["moves"]["list"][0]
         assert first["san"] == "e4" and first["player"] and first["cls"]
         assert state["view"]["card"]["comment"]["text"]
-        # Cofnięcie podglądu partii strzałką ◀ i powrót.
+        # Stepping back through the game with the ◀ arrow and returning.
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "step", "data": {"delta": -1}})
         assert view(app)["view"]["moves"]["current"] == 0
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "jump", "data": {"index": 2}})
         assert view(app)["view"]["moves"]["current"] == 1
-        # Nielegalny ruch jest ignorowany.
+        # An illegal move is ignored.
         before = view(app)["view"]["board"]["seq"]
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "move", "data": {"uci": "e1e5"}})
         assert view(app)["view"]["board"]["seq"] == before
@@ -178,7 +178,7 @@ def test_coach_game_through_actions(home: Path) -> None:
         app.stop()
 
 
-# ---------------------------------------------------------------------------- serwer HTTP
+# ---------------------------------------------------------------------------- HTTP server
 
 
 @pytest.fixture
@@ -221,23 +221,23 @@ def test_server_serves_page_strings_and_state(server: TacticMindServer) -> None:
 
 def test_server_rejects_foreign_requests(server: TacticMindServer) -> None:
     action = json.dumps({"type": "go", "screen": "stats"}).encode()
-    # Bez nagłówka X-TacticMind (np. formularz z innej strony) — odmowa.
+    # Without the X-TacticMind header (e.g. a form from another page) — rejected.
     status, _, _ = request(server, "POST", "/api/action", action, {"Content-Type": "application/json"})
     assert status == 403
-    # Obcy nagłówek Host (DNS rebinding) — odmowa.
+    # A foreign Host header (DNS rebinding) — rejected.
     status, _, _ = request(server, "GET", "/api/state", headers={"Host": "evil.example:80"})
     assert status == 403
-    # Wyjście poza katalog fontów — brak pliku.
+    # Escaping the fonts directory — no file.
     status, _, body = request(server, "GET", "/fonts/../../web/core.py")
     assert status == 404
     assert b"class WebApp" not in body
-    status, _, _ = request(server, "GET", "/fonts/nie-ma-takiego.ttf")
+    status, _, _ = request(server, "GET", "/fonts/no-such-file.ttf")
     assert status == 404
     _, _, body = request(server, "GET", "/../web/core.py")
     assert b"class WebApp" not in body
     status, _, _ = request(server, "POST", "/api/action", b"[1, 2]", {"X-TacticMind": "1", "Content-Type": "application/json"})
     assert status == 400
-    status, _, _ = request(server, "POST", "/api/action", b"{zly json", {"X-TacticMind": "1"})
+    status, _, _ = request(server, "POST", "/api/action", b"{bad json", {"X-TacticMind": "1"})
     assert status == 400
     status, _, _ = request(server, "POST", "/api/action", action, {"X-TacticMind": "1", "Content-Type": "application/json"})
     assert status == 204
@@ -259,9 +259,9 @@ def test_server_event_stream_sends_state(server: TacticMindServer) -> None:
     conn.close()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="zamykanie stdin działa tu inaczej")
+@pytest.mark.skipif(sys.platform == "win32", reason="closing stdin works differently here")
 def test_server_mode_for_tauri(home: Path) -> None:
-    """``main.py --server`` (tak uruchamia go okno Tauri): wypisuje adres i kończy się po zamknięciu stdin."""
+    """``main.py --server`` (how the Tauri window runs it): prints the address and exits once stdin is closed."""
     env = {**os.environ, "TACTICMIND_HOME": str(home)}
     process = subprocess.Popen(
         [sys.executable, str(ROOT / "main.py"), "--server", "--port", "0"],
@@ -299,9 +299,9 @@ def test_board_snapshot_promotion_and_legality(home: Path) -> None:
     snapshot = model.snapshot()
     assert "b7b8q" in snapshot["legal"] and "b7b8n" in snapshot["legal"]
     assert snapshot["anim"] == "none" and snapshot["interactive"]
-    assert not model.play("b7b8")  # promocja wymaga figury
+    assert not model.play("b7b8")  # a promotion requires a piece
     assert model.play("b7b8n") and played == ["b7b8n"]
-    model.player_color = chess.BLACK  # nie nasz ruch — ruchy odrzucane, bez listy legalnych
+    model.player_color = chess.BLACK  # not our turn — moves rejected, no legal-move list
     assert not model.play("e1e2")
     assert model.snapshot()["legal"] == []
     model.shake()

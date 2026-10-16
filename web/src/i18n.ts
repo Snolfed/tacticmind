@@ -1,5 +1,5 @@
-// Tłumaczenia: te same słowniki co w Pythonie (tacticmind/i18n), pobierane z /api/strings.
-// Stałe napisy interfejsu formatujemy tutaj; teksty zależne od stanu gry przychodzą gotowe.
+// Translations: the same dictionaries as in Python (tacticmind/i18n), fetched from /api/strings.
+// Static interface strings are formatted here; texts that depend on the game state arrive ready-made.
 
 import { useSyncExternalStore } from "react";
 import { UI_STRINGS } from "./uiStrings";
@@ -9,8 +9,8 @@ interface Payload {
   languages: Record<string, { name: string; strings: Record<string, string> }>;
 }
 
-let payload: Payload = { default: "pl", languages: {} };
-let language = "pl";
+let payload: Payload = { default: "en", languages: {} };
+let language = "en";
 const listeners = new Set<() => void>();
 
 export async function loadStrings(): Promise<void> {
@@ -43,7 +43,7 @@ export function has(key: string): boolean {
   return lookup(key) !== undefined;
 }
 
-/** Tekst w bieżącym języku; pola `{nazwa}` jak w str.format w Pythonie. */
+/** Text in the current language; `{name}` fields as in Python's str.format. */
 export function t(key: string, params: Record<string, string | number> = {}): string {
   const text = lookup(key) ?? key;
   return text.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match));
@@ -59,7 +59,7 @@ export function pluralForm(n: number, code: string = language): "one" | "few" | 
   return value === 1 ? "one" : "many";
 }
 
-/** Tekst z liczbą: klucze `key.one` / `key.few` / `key.many`. */
+/** Text with a number: keys `key.one` / `key.few` / `key.many`. */
 export function tn(key: string, n: number, params: Record<string, string | number> = {}): string {
   for (const candidate of [`${key}.${pluralForm(n)}`, `${key}.many`, key]) {
     if (has(candidate)) return t(candidate, { n, ...params });
@@ -67,7 +67,7 @@ export function tn(key: string, n: number, params: Record<string, string | numbe
   return key;
 }
 
-/** Komponenty, które używają t(), odświeżają się po zmianie języka. */
+/** Components that use t() re-render after a language change. */
 export function useLanguage(): string {
   return useSyncExternalStore(
     (listener) => {
@@ -78,7 +78,7 @@ export function useLanguage(): string {
   );
 }
 
-// Do testów.
+// For tests.
 export function _setPayload(value: Payload, code: string): void {
   payload = value;
   language = code;

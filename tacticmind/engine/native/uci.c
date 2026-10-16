@@ -1,12 +1,12 @@
 /*
- * Program „tmengine”: protokół UCI (mecze z innymi silnikami, np. w Cute Chess
- * albo przez python-chess) oraz narzędzia: perft, bench i generowanie danych
- * treningowych dla sieci NNUE (partie silnika z samym sobą).
+ * The "tmengine" program: the UCI protocol (matches against other engines, e.g. in
+ * Cute Chess or via python-chess) plus tools: perft, bench and generation of
+ * training data for the NNUE network (engine self-play games).
  *
- *   tmengine                         — tryb UCI
- *   tmengine bench [głębokość]       — szybkość na stałym zestawie pozycji
- *   tmengine perft <głębokość> [FEN]
- *   tmengine datagen <plik> <partie> <węzły> <ziarno> [sieć.nnue]
+ *   tmengine                         - UCI mode
+ *   tmengine bench [depth]           - speed on a fixed set of positions
+ *   tmengine perft <depth> [FEN]
+ *   tmengine datagen <file> <games> <nodes> <seed> [net.nnue]
  */
 #include "tm.h"
 
@@ -26,9 +26,9 @@
 
 static Engine *E;
 
-/* ------------------------------------------------------- wejście UCI
-   Czytamy stdin sami, bez bufora stdio: w trakcie liczenia (co ok. 20 ms) sprawdzamy, czy GUI
-   nie przysłało „stop” albo „quit”. Bufor stdio mógłby schować te polecenia przed select(). */
+/* ------------------------------------------------------- UCI input
+   We read stdin ourselves, without stdio buffering: during the search (every ~20 ms) we check whether
+   the GUI has sent "stop" or "quit". The stdio buffer could hide these commands from select(). */
 static char in_buf[1 << 16];
 static size_t in_len;
 static int in_eof, quit_requested;
@@ -44,7 +44,7 @@ static int stdin_ready(void) {
     }
     if (is_pipe) {
         DWORD avail = 0;
-        if (!PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL)) return 1; /* zamknięty potok: read() zwróci koniec */
+        if (!PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL)) return 1; /* closed pipe: read() will report end of input */
         return avail > 0;
     }
     DWORD events = 0;
@@ -59,7 +59,7 @@ static int stdin_ready(void) {
 #endif
 }
 
-/* Następna linia wejścia do out. Zwraca 1 — jest linia, 0 — na razie nic (tylko gdy !block), −1 — koniec wejścia. */
+/* Next input line into out. Returns 1 - got a line, 0 - nothing yet (only when !block), -1 - end of input. */
 static int next_line(char *out, size_t size, int block) {
     for (;;) {
         char *nl = memchr(in_buf, '\n', in_len);
@@ -84,7 +84,7 @@ static int next_line(char *out, size_t size, int block) {
     }
 }
 
-/* Wywoływane z wyszukiwania co ok. 20 ms: 1 = przerwij. */
+/* Called from the search every ~20 ms: 1 = stop. */
 static int uci_poll(void *user, int depth, uint64_t nodes, uint64_t cutoffs, uint64_t tt_hits, int time_ms) {
     (void)user, (void)depth, (void)nodes, (void)cutoffs, (void)tt_hits, (void)time_ms;
     char line[16384];
@@ -122,7 +122,7 @@ static void cmd_position(char *line) {
             Move m;
             if (!pos_parse_uci(&E->pos, tok, &m)) break;
             pos_make(&E->pos, m);
-            if (E->pos.ply > MAX_GAME - 200) { /* bardzo długa partia: zaczynamy historię od nowa */
+            if (E->pos.ply > MAX_GAME - 200) { /* very long game: restart the history */
                 char fen[256];
                 pos_get_fen(&E->pos, fen);
                 pos_set_fen(&E->pos, fen);
@@ -140,7 +140,7 @@ static long arg_value(const char *line, const char *name, long def) {
 
 static void cmd_go(char *line) {
     line[strcspn(line, "\r\n")] = 0;
-    strcat(line, " "); /* żeby „go depth 5” na końcu linii też pasowało do " depth " */
+    strcat(line, " "); /* so that "go depth 5" at the end of the line also matches " depth " */
     int depth = (int)arg_value(line, " depth ", MAX_PLY - 8);
     long movetime = arg_value(line, " movetime ", 0);
     long nodes = arg_value(line, " nodes ", 0);
@@ -152,7 +152,7 @@ static void cmd_go(char *line) {
     if (movetime > 0) {
         time_ms = (int)movetime;
     } else if (mytime != LONG_MIN) {
-        if (mytime < 0) mytime = 0; /* czas już przekroczony — ruch jak najszybciej */
+        if (mytime < 0) mytime = 0; /* time already exceeded: move as fast as possible */
         if (inc < 0) inc = 0;
         long base = mytime / (mtg > 0 ? mtg + 2 : 25) + inc * 3 / 4;
         long t = base * 2;
@@ -164,7 +164,7 @@ static void cmd_go(char *line) {
     int score;
     E->poll = uci_poll;
     Move best = engine_think(E, depth, time_ms, (uint64_t)nodes, &score, 1);
-    /* „go infinite”: bestmove dopiero po „stop”, nawet jeśli wyszukiwanie skończyło się wcześniej. */
+    /* "go infinite": bestmove only after "stop", even if the search finished earlier. */
     if (infinite && !E->stop) {
         char cmd[16384];
         int r;
@@ -205,15 +205,15 @@ static void uci_loop(void) {
                 v += 6;
                 v[strcspn(v, "\r\n")] = 0;
                 if (strstr(line, "name EvalFile")) {
-                    if (!nnue_load(v)) printf("info string nie udalo sie wczytac sieci %s\n", v);
+                    if (!nnue_load(v)) printf("info string failed to load network %s\n", v);
                 } else if (strstr(line, "name Hash")) {
                     Engine *bigger = engine_new(atoi(v) > 0 ? atoi(v) : 1);
-                    if (bigger) { /* zachowujemy pozycję i ustawienie UseNNUE */
+                    if (bigger) { /* keep the position and the UseNNUE setting */
                         bigger->pos = E->pos;
                         engine_free(E);
                         E = bigger;
                     } else {
-                        printf("info string brak pamieci na Hash %s MB\n", v);
+                        printf("info string not enough memory for Hash %s MB\n", v);
                     }
                 } else if (strstr(line, "name UseNNUE")) {
                     E->pos.use_nnue = strstr(v, "true") != NULL;
@@ -263,13 +263,13 @@ static void bench(int depth) {
     printf("nodes %llu time %.0f ms nps %.0f\n", (unsigned long long)total, el, total * 1000.0 / el);
 }
 
-/* ------------------------------------------------------- dane treningowe */
+/* ------------------------------------------------------- training data */
 
 typedef struct {
     uint64_t occ;
-    uint8_t pcs[16]; /* kody figur (0..11) po dwie na bajt, w kolejności bitów occ */
-    int16_t score;   /* ocena z perspektywy białych */
-    uint8_t result;  /* 0 = wygrały czarne, 1 = remis, 2 = wygrały białe */
+    uint8_t pcs[16]; /* piece codes (0..11), two per byte, in occ bit order */
+    int16_t score;   /* score from White's perspective */
+    uint8_t result;  /* 0 = Black won, 1 = draw, 2 = White won */
     uint8_t stm;
     uint8_t pad[4];
 } PackedPos;
@@ -307,7 +307,7 @@ static int datagen(const char *path, int games, int nodes, uint64_t seed) {
         engine_clear(E);
         Position *pos = &E->pos;
         pos_set_fen(pos, START_FEN);
-        /* Losowe otwarcie: 8–9 przypadkowych półruchów, żeby partie się różniły. */
+        /* Random opening: 8-9 random plies so that games differ. */
         int random_plies = 8 + (int)(rnd() % 2), ok = 1;
         for (int i = 0; i < random_plies; i++) {
             MoveList l;
@@ -319,7 +319,7 @@ static int datagen(const char *path, int games, int nodes, uint64_t seed) {
             pos_make(pos, l.moves[rnd() % (unsigned)l.count]);
         }
         if (!ok) continue;
-        { /* od nowa z FEN, żeby nie przepełnić historii */
+        { /* restart from FEN so the history doesn't overflow */
             char fen[256];
             pos_get_fen(pos, fen);
             pos_set_fen(pos, fen);
@@ -369,7 +369,7 @@ static int datagen(const char *path, int games, int nodes, uint64_t seed) {
         total += n;
         if ((g + 1) % 20 == 0) {
             fflush(f);
-            fprintf(stderr, "partie %d/%d, pozycje %ld, %.0f poz/s\n", g + 1, games, total, total * 1000.0 / (now_ms() - start));
+            fprintf(stderr, "games %d/%d, positions %ld, %.0f pos/s\n", g + 1, games, total, total * 1000.0 / (now_ms() - start));
         }
     }
     fclose(f);
@@ -380,7 +380,7 @@ int main(int argc, char **argv) {
     pos_init_tables();
     E = engine_new(64);
     setvbuf(stdout, NULL, _IOLBF, 0);
-    /* Sieć: z argumentu datagen, z TM_NET albo z pliku obok programu. */
+    /* Network: from the datagen argument, from TM_NET, or from the file next to the program. */
     const char *net = getenv("TM_NET");
     if (net) nnue_load(net);
     if (!NET_LOADED) nnue_load("tacticmind.nnue");
@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
         if (slash) {
             strcpy(slash + 1, "tacticmind.nnue");
             nnue_load(path);
-            if (!NET_LOADED) { /* program w native/build/, sieć w native/ */
+            if (!NET_LOADED) { /* program in native/build/, network in native/ */
                 strcpy(slash + 1, "../tacticmind.nnue");
                 nnue_load(path);
             }
@@ -411,11 +411,11 @@ int main(int argc, char **argv) {
             if (!strcmp(argv[6], "hce")) {
                 NET_LOADED = 0;
             } else if (!nnue_load(argv[6])) {
-                fprintf(stderr, "nie udalo sie wczytac %s\n", argv[6]);
+                fprintf(stderr, "failed to load %s\n", argv[6]);
                 return 1;
             }
         }
-        fprintf(stderr, "ocena: %s\n", NET_LOADED ? "NNUE" : "recznie (HCE)");
+        fprintf(stderr, "eval: %s\n", NET_LOADED ? "NNUE" : "hand-crafted (HCE)");
         return datagen(argv[2], atoi(argv[3]), atoi(argv[4]), (uint64_t)atoll(argv[5]));
     } else {
         uci_loop();

@@ -1,12 +1,12 @@
-"""Ranking Elo gracza.
+"""The player's Elo rating.
 
-Zadanie traktujemy jak przeciwnika o rankingu równym rankingowi zadania.
+A puzzle is treated as an opponent whose rating equals the puzzle's rating.
 
- - oczekiwany wynik:  E = 1 / (1 + 10^((R_zadania − R_gracza) / 400))
- - zmiana rankingu:   ΔR = K · (S − E)
+ - expected score:  E = 1 / (1 + 10^((R_puzzle − R_player) / 400))
+ - rating change:   ΔR = K · (S − E)
 
-Współczynnik K maleje z doświadczeniem: 60 w kalibracji (pierwsze 10 zadań),
-potem 32, a po 50 zadaniach 20.
+The K factor decreases with experience: 60 during calibration (first 10 puzzles),
+then 32, and 20 after 50 puzzles.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ CALIBRATION_GAMES = 10
 
 
 def expected_score(player_rating: float, puzzle_rating: float) -> float:
-    """Szansa na rozwiązanie zadania wg modelu Elo."""
+    """Chance of solving the puzzle according to the Elo model."""
     return 1.0 / (1.0 + 10 ** ((puzzle_rating - player_rating) / 400.0))
 
 
 def k_factor(games_played: int) -> int:
-    """K = 60 w kalibracji (pierwsze 10 zadań), potem 32, po 50 zadaniach 20."""
+    """K = 60 during calibration (first 10 puzzles), then 32, 20 after 50 puzzles."""
     if games_played < CALIBRATION_GAMES:
         return 60
     if games_played < 50:
@@ -37,11 +37,11 @@ def rating_delta(player_rating: float, puzzle_rating: float, score: float, k: fl
 
 
 def update_elo(player_rating: float, puzzle_rating: float, score: float, games_played: int) -> tuple[float, float]:
-    """Nowy ranking i zmiana po jednym zadaniu."""
+    """New rating and change after one puzzle."""
     delta = rating_delta(player_rating, puzzle_rating, score, k_factor(games_played))
     return player_rating + delta, delta
 
 
 def target_rating_for(player_rating: float, success_chance: float) -> float:
-    """Ranking zadania, przy którym szansa na sukces wynosi ``success_chance`` (odwrotność wzoru na E)."""
+    """Puzzle rating at which the chance of success equals ``success_chance`` (inverse of the E formula)."""
     return player_rating - 400.0 * math.log10(success_chance / (1.0 - success_chance))

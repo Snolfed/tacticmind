@@ -1,18 +1,18 @@
-"""Glicko-2 (Mark Glickman, 2013): ranking z odchyleniem (RD) i zmiennością (σ).
+"""Glicko-2 (Mark Glickman, 2013): a rating with deviation (RD) and volatility (σ).
 
-W odróżnieniu od Elo każdy gracz ma też niepewność rankingu RD. Duże RD (nowy
-gracz) = duże zmiany po każdym zadaniu; RD maleje, gdy system „poznaje” gracza.
-Dlatego pokazujemy przedział niepewności, np. „1450 ± 80”.
+Unlike Elo, every player also has a rating uncertainty RD. A large RD (new
+player) = large changes after every puzzle; RD shrinks as the system "gets to know" the player.
+That is why we show an uncertainty interval, e.g. "1450 ± 80".
 
-Algorytm (kroki z artykułu „Example of the Glicko-2 system”):
- 1. przejście na skalę Glicko-2: μ = (r − 1500)/173.7178, φ = RD/173.7178,
- 2. wariancja v i poprawa Δ z wyników okresu,
- 3. nowa zmienność σ' — pierwiastek równania f(x) = 0 metodą Illinois,
+Algorithm (steps from the paper "Example of the Glicko-2 system"):
+ 1. convert to the Glicko-2 scale: μ = (r − 1500)/173.7178, φ = RD/173.7178,
+ 2. variance v and improvement Δ from the period's results,
+ 3. new volatility σ' — the root of f(x) = 0 using the Illinois method,
  4. φ* = √(φ² + σ'²), φ' = 1/√(1/φ*² + 1/v), μ' = μ + φ'² Σ g(φ_j)(s_j − E_j),
- 5. powrót do skali rankingu.
+ 5. convert back to the rating scale.
 
-Jedno zadanie = jeden okres rankingowy z jednym „meczem” z zadaniem
-(ranking i RD zadania pochodzą z bazy Lichess). Wynik ``s`` może być ułamkowy.
+One puzzle = one rating period with a single "match" against the puzzle
+(the puzzle's rating and RD come from the Lichess database). The score ``s`` may be fractional.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import math
 from dataclasses import dataclass
 
 SCALE = 173.7178
-TAU = 0.5  # ograniczenie zmian zmienności
+TAU = 0.5  # constrains volatility changes
 EPSILON = 1e-6
 
 
@@ -41,22 +41,22 @@ def _expected(mu: float, mu_j: float, phi_j: float) -> float:
 
 
 def expected_score(player: Glicko2Rating, opponent_rating: float, opponent_rd: float) -> float:
-    """Szansa na sukces z uwzględnieniem niepewności rankingu przeciwnika."""
+    """Chance of success taking the opponent's rating uncertainty into account."""
     return _expected((player.rating - 1500) / SCALE, (opponent_rating - 1500) / SCALE, opponent_rd / SCALE)
 
 
 def update(player: Glicko2Rating, results: list[tuple[float, float, float]], tau: float = TAU) -> Glicko2Rating:
-    """Nowy ranking po okresie z wynikami ``(ranking_przeciwnika, rd_przeciwnika, wynik)``."""
+    """New rating after a period with results ``(opponent_rating, opponent_rd, score)``."""
     mu = (player.rating - 1500.0) / SCALE
     phi = player.rd / SCALE
     sigma = player.volatility
 
     if not results:
-        # Okres bez gier: rośnie tylko niepewność.
+        # A period without games: only the uncertainty grows.
         phi_star = math.sqrt(phi * phi + sigma * sigma)
         return Glicko2Rating(player.rating, phi_star * SCALE, sigma)
 
-    # Krok 3–4: wariancja v i poprawa Δ.
+    # Steps 3–4: variance v and improvement Δ.
     v_inv = 0.0
     delta_sum = 0.0
     for opp_rating, opp_rd, score in results:
@@ -69,7 +69,7 @@ def update(player: Glicko2Rating, results: list[tuple[float, float, float]], tau
     v = 1.0 / v_inv
     delta = v * delta_sum
 
-    # Krok 5: nowa zmienność (metoda Illinois na f(x) = 0).
+    # Step 5: new volatility (Illinois method on f(x) = 0).
     a = math.log(sigma * sigma)
 
     def f(x: float) -> float:
@@ -98,7 +98,7 @@ def update(player: Glicko2Rating, results: list[tuple[float, float, float]], tau
         big_b, f_b = big_c, f_c
     new_sigma = math.exp(big_a / 2.0)
 
-    # Krok 6–7: nowe φ i μ.
+    # Steps 6–7: new φ and μ.
     phi_star = math.sqrt(phi * phi + new_sigma * new_sigma)
     new_phi = 1.0 / math.sqrt(1.0 / (phi_star * phi_star) + 1.0 / v)
     new_mu = mu + new_phi * new_phi * delta_sum

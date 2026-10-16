@@ -1,12 +1,12 @@
-"""Portret trenera („Trener Maks”) rysowany w kodzie — bez plików graficznych.
+"""Coach portrait ("Coach Max") drawn in code — no image files.
 
-Rysujemy w 4× większej rozdzielczości i zmniejszamy filtrem (wygładzone krawędzie), a gotowe
-portrety trzymamy w pamięci podręcznej. Trener ma kilka min, które zmieniają się w trakcie gry:
- - ``neutral`` — spokojny uśmiech, ``happy`` — dobry ruch, ``excited`` — genialny ruch albo wygrana,
- - ``thinking`` — trener liczy, ``concerned`` — błąd, ``shocked`` — przeoczenie,
-oraz mruga co kilka sekund.
+It is drawn at 4× resolution and filtered down (anti-aliased edges), and finished portraits
+are cached. The coach has several expressions that change during the game:
+ - ``neutral`` — calm smile, ``happy`` — good move, ``excited`` — brilliant move or a win,
+ - ``thinking`` — the coach is calculating, ``concerned`` — mistake, ``shocked`` — blunder,
+and blinks every few seconds.
 
-``python -m tacticmind.ui.coach_avatar`` zapisuje portret jako ``tacticmind/assets/coach.png``.
+``python -m tacticmind.ui.coach_avatar`` saves the portrait as ``tacticmind/assets/coach.png``.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ _cache: dict[tuple[int, str, bool], pygame.Surface] = {}
 
 
 class _Pen:
-    """Rysowanie w jednostkach 0–100 na powiększonej powierzchni."""
+    """Drawing in 0–100 units on an upscaled surface."""
 
     def __init__(self, surface: pygame.Surface) -> None:
         self.s = surface
@@ -67,7 +67,7 @@ class _Pen:
         pygame.draw.polygon(self.s, color, [self.p(x, y) for x, y in points])
 
     def line(self, color: tuple[int, ...], points: list[Point], width: float) -> None:
-        """Gruba linia łamana z zaokrąglonymi końcami i łączeniami."""
+        """Thick polyline with rounded caps and joins."""
         w = max(1, round(width * self.k))
         pts = [self.p(x, y) for x, y in points]
         pygame.draw.lines(self.s, color, False, pts, w)
@@ -75,7 +75,7 @@ class _Pen:
             pygame.draw.circle(self.s, color, pt, w // 2)
 
     def curve(self, color: tuple[int, ...], a: Point, mid: Point, b: Point, width: float, steps: int = 14) -> None:
-        """Krzywa kwadratowa Béziera przez punkt kontrolny ``mid``."""
+        """Quadratic Bézier curve through control point ``mid``."""
         pts = []
         for i in range(steps + 1):
             t = i / steps
@@ -100,7 +100,7 @@ def _background(pen: _Pen) -> None:
         t = y / max(1, size - 1)
         color = tuple(round(a + (b - a) * t) for a, b in zip(top, bottom))
         pygame.draw.line(pen.s, color, (0, y), (size, y))
-    # Delikatna szachownica w tle i jasna plama światła.
+    # Subtle checkerboard in the background and a bright light spot.
     layer = pygame.Surface(pen.s.get_size(), pygame.SRCALPHA)
     cell = 12.5
     for row in range(8):
@@ -113,21 +113,21 @@ def _background(pen: _Pen) -> None:
 
 def _body(pen: _Pen) -> None:
     pen.ellipse(HOODIE, 6, 74, 88, 64)
-    pen.ellipse(HOODIE_LIGHT, 22, 70, 56, 22)  # kaptur wokół szyi
+    pen.ellipse(HOODIE_LIGHT, 22, 70, 56, 22)  # hood around the neck
     pen.ellipse(SHIRT, 37, 72, 26, 12)
-    pen.poly(SKIN_SHADE, [(42, 58), (58, 58), (58, 74), (50, 79), (42, 74)])  # szyja
-    pen.line((210, 220, 240), [(44, 84), (43, 97)], 1.2)  # sznurki kaptura
+    pen.poly(SKIN_SHADE, [(42, 58), (58, 58), (58, 74), (50, 79), (42, 74)])  # neck
+    pen.line((210, 220, 240), [(44, 84), (43, 97)], 1.2)  # hood strings
     pen.line((210, 220, 240), [(56, 84), (57, 97)], 1.2)
 
 
 def _head(pen: _Pen) -> None:
-    pen.ellipse(HAIR, 27, 13, 46, 34)  # tył włosów
-    pen.ellipse(SKIN_SHADE, 25.5, 39, 8, 12)  # uszy
+    pen.ellipse(HAIR, 27, 13, 46, 34)  # back of the hair
+    pen.ellipse(SKIN_SHADE, 25.5, 39, 8, 12)  # ears
     pen.ellipse(SKIN_SHADE, 66.5, 39, 8, 12)
     pen.ellipse((206, 148, 112), 27.5, 42, 4, 6)
     pen.ellipse((206, 148, 112), 68.5, 42, 4, 6)
     pen.ellipse(SKIN, 30, 19, 40, 47)
-    # Grzywka zaczesana na bok.
+    # Fringe combed to the side.
     fringe = [(29, 38), (29, 27), (34, 18), (43, 13.5), (53, 13), (63, 16), (69.5, 23), (71, 36), (68, 29), (63, 24.5)]
     fringe += _curve_points((63, 24.5), (52, 22), (40, 30))
     fringe += [(35, 31), (31, 35)]
@@ -157,7 +157,7 @@ def _eyebrows(pen: _Pen, expression: str) -> None:
 def _eyes(pen: _Pen, expression: str, blink: bool) -> None:
     for cx in (42.0, 58.0):
         if blink or expression == "excited":
-            # Zamknięte oczy: przy mrugnięciu kreska, przy radości „^”.
+            # Closed eyes: a line when blinking, "^" when happy.
             if expression == "excited":
                 pen.curve(EYE, (cx - 2.6, 46.2), (cx, 42.6), (cx + 2.6, 46.2), 1.5)
             else:
@@ -182,7 +182,7 @@ def _glasses(pen: _Pen) -> None:
     pen.curve(GLASSES, (49.3, 44.6), (50, 43.6), (50.7, 44.6), 1.3)
     pen.line(GLASSES, [(34.5, 44), (30.5, 42.5)], 1.3)
     pen.line(GLASSES, [(65.5, 44), (69.5, 42.5)], 1.3)
-    pen.curve((255, 255, 255), (38, 41.5), (39.2, 40.2), (41, 39.6), 0.8)  # odblask
+    pen.curve((255, 255, 255), (38, 41.5), (39.2, 40.2), (41, 39.6), 0.8)  # highlight
     pen.curve((255, 255, 255), (54, 41.5), (55.2, 40.2), (57, 39.6), 0.8)
 
 
@@ -212,7 +212,7 @@ def _cheeks(pen: _Pen, expression: str) -> None:
 
 
 def coach_portrait(size: int, expression: str = "neutral", blink: bool = False) -> pygame.Surface:
-    """Okrągły portret trenera o średnicy ``size`` pikseli."""
+    """Round coach portrait ``size`` pixels in diameter."""
     size = max(8, int(size))
     expression = expression if expression in EXPRESSIONS else "neutral"
     key = (size, expression, blink)
@@ -226,13 +226,13 @@ def coach_portrait(size: int, expression: str = "neutral", blink: bool = False) 
     knight = piece_surface(chess.Piece(chess.KNIGHT, chess.WHITE), max(4, round(14 * pen.k)))
     big.blit(knight, knight.get_rect(center=pen.p(65, 87)))
     _head(pen)
-    pen.poly(SKIN_SHADE, [(50, 48.5), (47.6, 54.5), (50.8, 55.4)])  # nos
+    pen.poly(SKIN_SHADE, [(50, 48.5), (47.6, 54.5), (50.8, 55.4)])  # nose
     _cheeks(pen, expression)
     _eyebrows(pen, expression)
     _eyes(pen, expression, blink)
     _glasses(pen)
     _mouth(pen, expression)
-    # Okrągła maska.
+    # Circular mask.
     mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
     pygame.draw.circle(mask, (255, 255, 255, 255), (size * SS // 2, size * SS // 2), size * SS // 2)
     big.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
@@ -246,7 +246,7 @@ def coach_portrait(size: int, expression: str = "neutral", blink: bool = False) 
 
 
 def draw_coach(surface: pygame.Surface, center: tuple[int, int], size: int, expression: str = "neutral", blink: bool = False, ring: tuple[int, ...] = theme.BORDER) -> pygame.Rect:
-    """Portret z obwódką."""
+    """Portrait with a border."""
     portrait = coach_portrait(size, expression, blink)
     rect = portrait.get_rect(center=center)
     pygame.draw.circle(surface, ring, center, size // 2 + max(2, size // 40))

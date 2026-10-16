@@ -1,5 +1,5 @@
-"""Wykresy rysowane w pygame: liniowy z gradientem pod linią (ranking w czasie) i słupkowy
-(skuteczność w motywach). Wszystkie wymiary są skalowane."""
+"""Charts drawn in pygame: a line chart with a gradient under the line (rating over time) and a
+bar chart (success rate per motif). All dimensions are scaled."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def line_chart(
     color: tuple[int, int, int] = theme.ACCENT,
     band: list[float] | None = None,
 ) -> None:
-    """Wykres liniowy; ``band`` = opcjonalny przedział niepewności (± RD) wokół linii."""
+    """Line chart; ``band`` = optional uncertainty band (± RD) around the line."""
     gfx.rrect(surface, theme.SURFACE, rect, px(12))
     if len(values) < 2:
         draw_text(surface, t("charts.no_data"), rect.center, fs(14), theme.MUTED, "regular", "center", max_width=rect.width - px(20))
@@ -65,7 +65,7 @@ def line_chart(
         upper = [(px_(i) - rect.x, py(highs[i]) - rect.y) for i in range(len(values))]
         lower = [(px_(i) - rect.x, py(lows[i]) - rect.y) for i in reversed(range(len(values)))]
         pygame.draw.polygon(layer, (*color, 26), upper + lower)
-    # Gradient pod linią
+    # Gradient under the line
     area_pts = [(px_(i) - rect.x, py(v) - rect.y) for i, v in enumerate(values)]
     area_pts += [(px_(len(values) - 1) - rect.x, plot.bottom - rect.y), (px_(0) - rect.x, plot.bottom - rect.y)]
     fill = pygame.Surface(rect.size, pygame.SRCALPHA)
@@ -85,7 +85,7 @@ def line_chart(
 
 
 def bar_chart(surface: pygame.Surface, rect: pygame.Rect, items: list[tuple[str, float, int]]) -> None:
-    """Poziome słupki: (etykieta, skuteczność 0..1, liczba prób)."""
+    """Horizontal bars: (label, success rate 0..1, number of attempts)."""
     gfx.rrect(surface, theme.SURFACE, rect, px(12))
     if not items:
         draw_text(surface, t("charts.no_themes"), rect.center, fs(14), theme.MUTED, "regular", "center", max_width=rect.width - px(20))

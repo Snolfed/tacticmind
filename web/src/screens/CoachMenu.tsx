@@ -1,4 +1,4 @@
-// Ekran „Trener”: powitanie, siła trenera (Elo albo „Twój poziom”), kolor i otwarcia do nauki.
+// The "Coach" screen: greeting, coach strength (Elo or "Your level"), colour and openings to learn.
 
 import { useEffect, useState, type ReactElement } from "react";
 import { screenAction } from "../api";
@@ -26,7 +26,7 @@ export function CoachMenu({ view }: { view: CoachMenuSnapshot }): ReactElement {
   useLanguage();
   const [dragElo, setDragElo] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "white" | "black">("all");
-  const [happy, setHappy] = useState(true); // trener uśmiecha się na powitanie
+  const [happy, setHappy] = useState(true); // the coach smiles as a greeting
   useEffect(() => {
     const timer = window.setTimeout(() => setHappy(false), 2500);
     return () => window.clearTimeout(timer);

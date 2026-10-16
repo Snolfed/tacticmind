@@ -1,5 +1,5 @@
-// Górny pasek: logo, nawigacja, język, dźwięk, ustawienia (licznik FPS, limit klatek), pełny ekran
-// i duży ranking z animowaną zmianą oraz serią z płomieniem.
+// Top bar: logo, navigation, language, sound, settings (FPS counter, frame limit), full screen
+// and a large rating with an animated change, plus the streak with a flame.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { go, send } from "../api";
@@ -19,8 +19,8 @@ const NAV: { screen: ScreenName; key: string; active: ScreenName[] }[] = [
 
 export const FPS_LIMITS = [60, 120, 144, 170, 240, 0];
 
-// W oknie Tauri pełny ekran przełącza samo okno: WebView2 (Windows) przy requestFullscreen powiększa
-// stronę tylko do rozmiaru okna. Uprawnienie do tych dwóch poleceń daje web/src-tauri/capabilities.
+// In the Tauri window, full screen is toggled by the window itself: with requestFullscreen WebView2 (Windows)
+// only enlarges the page to the window size. Permission for these two commands comes from web/src-tauri/capabilities.
 interface TauriInternals {
   invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
@@ -38,7 +38,7 @@ export function toggleFullscreen(): void {
       try {
         await api.invoke("plugin:window|set_fullscreen", { label: "main", value: !(await windowIsFullscreen(api)) });
       } catch {
-        // bez uprawnienia zostaje zwykłe okno
+        // without the permission a regular window remains
       }
       window.dispatchEvent(new Event(FULLSCREEN_EVENT));
     })();
@@ -95,7 +95,7 @@ function Rating({ top }: { top: TopBarSnapshot }): ReactElement {
   useEffect(() => {
     if (source.current !== top.source) {
       source.current = top.source;
-      shown.current = top.rating; // inny ranking — bez „przewijania” liczby
+      shown.current = top.rating; // a different rating — no number "rolling"
       if (valueRef.current) valueRef.current.textContent = String(top.rating);
       return;
     }
@@ -116,7 +116,7 @@ function Rating({ top }: { top: TopBarSnapshot }): ReactElement {
     if (valueRef.current) valueRef.current.textContent = String(Math.round(shown.current));
   }, animating);
 
-  // Liczbę wpisujemy sami (także w pętli klatek), więc React nie trzyma w tym elemencie tekstu.
+  // We write the number ourselves (also in the frame loop), so React keeps no text in this element.
   useLayoutEffect(() => {
     if (valueRef.current) valueRef.current.textContent = String(Math.round(shown.current));
   });
@@ -206,7 +206,7 @@ export function TopBar({
   settings: UiSettings;
 }): ReactElement {
   useLanguage();
-  const [volume, setVolume] = useState<number | null>(null); // wartość w trakcie przesuwania suwaka
+  const [volume, setVolume] = useState<number | null>(null); // value while the slider is being dragged
   const [menu, setMenu] = useState(false);
   const fullscreen = useFullscreen();
   const audible = top.sound && top.volume > 0.02;
@@ -254,7 +254,7 @@ export function TopBar({
             if (volume === null) return;
             send({ type: "sound", volume, final: true });
             setVolume(null);
-            sounds.play("move"); // próbka: od razu słychać nową głośność
+            sounds.play("move"); // sample: the new volume is audible right away
           }}
           onKeyUp={() => {
             if (volume === null) return;

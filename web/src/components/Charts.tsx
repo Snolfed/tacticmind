@@ -1,4 +1,4 @@
-// Wykresy w SVG: liniowy z gradientem pod linią (ranking w czasie) i słupkowy (skuteczność w motywach).
+// SVG charts: a line chart with a gradient under the line (rating over time) and a bar chart (accuracy per theme).
 
 import { useEffect, useId, useRef, useState, type ReactElement } from "react";
 import { t } from "../i18n";

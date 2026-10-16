@@ -1,8 +1,8 @@
-// Dźwięki syntezowane w kodzie (port ui/sounds.py na Web Audio) — bez plików z nagraniami.
-//  - ruch: drewniane „puknięcie”, bicie: podwójne „klaśnięcie”, szach: puknięcie z dzwoneczkiem,
-//  - roszada: dwa puknięcia, promocja: rosnący ton, sukces / genialny ruch: dzwonkowe arpeggio,
-//  - błąd: miękkie, opadające „bonk”.
-// Na końcu filtr dolnoprzepustowy i delikatne echo — brzmi miękko, nie „bije po uszach”.
+// Sounds synthesised in code (port of ui/sounds.py to Web Audio) — no recording files.
+//  - move: a wooden "knock", capture: a double "clap", check: a knock with a little bell,
+//  - castling: two knocks, promotion: a rising tone, success / brilliant move: a bell arpeggio,
+//  - mistake: a soft, falling "bonk".
+// At the end a low-pass filter and a gentle echo — it sounds soft, not harsh on the ears.
 
 type Samples = Float32Array;
 
@@ -11,7 +11,7 @@ class Synth {
   constructor(readonly rate: number) {}
 
   private random(): number {
-    // Prosty generator liniowy — szum uderzenia ma być powtarzalny, nie kryptograficzny.
+    // A simple linear generator — the hit noise should be repeatable, not cryptographic.
     this.seed = (this.seed * 1664525 + 1013904223) % 4294967296;
     return (this.seed / 4294967296) * 2 - 1;
   }
@@ -90,7 +90,7 @@ function soften(samples: Samples, rate: number, cutoff = 2600, echo = 0.12): Sam
   return out;
 }
 
-/** Normalizacja do zadanego poziomu i łagodne wyciszenie końcówki. */
+/** Normalisation to the given level and a gentle fade-out of the tail. */
 function normalize(samples: Samples, peak: number): Samples {
   let top = 0;
   for (const x of samples) top = Math.max(top, Math.abs(x));
@@ -152,7 +152,7 @@ class SoundPlayer {
   enabled = true;
   volume = 0.7;
 
-  /** Kontekst audio tworzymy przy pierwszym kliknięciu (przeglądarki blokują dźwięk przed interakcją). */
+  /** The audio context is created on the first click (browsers block sound before interaction). */
   unlock(): void {
     if (this.context) {
       if (this.context.state === "suspended") void this.context.resume();
@@ -181,7 +181,7 @@ class SoundPlayer {
   }
 
   private applyVolume(): void {
-    // Krzywa kwadratowa — suwak zmienia głośność „naturalnie” dla ucha.
+    // Quadratic curve — the slider changes volume "naturally" for the ear.
     if (this.gain) this.gain.gain.value = this.volume ** 2;
   }
 

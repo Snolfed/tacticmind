@@ -1,319 +1,320 @@
-# TacticMind — zadania taktyczne i trener szachowy z AI, które myśli na głos
+# TacticMind — chess tactics puzzles and an AI coach that thinks out loud
 
-TacticMind to trener taktyki szachowej w stylu „Puzzles” z chess.com. Gracz rozwiązuje prawdziwe zadania z bazy
-Lichess, a obok szachownicy panel **„Mózg AI”** pokazuje na żywo, co liczy **własny silnik szachowy** napisany
-od zera w tym projekcie: głębokość, liczbę węzłów, cięcia alfa-beta, trzy najlepsze ruchy z wariantami,
-mini-drzewo przeszukiwania i „strumień myśli” po polsku. Drugi element AI to **adaptacyjny ranking**
-(Glicko-2 albo Elo) z **modelem gracza**, który dobiera kolejne zadania pod aktualny poziom i słabe strony gracza.
+TacticMind is a chess tactics trainer in the style of chess.com "Puzzles". The player solves real puzzles from the
+Lichess database, while next to the board the **"AI Brain"** panel shows live what the project's **own chess engine**,
+written from scratch, is calculating: depth, node count, alpha-beta cutoffs, the three best moves with their lines,
+a mini search tree and a "stream of thoughts" in plain language. The second AI component is an **adaptive rating**
+(Glicko-2 or Elo) with a **player model** that picks the next puzzles to match the player's current level and weak spots.
 
-Druga gra to **partia z trenerem** (jak „Play Coach” na chess.com): grasz z trenerem o wybranej sile
-(400–2000 Elo), a on po każdym Twoim ruchu ocenia go (najlepszy, dobry, niedokładność, błąd, przeoczenie…),
-tłumaczy, co robi Twój ruch i jaki ruch byłby lepszy — i dlaczego. Można też **uczyć się otwarć**: 15 linii
-z objaśnieniem każdego ruchu. Po 10 partiach kalibracji pojawia się poziom **„Twój poziom”** — trener gra z siłą
-dopasowaną do Twoich wyników i zmienia ją co 5 partii.
+The second game is a **game against the coach** (like "Play Coach" on chess.com): you play the coach at a chosen strength
+(400–2000 Elo), and after each of your moves it rates it (best, good, inaccuracy, mistake, blunder…),
+explains what your move does and which move would have been better — and why. You can also **learn openings**: 15 lines
+with an explanation of every move. After 10 calibration games the **"Your level"** option appears — the coach plays at a
+strength matched to your results and adjusts it every 5 games.
 
-![Trener Maks](tacticmind/assets/coach.png)
+![Coach Maks](tacticmind/assets/coach.png)
 
-Stockfish ani żaden inny gotowy silnik **nie jest używany** w grze. Silnik gry jest napisany od zera w **C**
-(bitboardy, alfa-beta w wariancie PVS) i ocenia pozycje **siecią neuronową NNUE**, wytrenowaną w tym projekcie
-na partiach silnika z samym sobą ([Silnik w C i sieć NNUE](#silnik-w-c-i-sieć-nnue)). Prostsza wersja silnika
-w Pythonie (plansza 0x88) zostaje jako zapas, gdy nie ma kompilatora C, i do demonstracji minimaks vs alfa-beta.
-Biblioteka `python-chess` służy wyłącznie warstwie interfejsu (notacja SAN, sprawdzenie legalności ruchu gracza).
-
----
-
-## Spis treści
-
-1. [Uruchomienie](#uruchomienie)
-2. [Jak grać](#jak-grać)
-3. [Gra z trenerem](#gra-z-trenerem)
-4. [Architektura](#architektura)
-5. [Algorytmy](#algorytmy)
-6. [Silnik w C i sieć NNUE](#silnik-w-c-i-sieć-nnue)
-7. [Pomiary: minimaks vs alfa-beta](#pomiary-minimaks-vs-alfa-beta)
-8. [Testy](#testy)
-9. [Zadania z bazy Lichess](#zadania-z-bazy-lichess)
-10. [Decyzje projektowe](#decyzje-projektowe)
-11. [Etapy pracy](#etapy-pracy)
-12. [Źródła i licencje](#źródła-i-licencje)
+Stockfish or any other ready-made engine is **not used** in the game. The game engine is written from scratch in **C**
+(bitboards, alpha-beta in its PVS variant) and evaluates positions with an **NNUE neural network** trained in this project
+on the engine's self-play games ([C engine and NNUE network](#c-engine-and-nnue-network)). A simpler version of the engine
+in Python (0x88 board) remains as a fallback when no C compiler is available, and for the minimax vs alpha-beta demonstration.
+The `python-chess` library is used only by the interface layer (SAN notation, checking the legality of the player's move).
 
 ---
 
-## Uruchomienie
+## Table of contents
 
-Wymagania: **Python 3.11+** (projekt sprawdzony na Pythonie 3.14). Bez backendu i bez internetu — wszystko działa lokalnie.
+1. [Getting started](#getting-started)
+2. [How to play](#how-to-play)
+3. [Playing against the coach](#playing-against-the-coach)
+4. [Architecture](#architecture)
+5. [Algorithms](#algorithms)
+6. [C engine and NNUE network](#c-engine-and-nnue-network)
+7. [Benchmarks: minimax vs alpha-beta](#benchmarks-minimax-vs-alpha-beta)
+8. [Tests](#tests)
+9. [Puzzles from the Lichess database](#puzzles-from-the-lichess-database)
+10. [Design decisions](#design-decisions)
+11. [Work stages](#work-stages)
+12. [Sources and licenses](#sources-and-licenses)
+
+---
+
+## Getting started
+
+Requirements: **Python 3.11+** (tested on Python 3.14). No backend and no internet — everything runs locally.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt    # pygame-ce, python-chess, pytest
-python main.py                     # albo: python -m tacticmind
+python main.py                     # or: python -m tacticmind
 ```
 
-Silnik w C kompiluje się sam przy pierwszym uruchomieniu (ok. 2 s), jeśli w systemie jest kompilator C:
-na Linuksie `gcc` (`sudo apt install build-essential`), na macOS `clang` (`xcode-select --install`). Na Windowsie
-bez kompilatora gra używa gotowej biblioteki z `tacticmind/engine/native/prebuilt/windows-x64/`. Gdy nic z tego
-nie zadziała, gra po cichu przełącza się na silnik w Pythonie (słabszy, ale działa tak samo). Ręcznie:
+The C engine compiles itself on first launch (about 2 s) if a C compiler is installed:
+`gcc` on Linux (`sudo apt install build-essential`), `clang` on macOS (`xcode-select --install`). On Windows
+without a compiler the game uses the prebuilt library from `tacticmind/engine/native/prebuilt/windows-x64/`. If none of
+this works, the game silently falls back to the Python engine (weaker, but it behaves the same). Manually:
 
 ```bash
-python scripts/build_engine.py     # biblioteka dla gry + program UCI tmengine
+python scripts/build_engine.py     # library for the game + the tmengine UCI program
 ```
 
-`python main.py` uruchamia lokalny serwer gry i otwiera interfejs (TypeScript) w osobnym oknie Chrome / Edge
-w trybie aplikacji (bez pasków przeglądarki); gdy żadnej z nich nie ma — w domyślnej przeglądarce. Inne tryby:
+`python main.py` starts a local game server and opens the interface (TypeScript) in a separate Chrome / Edge window
+in app mode (no browser toolbars); if neither is installed — in the default browser. Other modes:
 
-| Polecenie | Co robi |
+| Command | What it does |
 |---|---|
-| `python main.py --browser` | interfejs w zwykłej karcie domyślnej przeglądarki |
-| `python main.py --no-window` | sam serwer gry (adres w konsoli), np. do pracy nad interfejsem |
-| `python main.py --pygame` | dawny interfejs w pygame |
+| `python main.py --browser` | interface in a regular tab of the default browser |
+| `python main.py --no-window` | game server only (address printed in the console), e.g. for working on the interface |
+| `python main.py --pygame` | the old pygame interface |
 
-### Okno aplikacji (Tauri 2)
+### Application window (Tauri 2)
 
-Własne okno gry, bez przeglądarki. Node.js nie jest potrzebny — zbudowany interfejs jest w repozytorium.
+A dedicated game window, without a browser. Node.js is not needed — the built interface is in the repository.
 
-1. **Python z bibliotekami w `.venv`** — jak w poleceniach wyżej (`python3 -m venv .venv`, potem
-   `pip install -r requirements.txt` w aktywnym `.venv`). Okno samo używa `.venv` z katalogu gry; bez niego sięga
-   po systemowego Pythona (`python`, `py -3`, `python3`), który zwykle nie ma pygame-ce i python-chess.
-   Inny interpreter wskazuje zmienna `TACTICMIND_PYTHON`.
-2. **[Rust](https://rustup.rs)** oraz biblioteki systemowe okna:
+1. **Python with the libraries in `.venv`** — as in the commands above (`python3 -m venv .venv`, then
+   `pip install -r requirements.txt` in the activated `.venv`). The window uses the `.venv` in the game directory on its
+   own; without it, it falls back to the system Python (`python`, `py -3`, `python3`), which usually lacks pygame-ce and
+   python-chess. A different interpreter can be set with the `TACTICMIND_PYTHON` variable.
+2. **[Rust](https://rustup.rs)** and the system libraries for the window:
 
-   | System | Polecenie |
+   | System | Command |
    |---|---|
    | Arch / Manjaro | `sudo pacman -S --needed webkit2gtk-4.1 base-devel` |
    | Debian / Ubuntu / Mint | `sudo apt install libwebkit2gtk-4.1-dev build-essential pkg-config` |
    | Fedora | `sudo dnf install webkit2gtk4.1-devel gcc pkgconf-pkg-config` |
-   | Windows | „Desktop development with C++” z Visual Studio Build Tools (instalator Rusta sam go proponuje); WebView2 jest w Windows 10 i 11 |
+   | Windows | "Desktop development with C++" from Visual Studio Build Tools (the Rust installer offers it); WebView2 ships with Windows 10 and 11 |
    | macOS | `xcode-select --install` |
 
-   Bez WebKitGTK kompilacja kończy się błędem „The system library … was not found” przy `javascriptcore-rs-sys`
-   albo `webkit2gtk-sys` (pełna lista dla innych systemów:
+   Without WebKitGTK the build fails with "The system library … was not found" in `javascriptcore-rs-sys`
+   or `webkit2gtk-sys` (full list for other systems:
    [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)).
-3. **Start okna:**
+3. **Start the window:**
 
    ```bash
    cargo run --release --manifest-path web/src-tauri/Cargo.toml
    ```
 
-Pierwsza kompilacja trwa kilka minut, kolejne starty są natychmiastowe (gotowy program:
-`web/src-tauri/target/release/tacticmind`, na Windows `tacticmind.exe`). Okno uruchamia Pythona w tle i zamyka go
-razem z sobą; gdy Python się nie uruchomi, pokazuje komunikat z jego błędem.
-Instalator (.msi / .exe, .deb, .dmg): `cd web && npm install && npm run tauri build`.
+The first build takes a few minutes; later starts are instant (the built program:
+`web/src-tauri/target/release/tacticmind`, on Windows `tacticmind.exe`). The window starts Python in the background and
+shuts it down when it closes; if Python fails to start, it shows a message with Python's error.
+Installer (.msi / .exe, .deb, .dmg): `cd web && npm install && npm run tauri build`.
 
-Testy:
+Tests:
 
 ```bash
 python -m pytest
-cd web && npm install && npm test    # testy interfejsu (vitest)
+cd web && npm install && npm test    # interface tests (vitest)
 ```
 
-Postępy (ranking, historia, statystyki, partie z trenerem i nauka otwarć) zapisują się w pliku `~/.tacticmind/profile.json`
-(inny katalog można wskazać zmienną `TACTICMIND_HOME`), a ustawienia interfejsu (licznik FPS, limit klatek)
-w `~/.tacticmind/ui_settings.json`.
+Progress (rating, history, statistics, coach games and opening lessons) is saved to `~/.tacticmind/profile.json`
+(a different directory can be set with the `TACTICMIND_HOME` variable), and interface settings (FPS counter, frame limit)
+to `~/.tacticmind/ui_settings.json`.
 
-### Praca nad interfejsem
+### Working on the interface
 
-Kod interfejsu jest w `web/src` (React 19 + TypeScript + Vite). Zbudowana wersja trafia do `tacticmind/web/static`
-i jest w repozytorium, więc do grania nie trzeba Node.js.
+The interface code lives in `web/src` (React 19 + TypeScript + Vite). The built version goes to `tacticmind/web/static`
+and is committed to the repository, so Node.js is not needed to play.
 
 ```bash
-python main.py --no-window         # serwer gry na http://127.0.0.1:8517
+python main.py --no-window         # game server at http://127.0.0.1:8517
 cd web && npm install
-npm run dev                        # http://localhost:5173 — zmiany w kodzie widać od razu
-npm run typecheck && npm test      # TypeScript (strict) i testy vitest
-npm run build                      # nowa wersja do tacticmind/web/static
+npm run dev                        # http://localhost:5173 — code changes show up immediately
+npm run typecheck && npm test      # TypeScript (strict) and vitest tests
+npm run build                      # new build into tacticmind/web/static
 ```
 
-## Jak grać
+## How to play
 
-- **Ekran startowy**: „Zadania taktyczne”, „Graj z trenerem”, „Statystyki”, „Jak działa AI?”. Te same miejsca
-  są w górnym pasku: „Zadania”, „Trener”, „Statystyki”, „Jak działa AI?”.
-- **Zadanie**: pierwszy ruch wykonuje przeciwnik (z animacją), potem szukasz najlepszego ruchu. Szachownica jest
-  obrócona na Twoją stronę. Ruch robisz przeciągnięciem albo klik-klik; kropki pokazują legalne pola, przy promocji
-  pojawia się okno wyboru figury. Odpowiedzi przeciwnika wykonują się same po ok. 400 ms.
-- **Informacja zwrotna**: turkusowy ✓ albo czerwony ✗ na polu docelowym i komunikaty „Najlepszy ruch!” /
-  „Niestety, to nie to”. Po błędzie silnik wylicza odpowiedź przeciwnika, np. „Po Wd1? przeciwnik gra Hxh2#. Mat.”,
-  a Ty wybierasz „Spróbuj ponownie” albo „Pokaż rozwiązanie”.
-- **Genialny ruch (!!)**: jeśli poprawny ruch jest poświęceniem (oddajesz figurę za co najmniej 2 piony materiału,
-  np. wieżę za piona), zamiast ✓ pojawia się cyjanowe „!!” z poświatą, iskrami i komunikatem „Genialny ruch!!” —
-  jak na chess.com (`puzzles/validator.py: is_sacrifice`).
-- **Cofanie się po ruchach**: przyciski ◀ ▶ pod szachownicą (albo klawisze ← →) działają przez całe zadanie —
-  można wrócić do pozycji przed ruchem przeciwnika i zobaczyć, co się stało. Cofnięcie też jest animowane: figura
-  płynnie wraca na swoje pole, zbita figura pojawia się z powrotem, a dźwięk odpowiada cofanemu ruchowi (bicie,
-  szach, roszada…). Na wcześniejszej pozycji nie da się ruszyć ani zobaczyć podpowiedzi; ▶ do końca (albo kolejny
-  ruch przeciwnika) wraca do bieżącej pozycji.
-- **Przyciski**: w trakcie zadania widać „Podpowiedź” i „Pokaż rozwiązanie” (po błędzie także „Spróbuj ponownie”);
-  „Następne zadanie” pojawia się dopiero po rozwiązaniu albo pokazaniu rozwiązania.
-- **Alternatywne rozwiązania**: ruch inny niż wzorcowy, który daje mata, rozwiązuje zadanie. Ruch, który według
-  silnika nadal wyraźnie wygrywa (ocena > +3 i najwyżej 0,5 piona gorzej od najlepszego), daje komunikat
-  „Dobry ruch, ale jest lepszy. Spróbuj jeszcze raz” i nie jest liczony jako błąd.
-- **Panel „Mózg AI”** ma trzy tryby:
-  - *Ukryty* — w trakcie rozwiązywania widać tylko liczniki i to, że AI liczy,
-  - *Podpowiedź* — podświetla figurę, którą trzeba ruszyć (nagroda rankingowa spada o połowę),
-  - *Pełny* — po zadaniu (albo po błędzie) widać wszystko: pasek oceny, strzałki (najlepszy ruch turkusowy,
-    drugi i trzeci półprzezroczyste), 3 linie kandydujące w SAN, strumień myśli, mini-drzewo, a AI tłumaczy zadanie.
-    Kliknięcie linii kandydującej odtwarza ją na szachownicy w trybie podglądu.
-- **Ranking**: duża liczba u góry (np. „1450 ± 80”) z animowaną zmianą (+12 turkusowo, −9 na czerwono),
-  seria z ikoną ognia, ranking zadania widoczny po jego zakończeniu, okienko „Dlaczego to zadanie?”.
-- Po zakończeniu zadania ◀ ▶ (albo ← →) przewijają pozycje, a silnik analizuje każdą z nich.
-- **Strzałki i zaznaczenia (jak na chess.com)**: prawym przyciskiem myszy przeciągasz z pola na pole, żeby
-  narysować strzałkę (ruch skoczka rysuje się jako litera L), a klikasz, żeby zaznaczyć pole. Shift = czerwony,
-  Ctrl = niebieski, Alt = turkusowy, bez klawisza = bursztynowy. Ponowne narysowanie usuwa strzałkę, lewy klik
-  na szachownicy albo wykonanie ruchu czyści rysunki.
-- **Język**: przełącznik PL / EN w górnym pasku zmienia cały interfejs, także „myśli” AI, wyjaśnienia,
-  nazwy motywów i litery figur w notacji (H/W/G/S po polsku, Q/R/B/N po angielsku). Wybór jest zapamiętywany.
-- **Rozdzielczość i responsywność**: cały interfejs skaluje się do rozmiaru okna (od małego okna po 4K), a teksty
-  dopasowują się do swoich pól (zmniejszają czcionkę albo skracają się „…”, zamiast wychodzić poza ramki).
-  W szerokim oknie szachownica z panelem obok i pionowym paskiem oceny; w wąskim (jak telefon) dwuwierszowy górny
-  pasek, poziomy pasek oceny nad szachownicą, panel pod nią, a cała strona przewija się kółkiem myszy.
-- **Ikona**: okno ma własną ikonę (biały pion na turkusowo-fioletowym kafelku), rysowaną w kodzie;
-  `python -m tacticmind.ui.icon` zapisuje ją jako `tacticmind/assets/icon.png` (np. do skrótu na pulpicie).
-- **Dźwięki (w stylu chess.com)**: drewniane „puknięcie” przy ruchu, podwójne „klaśnięcie” przy biciu, dzwoneczek
-  przy szachu, dwa puknięcia przy roszadzie, rosnący ton przy promocji, dzwonkowe arpeggio po rozwiązaniu zadania
-  (jaśniejsze przy genialnym ruchu) i miękkie „bonk” po błędzie. Wszystkie są syntezowane w kodzie
-  (`ui/sounds.py`, a w interfejsie TypeScript ten sam syntezator na Web Audio: `web/src/sound.ts`), więc nie ma
-  plików z cudzą licencją. Brzmią miękko: niskie, „ciepłe” tony drewna, filtr
-  dolnoprzepustowy i lekkie echo, bez ostrych wysokich częstotliwości.
-- **Głośność**: w górnym pasku jest suwak głośności (przeciągnij, kliknij albo kręć kółkiem myszy nad nim);
-  ikona głośnika wycisza/włącza dźwięk. Głośność jest zapamiętywana w profilu.
-- **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy; Esc z niego wychodzi.
-- **Ustawienia (koło zębate ⚙, interfejs pygame)**: licznik FPS w rogu okna (także F3) i limit klatek na sekundę: 60, 120, 144, 170
-  albo 240. Klatki zaczynają się w równych odstępach (precyzyjny limiter w `ui/pacing.py`), a wszystkie animacje
-  w danej klatce liczą się od jednego, dokładnego zegara — dzięki temu ruch nie „drga”.
-- **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy (w przeglądarce wychodzi
-  z niego też Esc).
-- **Ustawienia** (zębatka w górnym pasku, interfejs TypeScript): licznik FPS w lewym dolnym rogu (F3 włącza go i wyłącza) oraz limit
-  klatek animacji: 60, 120, 144, 170, 240 albo bez limitu (tyle, ile odświeża monitor).
-- **Przeciąganie z „martwą strefą”**: figura zaczyna się przeciągać dopiero, gdy mysz odjedzie od miejsca kliknięcia
-  o ok. 1/5 pola — drobne drgnięcie przy kliknięciu nie „łapie” figury, tylko ją zaznacza (klik-klik).
-- **Wygląd i animacje**: własny ciemny motyw (granat + turkus dla gracza + fiolet dla AI) i szachownica w stalowych
-  błękitach. Wszystkie kształty są wygładzane (supersampling), karty mają miękkie cienie. Animacje: płynny ruch figur
-  (bita figura znika), wyskakujący ✓/✗ z falą, potrząśnięcie szachownicą po błędzie, konfetti po rozwiązaniu,
-  pulsująca podpowiedź i szach, sprężysty pasek oceny, przenikanie ekranów, przesuwające się wskaźniki przełączników.
+- **Start screen**: "Tactics puzzles", "Play the coach", "Statistics", "How does the AI work?". The same places
+  are in the top bar: "Puzzles", "Coach", "Statistics", "How does the AI work?".
+- **Puzzle**: the opponent makes the first move (animated), then you look for the best move. The board is
+  flipped to your side. You move by dragging or click-click; dots show legal squares, and on promotion
+  a piece picker appears. The opponent's replies are played automatically after about 400 ms.
+- **Feedback**: a teal ✓ or a red ✗ on the target square and the messages "Best move!" /
+  "Sorry, that's not it". After a mistake the engine calculates the opponent's reply, e.g. "After Rd1? the opponent plays Qxh2#. Mate.",
+  and you choose "Try again" or "Show solution".
+- **Brilliant move (!!)**: if the correct move is a sacrifice (you give up a piece for at least 2 pawns of material,
+  e.g. a rook for a pawn), instead of ✓ a cyan "!!" appears with a glow, sparks and the message "Brilliant move!!" —
+  just like on chess.com (`puzzles/validator.py: is_sacrifice`).
+- **Stepping through moves**: the ◀ ▶ buttons under the board (or the ← → keys) work throughout the puzzle —
+  you can go back to the position before the opponent's move and see what happened. Stepping back is animated too: the piece
+  glides back to its square, a captured piece reappears, and the sound matches the move being undone (capture,
+  check, castling…). You cannot move or see a hint in an earlier position; ▶ to the end (or the opponent's next
+  move) returns to the current position.
+- **Buttons**: during a puzzle you see "Hint" and "Show solution" (after a mistake also "Try again");
+  "Next puzzle" appears only after solving the puzzle or revealing the solution.
+- **Alternative solutions**: a move other than the reference move that delivers mate solves the puzzle. A move that,
+  according to the engine, is still clearly winning (evaluation > +3 and at most 0.5 pawn worse than the best) gives the message
+  "Good move, but there is a better one. Try again" and is not counted as a mistake.
+- **The "AI Brain" panel** has three modes:
+  - *Hidden* — while solving, only the counters and the fact that the AI is calculating are visible,
+  - *Hint* — highlights the piece that has to move (the rating reward is halved),
+  - *Full* — after the puzzle (or after a mistake) everything is visible: the evaluation bar, arrows (best move in teal,
+    second and third semi-transparent), 3 candidate lines in SAN, the stream of thoughts, the mini tree, and the AI explains the puzzle.
+    Clicking a candidate line replays it on the board in preview mode.
+- **Rating**: a big number at the top (e.g. "1450 ± 80") with an animated change (+12 in teal, −9 in red),
+  a streak with a fire icon, the puzzle rating shown once the puzzle is over, and a "Why this puzzle?" pop-up.
+- After a puzzle ends, ◀ ▶ (or ← →) step through the positions, and the engine analyses each of them.
+- **Arrows and highlights (like on chess.com)**: drag with the right mouse button from square to square to
+  draw an arrow (a knight move is drawn as an L), and click to highlight a square. Shift = red,
+  Ctrl = blue, Alt = teal, no modifier = amber. Drawing the same arrow again removes it; a left click
+  on the board or making a move clears the drawings.
+- **Language**: the interface is in English by default, and Polish is available as a second language. The EN / PL switch in
+  the top bar changes the whole interface, including the AI's "thoughts", explanations, theme names and the piece letters in
+  notation (Q/R/B/N in English; the Polish locale uses Polish piece letters H/W/G/S). The choice is remembered.
+- **Resolution and responsiveness**: the whole interface scales to the window size (from a small window up to 4K), and texts
+  fit their boxes (they shrink the font or get truncated with "…" instead of overflowing).
+  In a wide window the board has the panel beside it and a vertical evaluation bar; in a narrow one (like a phone) there is a
+  two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
+- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile), drawn in code;
+  `python -m tacticmind.ui.icon` saves it as `tacticmind/assets/icon.png` (e.g. for a desktop shortcut).
+- **Sounds (chess.com style)**: a wooden "knock" on a move, a double "clack" on a capture, a little bell
+  on check, two knocks on castling, a rising tone on promotion, a chime arpeggio after solving a puzzle
+  (brighter for a brilliant move) and a soft "bonk" after a mistake. All of them are synthesized in code
+  (`ui/sounds.py`, and in the TypeScript interface the same synthesizer on Web Audio: `web/src/sound.ts`), so there are no
+  files under someone else's license. They sound soft: low, "warm" wooden tones, a low-pass
+  filter and a light echo, with no harsh high frequencies.
+- **Volume**: the top bar has a volume slider (drag it, click it or scroll the mouse wheel over it);
+  the speaker icon mutes/unmutes the sound. The volume is remembered in the profile.
+- **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode; Esc exits it.
+- **Settings (gear ⚙, pygame interface)**: an FPS counter in the window corner (also F3) and a frame-rate limit: 60, 120, 144, 170
+  or 240. Frames start at even intervals (a precise limiter in `ui/pacing.py`), and all animations
+  in a given frame are computed from one exact clock — so motion does not "jitter".
+- **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode (in the browser Esc also
+  exits it).
+- **Settings** (gear in the top bar, TypeScript interface): an FPS counter in the bottom-left corner (F3 toggles it) and an animation
+  frame limit: 60, 120, 144, 170, 240 or unlimited (as fast as the monitor refreshes).
+- **Dragging with a "dead zone"**: a piece starts being dragged only once the mouse moves away from the click point
+  by about 1/5 of a square — a small twitch while clicking does not "grab" the piece, it just selects it (click-click).
+- **Look and animations**: a custom dark theme (navy + teal for the player + purple for the AI) and a board in steel
+  blues. All shapes are anti-aliased (supersampling), cards have soft shadows. Animations: smooth piece movement
+  (a captured piece disappears), a popping ✓/✗ with a ripple, a board shake after a mistake, confetti after solving,
+  a pulsing hint and check, a springy evaluation bar, screen cross-fades, sliding toggle indicators.
 
-## Gra z trenerem
+## Playing against the coach
 
-Zakładka **„Trener”**. Trener nazywa się Maks — jego portret (z kilkoma minami, które zmieniają się w trakcie gry)
-jest rysowany w kodzie (`ui/coach_avatar.py`), bez plików graficznych.
+The **"Coach"** tab. The coach is called Maks — his portrait (with several facial expressions that change during the game)
+is drawn in code (`ui/coach_avatar.py`), without image files.
 
-- **Ustawienia partii**: siła trenera suwakiem od 400 do 2000 Elo (z opisem: początkujący, amator,
-  średniozaawansowany, zaawansowany, ekspert), kolor (białe / losowo / czarne) i przycisk „Zagraj”.
-- **„Twój poziom”**: przez pierwsze 10 partii trwa kalibracja (licznik „kalibracja 3/10”). Po 10. partii
-  odblokowuje się nowy poziom trudności — trener gra z siłą równą Twojemu rankingowi z partii. Ten poziom
-  zmienia się **co 5 partii** (po 15., 20., 25. …), a podsumowanie partii mówi, kiedy będzie następna zmiana.
-- **W trakcie partii**: po każdym Twoim ruchu trener pokazuje znaczek klasy ruchu na polu docelowym i w liście
-  ruchów — !! genialny, ! świetny, ★ najlepszy, ✓ znakomity / dobry, książka (z teorii), ?! niedokładność,
-  ? błąd, ?? przeoczenie — i mówi, co ten ruch robi albo czym grozi przeciwnik i co było lepsze, np.
-  „Przeciwnik odpowie 1... hxg6 i tracisz hetmana. Lepsze było Sc3 — rozwija skoczka.”.
-  Po **błędzie i przeoczeniu** partia się zatrzymuje: „Cofnij i popraw” (strzałka pokazuje lepszy ruch)
-  albo „Graj dalej”. Trener komentuje też własne ruchy i ostrzega przed swoimi groźbami („Uważaj — grożę matem!”).
-  Mina trenera reaguje na Twoje ruchy (radość, zmartwienie, zdziwienie), a gdy liczy — myśli.
-- **Pomoc**: „Podpowiedź” (strzałka najlepszego ruchu) i „Cofnij ruch”. Każda pomoc obniża wynik partii
-  liczony do „Twojego poziomu” o 0,1.
-- **Nazwa debiutu** na bieżąco (np. „Obrona sycylijska — wariant Najdorfa”), rozpoznawana po pozycji, więc
-  działa też przy przestawieniu ruchów.
-- **Paski graczy** nad i pod szachownicą: portret trenera i Twoja ikona, kto jest na ruchu, zbite figury
-  i przewaga materialna.
-- **Po partii**: podsumowanie z **celnością** (%) Twoją i trenera, liczbą ruchów każdej klasy i zmianą poziomu.
-  Przyciskami ◀ ▶ (albo klikając ruch na liście) przeglądasz partię — dla każdego ruchu wraca komentarz trenera,
-  a przy słabszych ruchach strzałka pokazuje, co było lepsze. „Rewanż” zaczyna nową partię z tymi samymi ustawieniami.
-- **Nauka otwarć**: 15 otwarć — dla białych partia włoska, hiszpańska, szkocka, gambit hetmański, system londyński,
-  otwarcie angielskie; dla czarnych obrona sycylijska (Najdorf), francuska, Caro-Kann, skandynawska, dwóch
-  skoczków, słowiańska, królewsko-indyjska, nimzoindyjska i Grünfelda. Grasz ruchy głównej linii, trener odpowiada
-  ruchami z tej linii i **objaśnia każdy ruch** (obie strony). Ruch spoza linii jest cofany, a trener mówi, co się tu
-  gra i dlaczego (jeśli Twój ruch też jest z teorii, mówi i o tym). Za ukończenie otwarcia są gwiazdki: 1 —
-  ukończone, 2 — bez błędu, 3 — trzy razy bez błędu. Po lekcji można grać dalej z tej pozycji — wtedy to zwykła
-  partia, liczona do „Twojego poziomu”.
-- W górnym pasku na ekranach trenera widać ranking partii z trenerem (osobny od rankingu zadań).
+- **Game settings**: the coach's strength set with a slider from 400 to 2000 Elo (with a label: beginner, amateur,
+  intermediate, advanced, expert), colour (white / random / black) and a "Play" button.
+- **"Your level"**: the first 10 games are calibration (a "calibration 3/10" counter). After the 10th game
+  a new difficulty level unlocks — the coach plays at a strength equal to your game rating. This level
+  changes **every 5 games** (after the 15th, 20th, 25th …), and the game summary tells you when the next change will happen.
+- **During the game**: after each of your moves the coach shows a move-class badge on the target square and in the move
+  list — !! brilliant, ! great, ★ best, ✓ excellent / good, book (from theory), ?! inaccuracy,
+  ? mistake, ?? blunder — and says what the move does, or what the opponent threatens and what was better, e.g.
+  "The opponent will reply 1... hxg6 and you lose your queen. Nc3 was better — it develops the knight.".
+  After a **mistake or blunder** the game pauses: "Take back and fix" (an arrow shows the better move)
+  or "Keep playing". The coach also comments on its own moves and warns about its threats ("Careful — I'm threatening mate!").
+  The coach's face reacts to your moves (joy, worry, surprise), and while calculating it looks thoughtful.
+- **Help**: "Hint" (an arrow for the best move) and "Take back move". Each use of help lowers the game result
+  counted towards "Your level" by 0.1.
+- **Opening name** shown live (e.g. "Sicilian Defence — Najdorf Variation"), recognized from the position, so
+  it also works with transpositions.
+- **Player bars** above and below the board: the coach's portrait and your icon, whose turn it is, captured pieces
+  and material advantage.
+- **After the game**: a summary with your and the coach's **accuracy** (%), the number of moves in each class and the level change.
+  With the ◀ ▶ buttons (or by clicking a move in the list) you review the game — each move brings back the coach's comment,
+  and for weaker moves an arrow shows what was better. "Rematch" starts a new game with the same settings.
+- **Opening lessons**: 15 openings — for White the Italian Game, Ruy Lopez, Scotch Game, Queen's Gambit, London System,
+  English Opening; for Black the Sicilian Defence (Najdorf), French, Caro-Kann, Scandinavian, Two
+  Knights, Slav, King's Indian, Nimzo-Indian and Grünfeld. You play the main-line moves, the coach replies
+  with moves from that line and **explains every move** (both sides). A move off the line is taken back, and the coach says
+  what is played here and why (if your move is also theory, it says so too). Completing an opening earns stars: 1 —
+  completed, 2 — without a mistake, 3 — three times without a mistake. After the lesson you can keep playing from that
+  position — it then becomes a regular game, counted towards "Your level".
+- On the coach screens the top bar shows your coach-game rating (separate from the puzzle rating).
 
-## Architektura
+## Architecture
 
 ```
-main.py                     # start gry (interfejs TypeScript; --pygame = dawny interfejs)
+main.py                     # game entry point (TypeScript interface; --pygame = old interface)
 tacticmind/
-  engine/                   # WŁASNY SILNIK
-    native/                 #   silnik w C: bitboard.c, position.c (make/unmake + akumulator NNUE),
-                            #   movegen.c (ruchy, SEE, perft), search.c (PVS), nnue.c, eval.c (ocena ręczna),
-                            #   api.c (dla ctypes), uci.c (program UCI tmengine), tacticmind.nnue (sieć)
-    native.py               #   kompilacja i ładowanie biblioteki C (ctypes)
-    csearch.py              #   CSearcher — silnik C z interfejsem Searcher; make_searcher() wybiera C albo Python
-    constants.py            #   kody figur, kodowanie ruchów, tablice pól 0x88
-    zobrist.py              #   klucze haszowania Zobrista
-    board.py                #   plansza 0x88, FEN, make/unmake, przyrostowy hasz i ocena
-    movegen.py              #   generator ruchów, szach/mat/pat, perft
-    pst.py, evaluation.py   #   funkcja oceny (tapered PST, mobilność, król, piony)
-    tt.py                   #   tablica transpozycji
-    search.py               #   negamax + alfa-beta, ID, quiescence, MultiPV, statystyki
-    compare.py              #   tryb porównawczy: minimaks / alfa-beta / alfa-beta + porządkowanie
-    process.py              #   silnik w osobnym procesie + protokół wiadomości
+  engine/                   # OWN ENGINE
+    native/                 #   C engine: bitboard.c, position.c (make/unmake + NNUE accumulator),
+                            #   movegen.c (moves, SEE, perft), search.c (PVS), nnue.c, eval.c (hand-written eval),
+                            #   api.c (for ctypes), uci.c (tmengine UCI program), tacticmind.nnue (network)
+    native.py               #   compiling and loading the C library (ctypes)
+    csearch.py              #   CSearcher — C engine with the Searcher interface; make_searcher() picks C or Python
+    constants.py            #   piece codes, move encoding, 0x88 square tables
+    zobrist.py              #   Zobrist hashing keys
+    board.py                #   0x88 board, FEN, make/unmake, incremental hash and evaluation
+    movegen.py              #   move generator, check/mate/stalemate, perft
+    pst.py, evaluation.py   #   evaluation function (tapered PST, mobility, king, pawns)
+    tt.py                   #   transposition table
+    search.py               #   negamax + alpha-beta, ID, quiescence, MultiPV, statistics
+    compare.py              #   comparison mode: minimax / alpha-beta / alpha-beta + ordering
+    process.py              #   engine in a separate process + message protocol
     types.py                #   SearchInfo, EngineScore, TreeNode…
   rating/                   # elo.py, glicko2.py, player_model.py, selector.py, profile.py,
-                            #   coach_profile.py (partie z trenerem, kalibracja, „Twój poziom”, gwiazdki otwarć)
-  coach/                    # GRA Z TRENEREM (bez pygame): openings.py (książka otwarć, nazwy debiutów),
-                            #   strength.py (siła gry wg Elo), review.py (klasy ruchów, celność),
-                            #   advice.py (wyjaśnienia trenera), game.py (przebieg partii i lekcji)
-  puzzles/                  # loader.py, themes.py (tłumaczenia), validator.py, session.py
-  brain/                    # notation.py (SAN w języku interfejsu), thoughts.py (strumień myśli), demo.py
-  i18n/                     # tłumaczenia: pl.py, en.py (jeden słownik na język) + liczba mnoga, formaty liczb;
-                            #   openings_pl.py / openings_en.py — nazwy i objaśnienia otwarć
-  ui/                       # pygame: app, board_view (z rysowaniem strzałek), eval_bar, brain_panel, topbar,
-                            #   charts, sounds, screens/, a także scale.py (skalowanie), gfx.py (wygładzona
-                            #   grafika, cienie), anim.py (wygładzanie animacji), effects.py (konfetti, fale),
-                            #   coach_avatar.py (portret trenera), badges.py (znaczki !!, ?, ?? …),
-                            #   screens/coach_menu.py i screens/coach_game.py (ekrany trenera)
-  web/                      # SERWER INTERFEJSU TYPESCRIPT (bez pygame): core.py (ekrany → migawki stanu, akcje),
-                            #   screens/ (zadanie, trener, statystyki, „Jak działa AI?”), board.py, brain.py,
-                            #   server.py (HTTP + SSE na 127.0.0.1), app.py (tryby uruchomienia, okno),
-                            #   static/ (zbudowany interfejs — tworzy go `npm run build`, nie edytować ręcznie)
-  data/                     # starter_puzzles.json (50 zadań), puzzles.json (3000 zadań)
-  assets/fonts/             # fonty Noto (tekst i symbole figur)
-  assets/coach.png          # portret trenera (wygenerowany kodem: python -m tacticmind.ui.coach_avatar)
-web/                        # INTERFEJS W TYPESCRIPT
-  src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — szachownica w SVG, BrainPanel,
-                            #   EvalBar, TopBar z ustawieniami, CoachAvatar…), chess.ts (FEN, animacje, strzałki),
-                            #   ticker.ts (jedna pętla requestAnimationFrame z limitem FPS), effects.ts, sound.ts
-  public/pieces/            #   figury „cburnett” (SVG)
-  src-tauri/                #   okno aplikacji Tauri 2 (Rust): uruchamia Pythona i pokazuje interfejs
-scripts/build_puzzles.py    # budowa zestawu zadań z bazy Lichess
-scripts/benchmark.py        # pomiary do tabeli w README
-scripts/build_engine.py     # kompilacja silnika w C
-scripts/match.py            # mecze między silnikami (pomiar Elo)
-scripts/nnue/               # trener sieci NNUE (train.c) i opis cyklu uczenia
+                            #   coach_profile.py (coach games, calibration, "Your level", opening stars)
+  coach/                    # GAME AGAINST THE COACH (no pygame): openings.py (opening book, opening names),
+                            #   strength.py (playing strength by Elo), review.py (move classes, accuracy),
+                            #   advice.py (coach explanations), game.py (game and lesson flow)
+  puzzles/                  # loader.py, themes.py (translations), validator.py, session.py
+  brain/                    # notation.py (SAN in the interface language), thoughts.py (stream of thoughts), demo.py
+  i18n/                     # translations: pl.py, en.py (one dictionary per language) + plurals, number formats;
+                            #   openings_pl.py / openings_en.py — opening names and explanations
+  ui/                       # pygame: app, board_view (with arrow drawing), eval_bar, brain_panel, topbar,
+                            #   charts, sounds, screens/, as well as scale.py (scaling), gfx.py (anti-aliased
+                            #   graphics, shadows), anim.py (animation easing), effects.py (confetti, ripples),
+                            #   coach_avatar.py (coach portrait), badges.py (badges !!, ?, ?? …),
+                            #   screens/coach_menu.py and screens/coach_game.py (coach screens)
+  web/                      # TYPESCRIPT INTERFACE SERVER (no pygame): core.py (screens → state snapshots, actions),
+                            #   screens/ (puzzle, coach, statistics, "How does the AI work?"), board.py, brain.py,
+                            #   server.py (HTTP + SSE on 127.0.0.1), app.py (launch modes, window),
+                            #   static/ (built interface — produced by `npm run build`, do not edit by hand)
+  data/                     # starter_puzzles.json (50 puzzles), puzzles.json (3000 puzzles)
+  assets/fonts/             # Noto fonts (text and piece symbols)
+  assets/coach.png          # coach portrait (generated by code: python -m tacticmind.ui.coach_avatar)
+web/                        # TYPESCRIPT INTERFACE
+  src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — SVG board, BrainPanel,
+                            #   EvalBar, TopBar with settings, CoachAvatar…), chess.ts (FEN, animations, arrows),
+                            #   ticker.ts (a single requestAnimationFrame loop with an FPS limit), effects.ts, sound.ts
+  public/pieces/            #   "cburnett" pieces (SVG)
+  src-tauri/                #   Tauri 2 application window (Rust): starts Python and shows the interface
+scripts/build_puzzles.py    # builds the puzzle set from the Lichess database
+scripts/benchmark.py        # measurements for the table in the README
+scripts/build_engine.py     # compiles the C engine
+scripts/match.py            # engine-vs-engine matches (Elo measurement)
+scripts/nnue/               # NNUE network trainer (train.c) and a description of the training cycle
 tests/                      # pytest
 ```
 
-Logika gry i silnik są oddzielone od interfejsu: `engine/`, `rating/`, `puzzles/`, `brain/` i `coach/` to czyste
-moduły bez pygame, testowane jednostkowo. Interfejs tylko je wywołuje i rysuje wyniki.
+Game logic and the engine are separated from the interface: `engine/`, `rating/`, `puzzles/`, `brain/` and `coach/` are pure
+modules without pygame, covered by unit tests. The interface only calls them and draws the results.
 
-**Interfejs w TypeScript.** Stan gry trzyma Python: `tacticmind/web/core.py` prowadzi ekrany (zadanie, partia
-z trenerem, statystyki…) bez rysowania i po każdej zmianie wysyła migawkę stanu (JSON) strumieniem SSE
-`/api/events`; ruchy i kliknięcia wracają jako `POST /api/action`. Przeglądarka tylko rysuje: szachownica w SVG
-(ostra w każdej rozdzielczości i przy każdym skalowaniu ekranu), animacje ruchów, strzałki, znaczki ruchów, efekty
-i wykresy — wszystko w jednej pętli `requestAnimationFrame` z limitem klatek z ustawień. Ruch gracza pojawia się
-od razu (optymistycznie), a Python go zatwierdza albo cofa. Serwer słucha tylko na `127.0.0.1`, odrzuca obcy
-nagłówek `Host` (DNS rebinding) i akcje bez nagłówka `X-TacticMind`. Okno Tauri (`web/src-tauri`) uruchamia
-`python main.py --server --port 0`, czyta z niego adres i pokazuje ten sam interfejs; Python kończy pracę, gdy
-okno zamknie jego standardowe wejście. Silnik jest używany przez ten sam interfejs `EngineClient` co w pygame.
+**TypeScript interface.** Python holds the game state: `tacticmind/web/core.py` runs the screens (puzzle, game
+against the coach, statistics…) without drawing, and after every change sends a state snapshot (JSON) over the SSE stream
+`/api/events`; moves and clicks come back as `POST /api/action`. The browser only draws: an SVG board
+(sharp at any resolution and any display scaling), move animations, arrows, move badges, effects
+and charts — all in a single `requestAnimationFrame` loop with the frame limit from the settings. The player's move appears
+immediately (optimistically), and Python confirms or reverts it. The server listens only on `127.0.0.1`, rejects a foreign
+`Host` header (DNS rebinding) and actions without the `X-TacticMind` header. The Tauri window (`web/src-tauri`) starts
+`python main.py --server --port 0`, reads the address from it and shows the same interface; Python exits when
+the window closes its standard input. The engine is used through the same `EngineClient` interface as in pygame.
 
 ```mermaid
 flowchart LR
-    subgraph UI["Proces główny — interfejs (pygame)"]
-        App["ui/app.py<br/>pętla gry"] --> Play["screens/play.py<br/>ekran zadania"]
-        App --> Other["ekrany: start, statystyki,<br/>Jak działa AI?"]
-        Play --> BoardView["board_view.py<br/>szachownica, strzałki"]
-        Play --> Brain["brain_panel.py<br/>Mózg AI"]
+    subgraph UI["Main process — interface (pygame)"]
+        App["ui/app.py<br/>game loop"] --> Play["screens/play.py<br/>puzzle screen"]
+        App --> Other["screens: start, statistics,<br/>How does the AI work?"]
+        Play --> BoardView["board_view.py<br/>board, arrows"]
+        Play --> Brain["brain_panel.py<br/>AI Brain"]
         Play --> EvalBar["eval_bar.py"]
-        Play --> Session["puzzles/session.py<br/>przebieg zadania"]
-        Play --> Selector["rating/selector.py<br/>dobór zadania"]
+        Play --> Session["puzzles/session.py<br/>puzzle flow"]
+        Play --> Selector["rating/selector.py<br/>puzzle selection"]
         Selector --> Model["rating/player_model.py"]
         Play --> Profile["rating/profile.py<br/>Elo + Glicko-2"]
-        Brain --> Thoughts["brain/thoughts.py<br/>strumień myśli"]
-        Session --> PyChess["python-chess<br/>(tylko UI: SAN, legalność)"]
+        Brain --> Thoughts["brain/thoughts.py<br/>stream of thoughts"]
+        Session --> PyChess["python-chess<br/>(UI only: SAN, legality)"]
     end
-    subgraph ENG["Proces silnika (multiprocessing)"]
+    subgraph ENG["Engine process (multiprocessing)"]
         Proc["engine/process.py"] --> CSearch["csearch.py → native/ (C)<br/>PVS + NNUE"]
-        Proc -. "bez kompilatora C" .-> Search["search.py<br/>negamax + alfa-beta"]
-        Proc --> Compare["compare.py<br/>minimaks vs alfa-beta"]
+        Proc -. "no C compiler" .-> Search["search.py<br/>negamax + alpha-beta"]
+        Proc --> Compare["compare.py<br/>minimax vs alpha-beta"]
         Search --> Eval["evaluation.py"]
         Search --> TT["tt.py"]
         Search --> MoveGen["movegen.py"]
@@ -321,356 +322,356 @@ flowchart LR
         Board --> Zobrist["zobrist.py"]
     end
     App -- "AnalyzeRequest / CompareRequest / Stop" --> Proc
-    Proc -- "InfoEvent po każdej głębokości,<br/>ProgressEvent co 100 ms, DoneEvent" --> App
+    Proc -- "InfoEvent after each depth,<br/>ProgressEvent every 100 ms, DoneEvent" --> App
 ```
 
-**Protokół silnika** (`engine/process.py`): po każdej ukończonej głębokości proces wysyła `InfoEvent` z obiektem
-`SearchInfo` = `{ depth, score (cp lub mat), pv, multi_pv, nodes, nps, cutoffs, tt_hits, time_ms, tree }`.
-Co ok. 100 ms przychodzi `ProgressEvent` (liczniki na żywo w trakcie głębokości). Komenda `stop` ustawia
-współdzieloną flagę `multiprocessing.Event`, którą wyszukiwanie sprawdza co 1024 węzły — przerwanie jest
-natychmiastowe, a proces obsługuje kolejne zapytania bez restartu.
+**Engine protocol** (`engine/process.py`): after each completed depth the process sends an `InfoEvent` with a
+`SearchInfo` object = `{ depth, score (cp or mate), pv, multi_pv, nodes, nps, cutoffs, tt_hits, time_ms, tree }`.
+About every 100 ms a `ProgressEvent` arrives (live counters during a depth). The `stop` command sets
+a shared `multiprocessing.Event` flag that the search checks every 1024 nodes — interruption is
+immediate, and the process handles further requests without restarting.
 
-Przebieg zadania (`puzzles/session.py`):
+Puzzle flow (`puzzles/session.py`):
 
 ```mermaid
 stateDiagram-v2
     [*] --> INTRO
-    INTRO --> PLAYER: ruch przeciwnika z bazy
-    PLAYER --> OPPONENT: ruch z rozwiązania
-    OPPONENT --> PLAYER: odpowiedź po ~400 ms
-    PLAYER --> SOLVED: ostatni ruch albo inny mat
-    PLAYER --> CHECKING: ruch spoza rozwiązania
-    CHECKING --> PLAYER: „dobry ruch, ale jest lepszy”
-    CHECKING --> MISTAKE: błąd (silnik pokazuje odpowiedź)
-    MISTAKE --> PLAYER: spróbuj ponownie
-    PLAYER --> REVEALED: pokaż rozwiązanie
-    MISTAKE --> REVEALED: pokaż rozwiązanie
+    INTRO --> PLAYER: opponent's move from the database
+    PLAYER --> OPPONENT: move from the solution
+    OPPONENT --> PLAYER: reply after ~400 ms
+    PLAYER --> SOLVED: last move or another mate
+    PLAYER --> CHECKING: move outside the solution
+    CHECKING --> PLAYER: good move, but there is a better one
+    CHECKING --> MISTAKE: mistake (engine shows the reply)
+    MISTAKE --> PLAYER: try again
+    PLAYER --> REVEALED: show solution
+    MISTAKE --> REVEALED: show solution
 ```
 
-## Algorytmy
+## Algorithms
 
-### Reprezentacja planszy 0x88 i generator ruchów
+### 0x88 board representation and move generator
 
-Plansza to tablica 128 pól (16 kolumn × 8 rzędów); używamy tylko kolumn 0–7. Indeks = `rząd·16 + kolumna`.
-Sztuczka 0x88: pole leży na planszy wtedy i tylko wtedy, gdy `(pole & 0x88) == 0` — wyjście poza planszę
-wykrywa jedna operacja bitowa. Na tej podstawie raz przy starcie liczymy listy pól dla skoczków, króla
-i promieni gońców/wież, z których korzysta generator. Ruch to jedna liczba całkowita
-(pole startowe, docelowe, figura promocji, flagi: bicie, en passant, roszada, podwójny ruch piona).
+The board is an array of 128 squares (16 files × 8 ranks); only files 0–7 are used. Index = `rank·16 + file`.
+The 0x88 trick: a square is on the board if and only if `(square & 0x88) == 0` — a single bitwise operation
+detects stepping off the board. Based on this, at start-up we compute once the square lists for knights, the king
+and bishop/rook rays that the generator uses. A move is a single integer
+(from square, to square, promotion piece, flags: capture, en passant, castling, pawn double push).
 
-Generator tworzy ruchy pseudolegalne (z roszadami, biciem w przelocie i promocjami na 4 figury), a legalność
-sprawdzamy po wykonaniu ruchu: jeśli własny król jest atakowany, ruch cofamy (`make_legal_move`).
-`make_move`/`unmake_move` zapisują na stosie wszystko, czego nie da się odtworzyć z ruchu (zbitą figurę,
-prawa do roszady, pole en passant, licznik 50 ruchów, hasz). Poprawność generatora potwierdza **perft** —
-liczba liści drzewa ruchów zgadza się z wartościami referencyjnymi dla 5 pozycji (testy w `tests/test_perft.py`).
+The generator produces pseudo-legal moves (with castling, en passant and promotions to 4 pieces), and legality
+is checked after making the move: if our own king is attacked, the move is undone (`make_legal_move`).
+`make_move`/`unmake_move` push onto a stack everything that cannot be restored from the move (the captured piece,
+castling rights, the en passant square, the 50-move counter, the hash). The generator's correctness is confirmed by **perft** —
+the number of leaves of the move tree matches the reference values for 5 positions (tests in `tests/test_perft.py`).
 
-### Minimaks (negamax)
+### Minimax (negamax)
 
-Zakładamy, że obie strony grają najlepiej: my maksymalizujemy ocenę, przeciwnik ją minimalizuje. Wersja
-**negamax** korzysta z tożsamości `max(a, b) = −min(−a, −b)`: ocena pozycji dla strony na ruchu to minus
-najlepsza ocena przeciwnika po każdym z naszych ruchów. Wystarcza jedna funkcja.
-
-```
-funkcja negamax(pozycja, głębokość):
-    jeśli głębokość == 0: zwróć ocena(pozycja)        # z perspektywy strony na ruchu
-    najlepszy = −∞
-    dla każdego legalnego ruchu:
-        wykonaj ruch
-        najlepszy = max(najlepszy, −negamax(pozycja, głębokość − 1))
-        cofnij ruch
-    jeśli brak ruchów: zwróć (szach ? −MAT + ply : 0)   # mat albo pat
-    zwróć najlepszy
-```
-
-Minimaks odwiedza ok. `b^d` węzłów (b ≈ 30–35 ruchów, d = głębokość) — na głębokości 5 to dziesiątki milionów.
-
-### Alfa-beta
-
-Alfa-beta daje **ten sam wynik** co minimaks, ale pomija gałęzie, które nie mogą zmienić decyzji.
-`α` = wynik, który strona na ruchu ma już zagwarantowany; `β` = najlepszy wynik, na jaki pozwoli jej przeciwnik.
-Gdy któryś ruch daje wynik ≥ β, przeciwnik nie dopuści do tej pozycji — pozostałych ruchów nie liczymy
-(**cięcie β**).
+We assume both sides play perfectly: we maximize the evaluation, the opponent minimizes it. The
+**negamax** formulation uses the identity `max(a, b) = −min(−a, −b)`: the evaluation of a position for the side to move is minus
+the opponent's best evaluation after each of our moves. A single function is enough.
 
 ```
-funkcja alfabeta(pozycja, głębokość, α, β, ply):
-    jeśli remis (powtórzenie, 50 ruchów): zwróć 0
-    jeśli szach: głębokość += 1                       # przedłużenie szacha
-    jeśli głębokość <= 0: zwróć quiescence(pozycja, α, β)
-    sprawdź tablicę transpozycji (może od razu dać wynik albo najlepszy ruch)
-    najlepszy = −∞
-    dla każdego ruchu w kolejności: TT/PV, bicia MVV-LVA, killery, history:
-        jeśli ruch nielegalny: pomiń
-        wykonaj ruch
-        wynik = −alfabeta(pozycja, głębokość − 1, −β, −α, ply + 1)
-        cofnij ruch
-        jeśli wynik > najlepszy:
-            najlepszy = wynik
-            jeśli wynik > α:
-                α = wynik; zapamiętaj wariant (PV)
-                jeśli wynik >= β:                     # cięcie β
-                    zapamiętaj ruch jako killer/history; przerwij pętlę
-    jeśli brak legalnych ruchów: zwróć (szach ? −MAT + ply : 0)
-    zapisz w TT (dokładny / dolna granica / górna granica)
-    zwróć najlepszy
+function negamax(position, depth):
+    if depth == 0: return evaluate(position)          # from the side to move's perspective
+    best = −∞
+    for each legal move:
+        make move
+        best = max(best, −negamax(position, depth − 1))
+        unmake move
+    if no moves: return (in check ? −MATE + ply : 0)   # checkmate or stalemate
+    return best
 ```
 
-Przy idealnej kolejności ruchów alfa-beta odwiedza ok. `b^(d/2)` węzłów — w tym samym czasie liczy prawie
-dwa razy głębiej. Dlatego tak ważne jest **porządkowanie ruchów**:
+Minimax visits about `b^d` nodes (b ≈ 30–35 moves, d = depth) — at depth 5 that is tens of millions.
 
-1. ruch z głównego wariantu / tablicy transpozycji (najlepszy z płytszej iteracji),
-2. bicia wg **MVV-LVA** (najcenniejsza ofiara, najtańszy napastnik), promocje na hetmana,
-3. **ruchy killer** — dwa ciche ruchy na poziom, które niedawno dały cięcie,
-4. **history heuristic** — punkty `głębokość²` dla ruchów (figura → pole), które dawały cięcia.
+### Alpha-beta
 
-Ruchy wybieramy leniwie (sortowanie przez wybór): po cięciu resztę listy i tak pomijamy.
+Alpha-beta gives **the same result** as minimax, but skips branches that cannot change the decision.
+`α` = the score the side to move is already guaranteed; `β` = the best score its opponent will allow.
+When some move scores ≥ β, the opponent will not allow this position — the remaining moves are not searched
+(**β cutoff**).
+
+```
+function alphabeta(position, depth, α, β, ply):
+    if draw (repetition, 50 moves): return 0
+    if in check: depth += 1                           # check extension
+    if depth <= 0: return quiescence(position, α, β)
+    probe the transposition table (may give a score or the best move right away)
+    best = −∞
+    for each move in order: TT/PV, MVV-LVA captures, killers, history:
+        if move is illegal: skip
+        make move
+        score = −alphabeta(position, depth − 1, −β, −α, ply + 1)
+        unmake move
+        if score > best:
+            best = score
+            if score > α:
+                α = score; store the line (PV)
+                if score >= β:                        # β cutoff
+                    record the move as killer/history; break the loop
+    if no legal moves: return (in check ? −MATE + ply : 0)
+    store in TT (exact / lower bound / upper bound)
+    return best
+```
+
+With perfect move ordering alpha-beta visits about `b^(d/2)` nodes — in the same time it searches almost
+twice as deep. That is why **move ordering** matters so much:
+
+1. the move from the principal variation / transposition table (the best one from the shallower iteration),
+2. captures by **MVV-LVA** (most valuable victim, least valuable attacker), queen promotions,
+3. **killer moves** — two quiet moves per ply that recently caused a cutoff,
+4. **history heuristic** — `depth²` points for moves (piece → square) that caused cutoffs.
+
+Moves are picked lazily (selection sort): after a cutoff the rest of the list is skipped anyway.
 
 ### Iterative deepening
 
-Silnik liczy głębokość 1, potem 2, 3… aż do limitu czasu albo głębokości. Płytkie iteracje są tanie, a ich
-najlepszy wariant porządkuje ruchy w głębszej — dzięki temu cięć jest więcej niż przy jednym przeszukaniu
-od razu na docelowej głębokości. Po każdej ukończonej głębokości silnik wysyła wynik do interfejsu
-(stąd „myśli” na żywo). Nowej głębokości nie zaczynamy, jeśli zużyto ponad połowę czasu.
-Gdy znaleziony jest mat w `n` półruchach, a głębokość ≥ `n`, wyszukiwanie kończy się (krótszego mata już nie ma).
+The engine searches depth 1, then 2, 3… until the time or depth limit. Shallow iterations are cheap, and their
+best line orders the moves in the deeper one — this yields more cutoffs than a single search
+straight at the target depth. After each completed depth the engine sends the result to the interface
+(hence the live "thoughts"). A new depth is not started if more than half of the time has been used.
+When a mate in `n` plies is found and the depth is ≥ `n`, the search stops (there is no shorter mate).
 
 ### Quiescence search
 
-Ocena w połowie wymiany jest fałszywa (np. hetman właśnie zbił piona, ale zaraz zostanie zbity) — to **efekt
-horyzontu**. Dlatego w liściach dogrywamy bicia i promocje, aż pozycja się uspokoi:
+An evaluation in the middle of an exchange is misleading (e.g. the queen has just captured a pawn but is about to be captured) — this is the **horizon
+effect**. So at the leaves we play out captures and promotions until the position is quiet:
 
 ```
-funkcja quiescence(pozycja, α, β):
-    jeśli szach: rozważ wszystkie ruchy (żeby nie przeoczyć mata)
-    inaczej:
-        stand_pat = ocena(pozycja)                     # strona na ruchu może nie bić
-        jeśli stand_pat >= β: zwróć stand_pat
+function quiescence(position, α, β):
+    if in check: consider all moves (so as not to miss a mate)
+    else:
+        stand_pat = evaluate(position)                 # the side to move may decline to capture
+        if stand_pat >= β: return stand_pat
         α = max(α, stand_pat)
-    dla każdego bicia/promocji (MVV-LVA):
-        pomiń bicia, które nie mogą podnieść α (delta pruning)
-        pomiń „złe bicia” (droższa figura bije tańszą na bronionym polu)
-        wynik = −quiescence(po ruchu, −β, −α)
-        aktualizuj α, cięcie gdy wynik >= β
+    for each capture/promotion (MVV-LVA):
+        skip captures that cannot raise α (delta pruning)
+        skip "bad captures" (a more valuable piece takes a cheaper one on a defended square)
+        score = −quiescence(after the move, −β, −α)
+        update α, cut off when score >= β
 ```
 
-Tabela pomiarów poniżej (bez quiescence, stała głębokość) dobrze pokazuje efekt horyzontu: ocena debiutu
-skacze między −2,1 a +1,4 zależnie od tego, czy głębokość kończy się w połowie wymiany.
+The benchmark table below (without quiescence, fixed depth) shows the horizon effect clearly: the opening evaluation
+jumps between −2.1 and +1.4 depending on whether the depth ends in the middle of an exchange.
 
-### Tablica transpozycji i haszowanie Zobrista
+### Transposition table and Zobrist hashing
 
-Każdej figurze na każdym polu, stronie na ruchu, prawom do roszady i polu en passant przypisujemy losową liczbę
-64-bitową (stałe ziarno). Hasz pozycji to XOR tych liczb; przy ruchu aktualizujemy go kilkoma operacjami XOR.
-Tablica transpozycji (`tt.py`) przechowuje dla hasza: głębokość, ocenę, typ oceny (**dokładna**, **dolna**
-granica po cięciu β, **górna** granica, gdy żaden ruch nie poprawił α) i najlepszy ruch. Wyniki matowe zapisujemy
-względem bieżącego węzła (a nie korzenia), żeby odległość do mata była poprawna po odczycie z innej głębokości.
-Hasze służą też do wykrywania powtórzeń pozycji (remis).
+Each piece on each square, the side to move, castling rights and the en passant square are assigned a random
+64-bit number (fixed seed). The position hash is the XOR of these numbers; on a move it is updated with a few XOR operations.
+The transposition table (`tt.py`) stores for a hash: depth, evaluation, evaluation type (**exact**, **lower**
+bound after a β cutoff, **upper** bound when no move improved α) and the best move. Mate scores are stored
+relative to the current node (not the root), so that the distance to mate stays correct when read at a different depth.
+The hashes are also used to detect position repetitions (draws).
 
-### Wyniki matowe
+### Mate scores
 
-Mat ma ocenę `±(32000 − liczba półruchów od korzenia)`, więc **szybszy mat jest zawsze lepszy**, a przy
-obronie silnik wybiera najdłuższą drogę do mata. Interfejs pokazuje to jako `M3` / `−M2`.
+A mate scores `±(32000 − number of plies from the root)`, so **a faster mate is always better**, and when
+defending the engine picks the longest path to mate. The interface shows this as `M3` / `−M2`.
 
-### Funkcja oceny
+### Evaluation function
 
-Ocena w centypionach (100 = pion):
+Evaluation in centipawns (100 = a pawn):
 
-- **materiał** i **tablice pozycyjne** (PST) — osobne wartości dla gry środkowej (mg) i końcówki (eg),
-- **tapered eval** — wynik = `(mg·faza + eg·(24 − faza)) / 24`, gdzie faza zależy od liczby figur
-  (skoczek/goniec 1, wieża 2, hetman 4). Król w środkowej grze chowa się, w końcówce idzie do centrum,
-- **mobilność** — premia za każde dostępne pole ponad typową liczbę (osobno dla figur i faz),
-- **bezpieczeństwo króla** — osłona pionków przed królem, kara za otwarte/półotwarte linie, „tropizm” (wrogie
-  figury blisko króla),
-- **struktura pionków** — zdwojone, izolowane, przechodnie (premia rośnie z każdym rzędem),
-- **para gońców**, wykrywanie remisu z braku materiału.
+- **material** and **piece-square tables** (PST) — separate values for the middlegame (mg) and the endgame (eg),
+- **tapered eval** — score = `(mg·phase + eg·(24 − phase)) / 24`, where the phase depends on the pieces on the board
+  (knight/bishop 1, rook 2, queen 4). In the middlegame the king hides, in the endgame it heads to the centre,
+- **mobility** — a bonus for every available square above the typical count (separately per piece and phase),
+- **king safety** — the pawn shield in front of the king, a penalty for open/half-open files, "tropism" (enemy
+  pieces close to the king),
+- **pawn structure** — doubled, isolated, passed (the bonus grows with every rank),
+- **bishop pair**, detection of draws by insufficient material.
 
-Materiał i PST plansza sumuje przyrostowo w `make_move`, więc liść kosztuje tylko składniki zależne od układu figur.
-Ocena dla silnika jest z perspektywy strony na ruchu (wymóg negamaksu); interfejs zawsze pokazuje ją
-**z perspektywy białych** (np. +1.5 albo M3).
+The board sums material and PST incrementally in `make_move`, so a leaf only pays for the terms that depend on the piece layout.
+For the engine the evaluation is from the side to move's perspective (a requirement of negamax); the interface always shows it
+**from White's perspective** (e.g. +1.5 or M3).
 
-### MultiPV (3 najlepsze ruchy)
+### MultiPV (3 best moves)
 
-Zamiast liczyć korzeń trzy razy, robimy to w jednym przebiegu: dla kolejnego ruchu z korzenia α = wynik
-**trzeciego** najlepszego ruchu znalezionego do tej pory. Ruchy z pierwszej trójki dostają więc dokładne oceny
-i warianty, a gorsze są szybko odcinane (fail-low).
+Instead of searching the root three times, we do it in a single pass: for each subsequent root move α = the score of the
+**third** best move found so far. Moves in the top three thus get exact scores
+and lines, while worse ones are quickly cut off (fail-low).
 
-### Statystyki i mini-drzewo
+### Statistics and the mini tree
 
-Silnik liczy na bieżąco: głębokość (i maksymalną głębokość selektywną), węzły, węzły/s, cięcia β, trafienia TT,
-odsetek pominiętych ruchów i czas. Dla ostatniej głębokości zapisuje pierwsze dwa poziomy drzewa: ruchy
-z korzenia z ocenami (dokładnymi albo „≤” po fail-low) i odpowiedzi przeciwnika — gałęzie odcięte przez alfa-betę
-są w panelu wyszarzone i przekreślone.
+The engine keeps live counts of: depth (and maximum selective depth), nodes, nodes/s, β cutoffs, TT hits,
+the share of skipped moves and time. For the last depth it records the first two levels of the tree: the root moves
+with their scores (exact, or "≤" after a fail-low) and the opponent's replies — branches cut off by alpha-beta
+are greyed out and struck through in the panel.
 
-### Strumień myśli
+### Stream of thoughts
 
-`brain/thoughts.py` zamienia kolejne wyniki silnika na zdania po polsku za pomocą szablonów (bez żadnego LLM),
-np. „Głębokość 4: nadal Hxf7+ (+3.2). Po Kxf7 Sg5+ wygrywam hetmana.”, „Zmieniam zdanie! Na głębokości 6 widzę
-mata w 3 po Wd8+.”, „Dzięki alfa-beta pomijam 84% gałęzi.”. Komentarz o zysku materiału wynika z przeliczenia
-materiału na końcu wariantu PV. Zmiana najlepszego ruchu między głębokościami jest wyróżniona kolorem.
+`brain/thoughts.py` turns successive engine results into sentences in the interface language using templates (no LLM at all),
+e.g. "Depth 4: still Qxf7+ (+3.2). After Kxf7 Ng5+ I win the queen.", "I'm changing my mind! At depth 6 I see
+mate in 3 after Rd8+.", "Thanks to alpha-beta I skip 84% of the branches.". The comment about winning material comes from counting
+the material at the end of the PV line. A change of the best move between depths is highlighted in colour.
 
-### Ranking: Elo i Glicko-2
+### Rating: Elo and Glicko-2
 
-Zadanie traktujemy jak przeciwnika o rankingu zadania.
+A puzzle is treated as an opponent with the puzzle's rating.
 
-- Oczekiwany wynik: `E = 1 / (1 + 10^((R_zadania − R_gracza) / 400))`
-- Zmiana rankingu Elo: `ΔR = K · (S − E)`; K = 60 przez pierwsze 10 zadań (kalibracja), potem 32, po 50 zadaniach 20.
-- Wynik `S`: 1,0 — bez błędu i podpowiedzi; 0,5 — z podpowiedzią; 0,0 — błędny ruch (nawet jeśli gracz potem
-  dokończy zadanie) albo pokazane rozwiązanie. Kara za bardzo długi czas: powyżej 3× przeciętnego czasu gracza
-  liniowo do −0,2 (przy 6×).
-- **Glicko-2** (bonus, domyślny system): oprócz rankingu `r` gracz ma odchylenie `RD` i zmienność `σ`.
-  Implementacja według artykułu Glickmana (przeliczenie na skalę μ/φ, wariancja v, poprawa Δ, nowa zmienność
-  metodą Illinois, nowe φ i μ); test sprawdza przykład z artykułu (1500/200 → 1464,06 / 151,52).
-  Jedno zadanie = jeden okres rankingowy; RD zadania pochodzi z bazy Lichess. Interfejs pokazuje „1450 ± 80”
-  (± RD), a wykres rankingu ma pas niepewności. System można przełączyć na Elo w statystykach.
+- Expected score: `E = 1 / (1 + 10^((R_puzzle − R_player) / 400))`
+- Elo rating change: `ΔR = K · (S − E)`; K = 60 for the first 10 puzzles (calibration), then 32, after 50 puzzles 20.
+- Score `S`: 1.0 — no mistake and no hint; 0.5 — with a hint; 0.0 — a wrong move (even if the player then
+  finishes the puzzle) or a revealed solution. Penalty for taking very long: above 3× the player's average time,
+  linearly down to −0.2 (at 6×).
+- **Glicko-2** (bonus, the default system): besides the rating `r` the player has a deviation `RD` and a volatility `σ`.
+  Implemented following Glickman's paper (conversion to the μ/φ scale, variance v, improvement Δ, new volatility
+  via the Illinois method, new φ and μ); a test checks the example from the paper (1500/200 → 1464.06 / 151.52).
+  One puzzle = one rating period; the puzzle's RD comes from the Lichess database. The interface shows "1450 ± 80"
+  (± RD), and the rating chart has an uncertainty band. The system can be switched to Elo in the statistics.
 
-### Dobór zadań i model gracza
+### Puzzle selection and the player model
 
 `rating/selector.py`:
 
-- **strefa flow** — celujemy w ok. 65% szans: ranking zadania ≈ `R_gracza − 100` (bo E(−100) ≈ 0,64)
-  z losowym rozrzutem ±75,
-- **model gracza** (`player_model.py`) liczy skuteczność w każdym motywie (widełki, związania, maty…),
-  z wygładzaniem Bayesa (jedno nieudane zadanie nie robi z motywu słabej strony); ok. **30%** zadań pochodzi
-  z najsłabszych motywów,
-- **ochrona przed frustracją** — po 3 porażkach z rzędu zadanie wyraźnie łatwiejsze (≈ R − 300); po 5 sukcesach
-  z rzędu **zadanie bonusowe** (≈ R + 200),
-- zadania się nie powtarzają, a motywy z ostatnich 3 zadań dostają karę (różnorodność),
-- każda decyzja ma uzasadnienie w okienku **„Dlaczego to zadanie?”**, np. „Ranking zadania ok. 1380, celuję
-  w 65% szans (strefa flow). Twoja słaba strona: związanie (41%).”
+- **flow zone** — we aim for about a 65% chance: puzzle rating ≈ `R_player − 100` (since E(−100) ≈ 0.64)
+  with a random spread of ±75,
+- the **player model** (`player_model.py`) tracks the success rate in each theme (forks, pins, mates…),
+  with Bayesian smoothing (one failed puzzle does not turn a theme into a weak spot); about **30%** of puzzles come
+  from the weakest themes,
+- **frustration guard** — after 3 failures in a row a clearly easier puzzle (≈ R − 300); after 5 successes
+  in a row a **bonus puzzle** (≈ R + 200),
+- puzzles do not repeat, and themes from the last 3 puzzles get a penalty (variety),
+- every decision has a justification in the **"Why this puzzle?"** pop-up, e.g. "Puzzle rating about 1380, aiming
+  for a 65% chance (flow zone). Your weak spot: pin (41%)."
 
-### Trener: siła gry zależna od Elo
+### Coach: playing strength based on Elo
 
-`coach/strength.py`. Trener używa tego samego silnika, ale gra słabiej w trzech miejscach:
+`coach/strength.py`. The coach uses the same engine but plays weaker in three ways:
 
-| Elo | Głębokość | Czas na ruch | Kandydaci (MultiPV) | Temperatura T | Przypadkowy ruch |
+| Elo | Depth | Time per move | Candidates (MultiPV) | Temperature T | Random move |
 |---|---|---|---|---|---|
-| 400 | 1 | 0,4 s | 8 | 305 cp | 25% |
-| 800 | 2 | 1,0 s | 6 | 174 cp | 14% |
-| 1200 | 3 | 1,6 s | 5 | 80 cp | 6% |
-| 1600 | 4 | 2,2 s | 4 | 24 cp | 1,6% |
-| 2000 | 5 | 2,8 s | 2 | 5 cp | 0% |
+| 400 | 1 | 0.4 s | 8 | 305 cp | 25% |
+| 800 | 2 | 1.0 s | 6 | 174 cp | 14% |
+| 1200 | 3 | 1.6 s | 5 | 80 cp | 6% |
+| 1600 | 4 | 2.2 s | 4 | 24 cp | 1.6% |
+| 2000 | 5 | 2.8 s | 2 | 5 cp | 0% |
 
-Spośród kandydatów trener losuje ruch z prawdopodobieństwem `p(ruch) ~ exp((ocena − ocena_najlepszego) / T)`
-(softmax z temperaturą T): przy dużym T ruch gorszy o pół piona jest prawie tak samo prawdopodobny jak najlepszy,
-przy małym T trener prawie zawsze gra najlepszy ruch. „Przypadkowy ruch” to zupełnie losowy legalny ruch, jak
-przeoczenie początkującego. W debiucie trener gra z książki otwarć (losowo, z wagą = w ilu liniach występuje ruch).
-Elo trenera jest **przybliżone** — dokładne skalowanie wymagałoby tysięcy partii z graczami o znanym rankingu.
+From the candidates the coach samples a move with probability `p(move) ~ exp((score − best_score) / T)`
+(softmax with temperature T): with a large T a move half a pawn worse is almost as likely as the best one,
+with a small T the coach almost always plays the best move. A "random move" is a completely random legal move, like
+a beginner's blunder. In the opening the coach plays from the opening book (randomly, weighted by how many lines contain the move).
+The coach's Elo is **approximate** — exact calibration would require thousands of games against players with known ratings.
 
-### Ocena ruchów i celność
+### Move classification and accuracy
 
-`coach/review.py`. Kiedy gracz myśli, silnik w tle analizuje pozycję (MultiPV 3, do 1,6 s). Jeśli ruch gracza jest
-wśród trzech najlepszych, jego ocenę już znamy; jeśli nie, silnik liczy jeszcze pozycję po ruchu. Ocenę zamieniamy
-na **szansę na wygraną** (wzór z Lichess): `W(cp) = 50 + 50 · (2 / (1 + e^(−0,00368208 · cp)) − 1)` — 0 cp to 50%,
-+3 piony ok. 75%, mat 100%. Klasa ruchu zależy od tego, o ile punktów procentowych **spadła** szansa na wygraną
-względem najlepszego ruchu: do 2 — znakomity, do 5 — dobry, do 10 — niedokładność, do 20 — błąd, powyżej —
-przeoczenie. Najlepszy ruch silnika to „najlepszy”, a jeśli drugi ruch był gorszy o ≥ 15 pkt — „świetny” (jedyny
-dobry ruch; nie dotyczy oczywistych odbić). „Genialny” to najlepszy (albo prawie) ruch, który poświęca figurę,
-w pozycji, która nie była już wygrana. Dzięki skali szans ten sam błąd o pół piona jest poważniejszy przy równej
-grze niż przy przewadze +8.
+`coach/review.py`. While the player is thinking, the engine analyses the position in the background (MultiPV 3, up to 1.6 s). If the player's move is
+among the top three, its score is already known; if not, the engine also searches the position after the move. The score is converted
+to a **win chance** (the Lichess formula): `W(cp) = 50 + 50 · (2 / (1 + e^(−0.00368208 · cp)) − 1)` — 0 cp is 50%,
++3 pawns about 75%, mate 100%. The move class depends on how many percentage points the win chance **dropped**
+compared to the best move: up to 2 — excellent, up to 5 — good, up to 10 — inaccuracy, up to 20 — mistake, above that —
+blunder. The engine's best move is "best", and if the second move was worse by ≥ 15 points — "great" (the only
+good move; does not apply to obvious recaptures). "Brilliant" is the best (or nearly best) move that sacrifices a piece,
+in a position that was not already winning. Thanks to the win-chance scale, the same half-pawn mistake weighs more in an equal
+game than at a +8 advantage.
 
-**Celność** ruchu: `103,1668 · e^(−0,04354 · spadek) − 3,1669` (%, jak na Lichess), celność partii to średnia.
-Ruchy trenera oceniamy tak samo, więc podsumowanie pokazuje celność obu stron.
+**Accuracy** of a move: `103.1668 · e^(−0.04354 · drop) − 3.1669` (%, as on Lichess); game accuracy is the average.
+The coach's moves are rated the same way, so the summary shows the accuracy of both sides.
 
-### Wyjaśnienia trenera
+### Coach explanations
 
-`coach/advice.py` — bez modelu językowego, tylko reguły i wyniki silnika:
+`coach/advice.py` — no language model, only rules and engine results:
 
-- **co robi ruch**: bicie, szach, roszada, promocja, atak na figurę cenniejszą od atakującej albo niebronioną
-  (dwie naraz = widełki), zabranie figury spod ataku, osłona wiszącej figury, rozwój lekkiej figury, pion w centrum,
-  wieża na otwartej linii,
-- **czym grozi przeciwnik**: wariant silnika po ruchu gracza — mat („Po tym ruchu przeciwnik daje mata: 1. Hxf7#”)
-  albo strata materiału, liczona do końca wymiany i ucięta na ruchu, który naprawdę zabiera materiał,
-- **co było lepsze**: najlepszy ruch i jego wariant — mat, zysk materiału albo cechy ruchu („rozwija skoczka”),
-- **groźby trenera** po jego ruchu: mat w jednym ruchu (sprawdzany „ruchem pustym”) albo wisząca figura gracza.
+- **what the move does**: capture, check, castling, promotion, attack on a piece more valuable than the attacker or an undefended one
+  (two at once = a fork), moving a piece out of attack, defending a hanging piece, developing a minor piece, a pawn in the centre,
+  a rook on an open file,
+- **what the opponent threatens**: the engine's line after the player's move — mate ("After this move the opponent mates: 1. Qxf7#")
+  or loss of material, counted to the end of the exchange and cut at the move that actually wins material,
+- **what was better**: the best move and its line — mate, material gain or the move's features ("develops the knight"),
+- **the coach's threats** after its move: mate in one (checked with a "null move") or a hanging piece of the player's.
 
-Komentarze są zapisane jako dane (klucz tłumaczenia + parametry), a tekst powstaje przy rysowaniu, więc zmiana
-języka w trakcie partii od razu tłumaczy też wcześniejsze komentarze.
+Comments are stored as data (translation key + parameters), and the text is produced at draw time, so switching
+the language mid-game immediately translates earlier comments as well.
 
-### Kalibracja i „Twój poziom”
+### Calibration and "Your level"
 
-`rating/coach_profile.py`. Każda partia z trenerem to jeden okres Glicko-2: przeciwnik ma ranking równy Elo
-trenera i RD = 80 (bo to Elo jest przybliżone), wynik `S` = 1 / 0,5 / 0 minus 0,1 za każdą podpowiedź i cofnięcie
-ruchu. Po **10 partiach** „Twój poziom” = ranking zaokrąglony do 25 (w granicach 400–2000); potem jest przeliczany
-**co 5 partii**, a nie po każdej — przeciwnik jest stabilny, a postęp widać jak awans na kolejny stopień.
-Przerwanie partii po co najmniej 5 ruchach liczy się jako poddanie (po potwierdzeniu); lekcje otwarć liczą się
-do poziomu dopiero wtedy, gdy po lekcji grasz dalej i partia się skończy.
+`rating/coach_profile.py`. Each game against the coach is one Glicko-2 period: the opponent's rating equals the coach's
+Elo with RD = 80 (because that Elo is approximate), the score `S` = 1 / 0.5 / 0 minus 0.1 for each hint and take-back.
+After **10 games** "Your level" = the rating rounded to 25 (within 400–2000); after that it is recalculated
+**every 5 games**, not after each one — the opponent stays stable, and progress feels like moving up a rank.
+Abandoning a game after at least 5 moves counts as resigning (after confirmation); opening lessons count towards
+the level only when you keep playing after the lesson and the game ends.
 
-## Silnik w C i sieć NNUE
+## C engine and NNUE network
 
-Silnik gry (`tacticmind/engine/native/`) to ten sam pomysł co wersja w Pythonie — negamax z alfa-betą, iterative
-deepening, quiescence, tablica transpozycji, MultiPV — ale napisany w C i rozbudowany o techniki, które opłacają się
-dopiero przy milionach węzłów na sekundę. Gra ładuje go jako bibliotekę przez `ctypes` (`engine/native.py`),
-a `engine/csearch.py` daje mu dokładnie ten sam interfejs co `Searcher` z Pythona: po każdej głębokości powstaje
-taki sam `SearchInfo` (MultiPV, statystyki, mini-drzewo), więc panel „Mózg AI”, trener i ocena zadań działają bez zmian.
+The game engine (`tacticmind/engine/native/`) is the same idea as the Python version — negamax with alpha-beta, iterative
+deepening, quiescence, a transposition table, MultiPV — but written in C and extended with techniques that only pay off
+at millions of nodes per second. The game loads it as a library via `ctypes` (`engine/native.py`),
+and `engine/csearch.py` gives it exactly the same interface as the Python `Searcher`: after each depth it produces
+the same `SearchInfo` (MultiPV, statistics, mini tree), so the "AI Brain" panel, the coach and puzzle evaluation work unchanged.
 
-**Plansza i ruchy.** Bitboardy (64-bitowa maska na każdy rodzaj figury), ataki gońców i wież z „magicznych”
-tablic (magiczne liczby znalezione losowaniem i zapisane w kodzie), legalność sprawdzana bez wykonywania ruchu (czy po ruchu
-coś atakuje króla). Perft zgadza się z wartościami referencyjnymi, np. Kiwipete na głębokości 5 = 193 690 690.
+**Board and moves.** Bitboards (a 64-bit mask for each piece type), bishop and rook attacks from "magic"
+tables (magic numbers found by random search and hard-coded), legality checked without making the move (whether after the move
+anything attacks the king). Perft matches the reference values, e.g. Kiwipete at depth 5 = 193 690 690.
 
-**Wyszukiwanie** (`search.c`):
+**Search** (`search.c`):
 
-- **PVS** — pierwszy ruch liczymy pełnym oknem, a resztę „zerowym oknem” (czy jest lepsza od α?); pełne
-  przeliczenie tylko wtedy, gdy ruch zaskoczy. Przy dobrym porządku ruchów to kilka razy mniej węzłów,
-- **okno aspiracyjne** w korzeniu (wynik blisko poprzedniej głębokości),
-- **null move pruning** — jeśli nawet po oddaniu ruchu przeciwnikowi pozycja jest ≥ β, gałąź na pewno da cięcie,
-- **late move reductions** — późne, ciche ruchy liczymy płycej (redukcja rośnie z głębokością i numerem ruchu),
-- **reverse futility, futility i late move pruning, razoring** — w płytkich węzłach pomijamy ruchy bez szans na
-  poprawę α,
-- **SEE** (static exchange evaluation) — przycinanie przegrywających wymian i ich porządkowanie,
-- **singular extensions** — ruch z tablicy transpozycji wyraźnie lepszy od reszty liczymy głębiej,
-- porządkowanie: ruch z TT, dobre bicia (MVV-LVA + SEE), killery, counter-move, historia i historia kontynuacji.
+- **PVS** — the first move is searched with a full window, the rest with a "zero window" (is it better than α?); a full
+  re-search only when a move surprises. With good move ordering this means several times fewer nodes,
+- an **aspiration window** at the root (score close to the previous depth),
+- **null move pruning** — if the position is ≥ β even after handing the move to the opponent, the branch will certainly cut off,
+- **late move reductions** — late, quiet moves are searched shallower (the reduction grows with depth and move number),
+- **reverse futility, futility and late move pruning, razoring** — in shallow nodes we skip moves with no chance of
+  improving α,
+- **SEE** (static exchange evaluation) — pruning losing exchanges and ordering them,
+- **singular extensions** — a transposition-table move clearly better than the rest is searched deeper,
+- ordering: TT move, good captures (MVV-LVA + SEE), killers, counter-move, history and continuation history.
 
-**NNUE** (`nnue.c`, `position.c`). Ocena to mała sieć neuronowa:
+**NNUE** (`nnue.c`, `position.c`). The evaluation is a small neural network:
 
 ```
-768 cech (kolor × figura × pole) z perspektywy strony na ruchu ──► 256 neuronów ─┐
-768 cech z perspektywy przeciwnika (te same wagi)               ──► 256 neuronów ─┴► SCReLU ─► 512 → 1
-                                                                       (8 warstw wyjściowych — według liczby figur)
+768 features (colour × piece × square) from the side to move ──► 256 neurons ─┐
+768 features from the opponent's side (same weights)          ──► 256 neurons ─┴► SCReLU ─► 512 → 1
+                                                                       (8 output layers — by piece count)
 ```
 
-Warstwę wyjściową wybieramy według liczby figur na planszy (8 „kubełków” od końcówki do debiutu): te same
-cechy znaczą w końcówce co innego niż w debiucie, a koszt jest zerowy — liczymy i tak tylko jedną warstwę.
+The output layer is chosen by the number of pieces on the board (8 "buckets" from endgame to opening): the same
+features mean something different in the endgame than in the opening, and the cost is zero — only one layer is computed anyway.
 
-Trik NNUE: pierwsza warstwa (akumulator) to suma kolumn wag dla figur na planszy, a ruch zmienia tylko 2–4 figury.
-Zamiast liczyć 768 × 256 mnożeń, przy każdym ruchu dodajemy i odejmujemy 2–4 kolumny po 256 liczb. Wagi są
-skwantowane do liczb całkowitych (int16), więc ocena kosztuje mniej niż ręczna funkcja oceny — silnik z siecią
-liczy 0,7–1,7 mln węzłów/s na jednym rdzeniu (zależnie od procesora), ok. 20–30 razy więcej niż silnik w Pythonie.
+The NNUE trick: the first layer (the accumulator) is a sum of weight columns for the pieces on the board, and a move changes only 2–4 pieces.
+Instead of 768 × 256 multiplications, each move adds and subtracts 2–4 columns of 256 numbers. The weights are
+quantized to integers (int16), so evaluation costs less than the hand-written evaluation function — the engine with the network
+searches 0.7–1.7 M nodes/s on a single core (depending on the CPU), about 20–30 times more than the Python engine.
 
-**Skąd sieć?** Cała wytrenowana w tym projekcie (`scripts/nnue/`), bez cudzych sieci i bez ocen innych silników:
+**Where does the network come from?** It is trained entirely in this project (`scripts/nnue/`), with no third-party networks and no evaluations from other engines:
 
-1. silnik z ręczną oceną gra sam ze sobą (8–9 losowych półruchów na start, ok. 5000 węzłów na ruch);
-   zapisujemy spokojne pozycje z oceną z wyszukiwania,
-2. trener w C (`train.c`, Adam, OpenMP) uczy sieć przewidywać `sigmoid(ocena / 400)`,
-3. silnik z nową siecią znowu gra sam ze sobą — jego oceny są lepsze, więc kolejna sieć też.
+1. the engine with the hand-written evaluation plays itself (8–9 random plies at the start, about 5000 nodes per move);
+   quiet positions are saved with the evaluation from the search,
+2. a trainer in C (`train.c`, Adam, OpenMP) teaches the network to predict `sigmoid(eval / 400)`,
+3. the engine with the new network plays itself again — its evaluations are better, so the next network is too.
 
-### Pomiary siły
+### Strength measurements
 
-Wszystkie mecze: `scripts/match.py`, 30 otwarć granych obydwoma kolorami, jeden wątek na silnik,
-Elo z 95% przedziałem ufności.
+All matches: `scripts/match.py`, 30 openings played with both colours, one thread per engine,
+Elo with a 95% confidence interval.
 
-**Kolejne sieci** (każda przeciw poprzedniej, 200 partii, 2 s + 0,02 s na partię):
+**Successive networks** (each against the previous one, 200 games, 2 s + 0.02 s per game):
 
-| Sieć | Dane treningowe | Wynik | Elo |
+| Network | Training data | Result | Elo |
 |---|---|---:|---:|
-| 1 | 2,2 mln pozycji z partii z ręczną oceną | 78 : 22 z ręczną oceną (100 partii) | +220 ± 63 |
-| 2 | 12 mln (+ partie sieci 1) | 150,5 : 49,5 | +193 ± 40 |
-| 3 | 20 mln (+ partie sieci 2) | 121,5 : 78,5 | +76 ± 39 |
-| 3 z 512 neuronami | te same 20 mln | 97 : 103 z siecią 3 | −10 ± 40 (dokładniejsza, ale 2× wolniejsza) |
-| 3 z kubełkami | te same 20 mln | 104,5 : 95,5 z siecią 3 | +16 ± 37 |
-| **4 (w grze)** | **27,3 mln** (+ partie sieci 3), kubełki | 108,5 : 91,5 z siecią 3 | +30 ± 41 |
+| 1 | 2.2 M positions from games with the hand-written evaluation | 78 : 22 vs the hand-written evaluation (100 games) | +220 ± 63 |
+| 2 | 12 M (+ network 1 games) | 150.5 : 49.5 | +193 ± 40 |
+| 3 | 20 M (+ network 2 games) | 121.5 : 78.5 | +76 ± 39 |
+| 3 with 512 neurons | the same 20 M | 97 : 103 vs network 3 | −10 ± 40 (more accurate, but 2× slower) |
+| 3 with buckets | the same 20 M | 104.5 : 95.5 vs network 3 | +16 ± 37 |
+| **4 (in the game)** | **27.3 M** (+ network 3 games), buckets | 108.5 : 91.5 vs network 3 | +30 ± 41 |
 
-**Przeciw Stockfishowi 16 z ograniczoną siłą** (`UCI_LimitStrength`, `UCI_Elo`; 100 partii na poziom,
-10 s + 0,1 s na partię):
+**Against Stockfish 16 with limited strength** (`UCI_LimitStrength`, `UCI_Elo`; 100 games per level,
+10 s + 0.1 s per game):
 
-| Stockfish `UCI_Elo` | Wygrane / remisy / porażki | Wynik | Różnica Elo |
+| Stockfish `UCI_Elo` | Wins / draws / losses | Score | Elo difference |
 |---:|:---:|---:|---:|
-| 2400 | 90 / 5 / 5 | 92,5% | +436 ± 136 |
+| 2400 | 90 / 5 / 5 | 92.5% | +436 ± 136 |
 | 2700 | 70 / 12 / 18 | 76% | +200 ± 75 |
 | 3000 | 23 / 24 / 53 | 35% | −108 ± 62 |
 
-Najlepiej pasujące Elo (największa wiarygodność ze wszystkich 300 partii): **ok. 2890** (95%: 2840–2940)
-w skali `UCI_Elo` Stockfisha, która jest kalibrowana do listy CCRL 40/4. To przybliżenie: kalibracja
-Stockfisha dotyczy wolniejszego tempa, a nasze mecze grane były szybciej.
+Best-fitting Elo (maximum likelihood over all 300 games): **about 2890** (95%: 2840–2940)
+on Stockfish's `UCI_Elo` scale, which is calibrated to the CCRL 40/4 list. This is an approximation: Stockfish's
+calibration refers to a slower time control, while our matches were played faster.
 
-**Przeciw staremu silnikowi w Pythonie** (300 ms na ruch): 20 : 0.
+**Against the old Python engine** (300 ms per move): 20 : 0.
 
-Uruchomienie u siebie (potrzebny `pip install chess` i Stockfish):
+To run it yourself (requires `pip install chess` and Stockfish):
 
 ```bash
 python scripts/build_engine.py
@@ -678,68 +679,68 @@ python scripts/match.py --a tacticmind/engine/native/build/tmengine --b stockfis
     --b-option UCI_LimitStrength=true --b-option UCI_Elo=2700 --tc 10+0.1 --games 100 --concurrency 4
 ```
 
-## Pomiary: minimaks vs alfa-beta
+## Benchmarks: minimax vs alpha-beta
 
-Ta sama pozycja, ta sama głębokość i ta sama funkcja oceny (bez quiescence i bez tablicy transpozycji),
-więc wynik wszystkich trzech wariantów jest identyczny — różni się tylko liczba odwiedzonych węzłów.
-Pomiar: `python scripts/benchmark.py` (CPython 3.14, jeden rdzeń). Minimaks na głębokości 5 w debiucie
-pominięto — szacunkowo ok. 28,6 mln węzłów (kilkanaście minut w Pythonie).
+Same position, same depth and same evaluation function (no quiescence and no transposition table),
+so all three variants return an identical result — only the number of visited nodes differs.
+Measured with `python scripts/benchmark.py` (CPython 3.14, one core). Minimax at depth 5 in the opening
+was skipped — an estimated 28.6 M nodes (a dozen or so minutes in Python).
 
-**Debiut włoski (gra środkowa)** — `r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3` (31 legalnych ruchów)
+**Italian Game (middlegame)** — `r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3` (31 legal moves)
 
-| Głębokość | Minimaks | Alfa-beta | Alfa-beta + porządkowanie | Oszczędność alfa-bety | Oszczędność z porządkowaniem | Ocena |
+| Depth | Minimax | Alpha-beta | Alpha-beta + ordering | Alpha-beta savings | Savings with ordering | Eval |
 |---:|---:|---:|---:|---:|---:|:---:|
-| 1 | 32 (0,00 s) | 32 (0,00 s) | 32 (0,00 s) | 0,0% | 0,0% | −0.2 |
-| 2 | 1 048 (0,04 s) | 660 (0,02 s) | 285 (0,01 s) | 37,0% | 72,8% | +1.3 |
-| 3 | 32 072 (1,04 s) | 2 762 (0,09 s) | 2 076 (0,07 s) | 91,4% | 93,5% | −2.1 |
-| 4 | 1 040 115 (33,24 s) | 60 313 (1,86 s) | 15 488 (0,48 s) | 94,2% | 98,5% | +1.4 |
-| 5 | — (ok. 28,6 mln) | 792 174 (24,84 s) | 73 121 (2,23 s) | — | 90,8% względem alfa-bety | −1.8 |
+| 1 | 32 (0.00 s) | 32 (0.00 s) | 32 (0.00 s) | 0.0% | 0.0% | −0.2 |
+| 2 | 1 048 (0.04 s) | 660 (0.02 s) | 285 (0.01 s) | 37.0% | 72.8% | +1.3 |
+| 3 | 32 072 (1.04 s) | 2 762 (0.09 s) | 2 076 (0.07 s) | 91.4% | 93.5% | −2.1 |
+| 4 | 1 040 115 (33.24 s) | 60 313 (1.86 s) | 15 488 (0.48 s) | 94.2% | 98.5% | +1.4 |
+| 5 | — (about 28.6 M) | 792 174 (24.84 s) | 73 121 (2.23 s) | — | 90.8% relative to alpha-beta | −1.8 |
 
-**Końcówka (pozycja 3 z Chess Programming Wiki)** — `8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1` (14 legalnych ruchów)
+**Endgame (position 3 from the Chess Programming Wiki)** — `8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1` (14 legal moves)
 
-| Głębokość | Minimaks | Alfa-beta | Alfa-beta + porządkowanie | Oszczędność alfa-bety | Oszczędność z porządkowaniem | Ocena |
+| Depth | Minimax | Alpha-beta | Alpha-beta + ordering | Alpha-beta savings | Savings with ordering | Eval |
 |---:|---:|---:|---:|---:|---:|:---:|
-| 1 | 15 (0,00 s) | 15 (0,00 s) | 15 (0,00 s) | 0,0% | 0,0% | +1.2 |
-| 2 | 206 (0,00 s) | 131 (0,00 s) | 30 (0,00 s) | 36,4% | 85,4% | +0.9 |
-| 3 | 3 018 (0,05 s) | 503 (0,01 s) | 394 (0,01 s) | 83,3% | 86,9% | +1.5 |
-| 4 | 46 256 (0,71 s) | 1 733 (0,03 s) | 1 047 (0,02 s) | 96,3% | 97,7% | −0.1 |
-| 5 | 720 880 (11,13 s) | 32 498 (0,49 s) | 6 946 (0,11 s) | 95,5% | 99,0% | +1.8 |
+| 1 | 15 (0.00 s) | 15 (0.00 s) | 15 (0.00 s) | 0.0% | 0.0% | +1.2 |
+| 2 | 206 (0.00 s) | 131 (0.00 s) | 30 (0.00 s) | 36.4% | 85.4% | +0.9 |
+| 3 | 3 018 (0.05 s) | 503 (0.01 s) | 394 (0.01 s) | 83.3% | 86.9% | +1.5 |
+| 4 | 46 256 (0.71 s) | 1 733 (0.03 s) | 1 047 (0.02 s) | 96.3% | 97.7% | −0.1 |
+| 5 | 720 880 (11.13 s) | 32 498 (0.49 s) | 6 946 (0.11 s) | 95.5% | 99.0% | +1.8 |
 
-Wnioski:
+Conclusions:
 
-- na głębokości 1 cięć nie ma (liście nie mają rodzeństwa do odcięcia), od głębokości 3 alfa-beta pomija > 80% węzłów,
-- porządkowanie ruchów zbliża alfa-betę do ideału `b^(d/2)`: na głębokości 5 w debiucie 73 tys. zamiast 792 tys. węzłów,
-- skaczące oceny (−2.1 / +1.4 / −1.8) to efekt horyzontu przy stałej głębokości — dlatego właściwy silnik gry
-  używa quiescence search.
+- at depth 1 there are no cutoffs (the leaves have no siblings to cut), from depth 3 alpha-beta skips > 80% of nodes,
+- move ordering brings alpha-beta close to the ideal `b^(d/2)`: at depth 5 in the opening 73 k instead of 792 k nodes,
+- the jumping evaluations (−2.1 / +1.4 / −1.8) are the horizon effect at a fixed depth — which is why the actual game engine
+  uses quiescence search.
 
-Pełny silnik (z iterative deepening, TT i quiescence) liczy w Pythonie ok. 25–60 tys. węzłów/s; w typowym
-zadaniu dochodzi do głębokości 6–9 w kilka sekund, a maty w 3 znajduje w ok. 0,1 s (głębokość 3 z przedłużeniem
-szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie na stronie „Jak działa AI?”.
+The full engine (with iterative deepening, TT and quiescence) searches about 25–60 k nodes/s in Python; in a typical
+puzzle it reaches depth 6–9 in a few seconds, finds mates in 3 in about 0.1 s (depth 3 with the check
+extension) and confirms them within 2 s. The same comparison can be run interactively on the "How does the AI work?" page.
 
-## Testy
+## Tests
 
-`python -m pytest` — 173 testów, m.in.:
+`python -m pytest` — 173 tests, including:
 
-| Plik | Co sprawdza |
+| File | What it checks |
 |---|---|
-| `test_perft.py` | perft z pozycji startowej (1–4: 20, 400, 8 902, 197 281), Kiwipete (1–3: 48, 2 039, 97 862), pozycja 3 (1–4: 14, 191, 2 812, 43 238) oraz pozycje 4 i 5 z CPW; zgodność FEN i przyrostowego hasza/oceny |
-| `test_search.py` | maty w 1, 2 i 3 (pozycje klasyczne i z bazy Lichess, także dla czarnych), szybszy mat, pat/mat w korzeniu, MultiPV, statystyki, drzewo, przerwanie, minimaks = alfa-beta przy mniejszej liczbie węzłów |
-| `test_native.py` | silnik w C: perft (5 pozycji), maty w 1–3, pat/mat w korzeniu, MultiPV, statystyki i mini-drzewo, przerwanie i liczniki na żywo, symetria oceny NNUE, dołączona sieć, wybór silnika C, mat w setnym półruchu, niemożliwe bicie w przelocie w FEN |
-| `test_engine_process.py` | proces silnika: `info` po każdej głębokości, przerwanie nowym zapytaniem, tryb porównawczy |
-| `test_rating.py` | E i ΔR Elo dla przykładowych wartości, K w kalibracji, przykład Glicko-2 z artykułu, wynik S i kara za czas, profil i zapis |
-| `test_selector.py` | selektor trafia w docelowy przedział rankingu, łatwiejsze zadanie po 3 porażkach, bonus po 5 sukcesach, ~30% słabych motywów, brak powtórek, różnorodność |
-| `test_puzzles.py` | dane Lichess (każdy ruch legalny w naszym generatorze i w python-chess), przebieg zadania, inny mat, „dobry ruch, ale jest lepszy”, notacja polska, strumień myśli |
-| `test_coach.py` | każda linia otwarcia legalna i objaśniona w obu językach, nazwy debiutów i transpozycje, książka otwarć, siła trenera rośnie z Elo (silny gra najlepsze ruchy, słaby losuje), szansa na wygraną i celność, progi klas ruchów, „świetny” i „genialny”, wyjaśnienia (wisząca figura, przegapiony i dopuszczony mat, widełki, groźby trenera), przebieg lekcji i cofanie ruchów, wynik partii i kara za pomoc, kalibracja 10 partii i zmiana poziomu co 5, zapis profilu |
-| `test_pacing.py` | limiter FPS trzyma równe odstępy między klatkami, licznik FPS, zapis ustawień FPS w profilu (błędne wartości → 60) |
-| `test_i18n.py` | każdy język ma komplet kluczy i te same pola `{…}`, liczba mnoga (polska: 1/2–4/5+), formaty liczb, litery figur |
-| `test_web.py` | serwer interfejsu TypeScript: ustawienia (walidacja i zapis), nawigacja i migawki ekranów, rozwiązanie zadania i partia z trenerem przez akcje, promocja i legalne ruchy w migawce, strona/teksty/stan przez HTTP, strumień SSE, odrzucanie obcych żądań (Host, brak nagłówka, zły JSON, wyjście poza katalog), tryb `--server` dla okna Tauri |
-| `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, okienko ustawień (limit FPS, F3, Esc), zmiana języka w trakcie zadania, wszystkie ekrany (także trenera) w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; partia z trenerem (ruch z teorii, przeoczenie → pauza i strzałka lepszego ruchu, cofnięcie, poddanie, podsumowanie i kalibracja), lekcja otwarcia od błędu do końca linii, menu trenera i portret; demonstracja alfa-bety |
+| `test_perft.py` | perft from the starting position (1–4: 20, 400, 8 902, 197 281), Kiwipete (1–3: 48, 2 039, 97 862), position 3 (1–4: 14, 191, 2 812, 43 238) and positions 4 and 5 from CPW; FEN round-trip and incremental hash/evaluation consistency |
+| `test_search.py` | mates in 1, 2 and 3 (classic positions and ones from the Lichess database, also for Black), faster mate, stalemate/mate at the root, MultiPV, statistics, tree, interruption, minimax = alpha-beta with fewer nodes |
+| `test_native.py` | C engine: perft (5 positions), mates in 1–3, stalemate/mate at the root, MultiPV, statistics and mini tree, interruption and live counters, NNUE evaluation symmetry, bundled network, C engine selection, mate on the hundredth ply, impossible en passant capture in a FEN |
+| `test_engine_process.py` | engine process: `info` after each depth, interruption by a new request, comparison mode |
+| `test_rating.py` | Elo E and ΔR for sample values, K during calibration, the Glicko-2 example from the paper, score S and the time penalty, profile and saving |
+| `test_selector.py` | the selector hits the target rating range, an easier puzzle after 3 failures, a bonus after 5 successes, ~30% weak themes, no repeats, variety |
+| `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
+| `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
+| `test_pacing.py` | the FPS limiter keeps even intervals between frames, FPS counter, saving FPS settings in the profile (invalid values → 60) |
+| `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
+| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), `--server` mode for the Tauri window |
+| `test_ui_smoke.py` | the game run headless: solving a puzzle, a mistake, a brilliant move, stepping back ◀ ▶ (with the animation restoring a captured piece), drag dead zone, sounds, volume slider and full screen, settings pop-up (FPS limit, F3, Esc), switching language mid-puzzle, all screens (including the coach) at resolutions from 430×640 to 2560×1440, drawing arrows with the right mouse button; a coach game (book move, blunder → pause and an arrow for the better move, take-back, resignation, summary and calibration), an opening lesson from a mistake to the end of the line, the coach menu and portrait; the alpha-beta demonstration |
 
-Interfejs TypeScript ma własne testy (`cd web && npm test`, vitest): FEN, ruchy na próbę (roszada, bicie w przelocie,
-promocja), animacje przejść między pozycjami, strzałki, pasek oceny, tłumaczenia i liczba mnoga.
+The TypeScript interface has its own tests (`cd web && npm test`, vitest): FEN, trial moves (castling, en passant,
+promotion), transition animations between positions, arrows, the evaluation bar, translations and plurals.
 
-Kod jest sprawdzany także narzędziami `ruff` i `mypy` (typy we wszystkich funkcjach, bez `type: ignore`
-w kodzie gry):
+The code is also checked with `ruff` and `mypy` (types on all functions, no `type: ignore`
+in the game code):
 
 ```bash
 pip install -r requirements-dev.txt
@@ -747,138 +748,138 @@ ruff check .
 mypy tacticmind scripts main.py --disallow-untyped-defs
 ```
 
-## Zadania z bazy Lichess
+## Puzzles from the Lichess database
 
-Baza: <https://database.lichess.org/lichess_db_puzzle.csv.zst> (licencja **CC0**). Kolumny:
+Database: <https://database.lichess.org/lichess_db_puzzle.csv.zst> (license **CC0**). Columns:
 `PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags`.
 
 ```bash
-# pobierz bazę (ok. 300 MB), potem:
-python scripts/build_puzzles.py lichess_db_puzzle.csv.zst                 # 3000 zadań → tacticmind/data/puzzles.json
+# download the database (about 300 MB), then:
+python scripts/build_puzzles.py lichess_db_puzzle.csv.zst                 # 3000 puzzles → tacticmind/data/puzzles.json
 python scripts/build_puzzles.py lichess_db_puzzle.csv.zst --count 50 --out tacticmind/data/starter_puzzles.json
 ```
 
-Skrypt bierze zadania z `Popularity > 80` i `NbPlays > 500` o rankingu 600–2800, dzieli je na koszyki co 100 punktów,
-z każdego koszyka losuje tyle samo zadań (reservoir sampling ze stałym ziarnem), preferując rzadkie motywy,
-i sprawdza legalność wszystkich ruchów. Plik `.zst` czyta modułem `compression.zstd` z Pythona 3.14
-(w starszym Pythonie wystarczy go rozpakować: `unzstd`).
+The script takes puzzles with `Popularity > 80` and `NbPlays > 500` rated 600–2800, splits them into 100-point buckets,
+samples the same number of puzzles from each bucket (reservoir sampling with a fixed seed), preferring rare themes,
+and checks that all moves are legal. It reads the `.zst` file with the `compression.zstd` module from Python 3.14
+(on older Python just decompress it first: `unzstd`).
 
-W repozytorium są oba pliki: **zestaw startowy** (50 prawdziwych zadań, rankingi 649–2784, ponad 50 motywów)
-i **pełny zestaw** 3000 zadań. Gra używa pełnego zestawu, a gdy go nie ma — startowego.
+The repository contains both files: the **starter set** (50 real puzzles, ratings 649–2784, over 50 themes)
+and the **full set** of 3000 puzzles. The game uses the full set, and falls back to the starter set when it is missing.
 
-Uwaga na format Lichess: `FEN` to pozycja **przed** ruchem przeciwnika; pierwszy ruch z `Moves` wykonuje przeciwnik,
-a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jego stronę).
+Note on the Lichess format: `FEN` is the position **before** the opponent's move; the first move in `Moves` is played by the opponent,
+and the player plays the side to move after it (the board flips to that side).
 
-## Decyzje projektowe
+## Design decisions
 
-1. **Python + pygame zamiast Vite/React/TypeScript.** Pierwotna specyfikacja (PROMPT.md) zakładała stos webowy;
-   na życzenie zamawiającego całość jest w Pythonie. Odpowiedniki: `react-chessboard` → własna szachownica
-   w pygame (`ui/board_view.py`: przeciąganie, klik-klik, kropki, promocja, animacje, strzałki); `chess.js` →
-   `python-chess` (tylko interfejs); Web Worker → osobny proces `multiprocessing`; Recharts → własne wykresy
-   (`ui/charts.py`); Vitest → pytest; localStorage → plik JSON w katalogu domowym; Tailwind → `ui/theme.py`;
-   TypeScript strict → adnotacje typów + mypy (`--disallow-untyped-defs`).
-2. **0x88 + legalność przez sprawdzenie króla.** Prostsze i pewniejsze niż wykrywanie związań; potwierdzone perftem.
-3. **Przyrostowy hasz i ocena** (materiał + PST) w `make_move` — w czystym Pythonie to największa oszczędność
-   w liściach.
-4. **Proces zamiast wątku** dla silnika: wątki Pythona dzielą GIL i przycinałyby animacje; osobny proces liczy
-   na innym rdzeniu. Start „spawn” działa tak samo na Linuksie, Windowsie i macOS.
-5. **Przerwanie liczenia**: flaga `multiprocessing.Event` sprawdzana co 1024 węzły + wykrywanie nowego zapytania
-   w kolejce. Przerwanie w środku drzewa cofa wszystkie wykonane ruchy, wynik ostatniej pełnej głębokości zostaje.
-6. **MultiPV w jednym przebiegu** (α = wynik 3. najlepszego ruchu) zamiast trzykrotnego liczenia korzenia.
-7. **Silnik w Pythonie bez null-move pruning i LMR** — ta wersja ma być czytelna i służy do wyjaśniania algorytmu.
-   Silnik w C ich używa, bo bez nich nie da się grać na poziomie mistrzowskim; null move jest wyłączony, gdy strona
-   na ruchu ma same piony (tam zugzwang jest najczęstszy).
-8. **Glicko-2 jako domyślny system** (bonus ze specyfikacji), z możliwością przełączenia na Elo w statystykach.
-   Oba rankingi liczone są zawsze, więc przełączenie nie traci danych. Minimalne RD = 50 (bez tego po setkach
-   zadań ranking prawie przestałby się zmieniać). „± RD” to jedno odchylenie standardowe.
-9. **Wynik zadania ustalany raz**: przy rozwiązaniu, pierwszym błędzie albo pokazaniu rozwiązania (jak na
-   chess.com). Po błędzie można dokończyć zadanie, ale ranking już się nie zmienia; panel przechodzi w tryb
-   Pełny, żeby AI wyjaśniło, co poszło nie tak.
-10. **Tryb Pełny w trakcie rozwiązywania** zdradza rozwiązanie, więc wymaga potwierdzenia i liczy zadanie jako
-    nierozwiązane. Przejście do następnego zadania jest możliwe dopiero po jego rozstrzygnięciu.
-11. **„Dobry ruch, ale jest lepszy”**: jeśli ruch gracza jest wśród 3 linii MultiPV, używamy jego oceny z tej
-    samej głębokości co najlepszy ruch; w przeciwnym razie silnik osobno liczy pozycję po ruchu (1,6 s). Ta sama
-    analiza daje odpowiedź przeciwnika pokazywaną po błędzie.
-12. **Ranking zadania ukryty do końca** (jak na chess.com); okienko „Dlaczego to zadanie?” podaje docelowy
-    ranking („ok. 1380”), a dokładny widać po zakończeniu.
-13. **Kara za czas** liczona od przeciętnego czasu z ostatnich 20 rozwiązanych zadań (co najmniej 3), liniowo od
-    3× do 6× średniej (maks. −0,2).
-14. **Figury z symboli Unicode** (czcionka Noto Sans Symbols 2) i **dźwięki syntezowane w kodzie** — żadnych
-    plików graficznych ani dźwiękowych z niejasną licencją. Dźwięki powstają w formacie, w jakim system otworzył
-    kartę dźwiękową (mono/stereo), w osobnym wątku przy starcie, z małym buforem (niskie opóźnienie). Suwak
-    głośności działa z krzywą kwadratową (głośność = wartość²), bo ucho odbiera głośność logarytmicznie — dzięki
-    temu połowa suwaka to wyraźnie ciszej, a nie prawie tak samo głośno. Symbole króla i hetmana są w tej czcionce wąskie,
-    więc poszerzamy je w poziomie (×1,22 i ×1,14) podczas zmniejszania z podwójnej rozdzielczości.
-15. **Notacja w języku interfejsu** (po polsku K, H, W, G, S; po angielsku K, Q, R, B, N) w panelu i komunikatach;
-    silnik i protokół używają UCI.
-16. **Responsywność i skalowanie**: interfejs jest projektowany dla okna 1360×860 (albo 560×1000 w układzie
-    wąskim), a wszystkie wymiary i czcionki mnożymy przez współczynnik zależny od rozmiaru okna (`ui/scale.py`).
-    Teksty dopasowują się do pól funkcjami `fonts.fit` / `fonts.fit_wrapped` (najpierw mniejsza czcionka,
-    potem „…”), a ich układ jest zapamiętywany, żeby nie liczyć go 60 razy na sekundę.
-    Szeroki układ (panel obok) albo wąski jak na telefonie (panel pod
-    szachownicą, poziomy pasek oceny, przewijana strona).
-17. **Dwa zestawy zadań w repozytorium**: zestaw startowy wymagany przez specyfikację oraz pełny zestaw
-    3000 zadań wygenerowany skryptem, żeby dobór zadań miał z czego wybierać bez pobierania bazy.
-18. **Własny wygląd zamiast kopii chess.com**: granatowe tło, turkus jako kolor gracza, fiolet jako kolor AI,
-    stalowo-niebieska szachownica. Jakość: wszystkie kształty (zaokrąglone karty, koła, strzałki, ikony) rysujemy
-    w potrójnej rozdzielczości i zmniejszamy filtrem (`ui/gfx.py`), figury w podwójnej. Gotowe kształty trafiają
-    do pamięci podręcznej w formacie ekranu — interfejs mieści się w 60 kl./s nawet przy 2560×1440.
-19. **Tłumaczenia jako słowniki** (`tacticmind/i18n/`): każdy język to jeden plik z kluczami; brakujący klucz spada
-    na polski. Komunikaty na ekranie gry są przechowywane jako funkcje zwracające tekst, a strumień myśli jest
-    odtwarzany z zapisanych wyników silnika — dzięki temu zmiana języka działa natychmiast, także w trakcie zadania.
-    Żeby dodać język, wystarczy skopiować `en.py`, przetłumaczyć wartości i dopisać kod w `i18n/__init__.py`.
-20. **Strzałki gracza** działają jak na chess.com/lichess (prawy przycisk, kolory z Shift/Ctrl/Alt, L dla skoczka)
-    i znikają po ruchu, żeby nie myliły się ze strzałkami silnika.
-21. **Trener w tej samej aplikacji** (zakładka „Trener”), a nie osobny program: korzysta z tego samego silnika,
-    profilu, dźwięków, języków i wyglądu. Ma osobny ranking (partie z trenerem), żeby wyniki w zadaniach i w partiach
-    się nie mieszały.
-22. **Siła trenera przez głębokość + losowanie softmax + przeoczenia** zamiast np. sztucznego psucia funkcji oceny:
-    słabszy trener gra „ludzkie” słabsze ruchy (bliskie najlepszym), a nie dziwne ruchy, których nikt by nie zagrał.
-23. **Ocena ruchów na skali szansy na wygraną**, a nie w centypionach — ten sam spadek oceny znaczy co innego
-    w równej i w wygranej pozycji. Do oceny ruchów gracza trener używa osobnej, dokładniejszej analizy niż do własnej
-    gry, więc słaby trener nadal dobrze ocenia ruchy gracza.
-24. **„Twój poziom” zmienia się co 5 partii** (po 10 partiach kalibracji), zgodnie z założeniem: przeciwnik jest
-    stabilny i nie „ucieka” po jednej wygranej. Pomoc trenera (podpowiedzi, cofnięcia) obniża wynik do poziomu,
-    żeby poziom nie rósł dzięki cofaniu błędów.
-25. **Własna, ręcznie przygotowana książka otwarć** (15 linii po 12–16 półruchów) zamiast pobierania gotowej bazy:
-    każdy ruch ma objaśnienie po polsku i po angielsku, a nazwy debiutów są rozpoznawane po pozycji (EPD).
+1. **Python + pygame instead of Vite/React/TypeScript.** The original specification (PROMPT.md) assumed a web stack;
+   at the client's request everything is in Python. Equivalents: `react-chessboard` → a custom board
+   in pygame (`ui/board_view.py`: dragging, click-click, dots, promotion, animations, arrows); `chess.js` →
+   `python-chess` (interface only); Web Worker → a separate `multiprocessing` process; Recharts → custom charts
+   (`ui/charts.py`); Vitest → pytest; localStorage → a JSON file in the home directory; Tailwind → `ui/theme.py`;
+   TypeScript strict → type annotations + mypy (`--disallow-untyped-defs`).
+2. **0x88 + legality via a king check.** Simpler and more reliable than detecting pins; confirmed by perft.
+3. **Incremental hash and evaluation** (material + PST) in `make_move` — in pure Python this is the biggest saving
+   at the leaves.
+4. **A process instead of a thread** for the engine: Python threads share the GIL and would make animations stutter; a separate process runs
+   on another core. The "spawn" start method works the same on Linux, Windows and macOS.
+5. **Interrupting the search**: a `multiprocessing.Event` flag checked every 1024 nodes + detection of a new request
+   in the queue. Interrupting mid-tree unmakes all moves made, and the result of the last complete depth is kept.
+6. **MultiPV in a single pass** (α = score of the 3rd best move) instead of searching the root three times.
+7. **Python engine without null-move pruning and LMR** — this version is meant to be readable and serves to explain the algorithm.
+   The C engine uses them, because master-level play is impossible without them; null move is disabled when the side
+   to move has only pawns (where zugzwang is most common).
+8. **Glicko-2 as the default system** (a bonus from the specification), with the option to switch to Elo in the statistics.
+   Both ratings are always computed, so switching loses no data. Minimum RD = 50 (without it, after hundreds
+   of puzzles the rating would almost stop changing). "± RD" is one standard deviation.
+9. **The puzzle result is decided once**: on solving, on the first mistake or on revealing the solution (as on
+   chess.com). After a mistake you can finish the puzzle, but the rating no longer changes; the panel switches to
+   Full mode so the AI can explain what went wrong.
+10. **Full mode while solving** gives away the solution, so it requires confirmation and counts the puzzle as
+    unsolved. Moving on to the next puzzle is possible only once the current one is settled.
+11. **"Good move, but there is a better one"**: if the player's move is among the 3 MultiPV lines, we use its score from the
+    same depth as the best move; otherwise the engine searches the position after the move separately (1.6 s). The same
+    analysis provides the opponent's reply shown after a mistake.
+12. **Puzzle rating hidden until the end** (as on chess.com); the "Why this puzzle?" pop-up gives the target
+    rating ("about 1380"), and the exact one is shown once the puzzle is over.
+13. **Time penalty** computed from the average time of the last 20 solved puzzles (at least 3), linearly from
+    3× to 6× the average (max. −0.2).
+14. **Pieces from Unicode symbols** (Noto Sans Symbols 2 font) and **sounds synthesized in code** — no
+    image or sound files with unclear licensing. Sounds are generated in the format in which the system opened
+    the sound card (mono/stereo), in a separate thread at start-up, with a small buffer (low latency). The volume
+    slider uses a quadratic curve (volume = value²), because the ear perceives loudness logarithmically — so
+    half the slider is noticeably quieter, not almost as loud. The king and queen symbols are narrow in this font,
+    so we widen them horizontally (×1.22 and ×1.14) while downscaling from double resolution.
+15. **Notation in the interface language** (in English K, Q, R, B, N; in the Polish locale K, H, W, G, S) in the panel and messages;
+    the engine and the protocol use UCI.
+16. **Responsiveness and scaling**: the interface is designed for a 1360×860 window (or 560×1000 in the narrow
+    layout), and all dimensions and fonts are multiplied by a factor that depends on the window size (`ui/scale.py`).
+    Texts fit their boxes via `fonts.fit` / `fonts.fit_wrapped` (first a smaller font,
+    then "…"), and their layout is cached so it is not recomputed 60 times per second.
+    A wide layout (panel beside the board) or a narrow, phone-like one (panel below the
+    board, horizontal evaluation bar, scrolling page).
+17. **Two puzzle sets in the repository**: the starter set required by the specification and the full set of
+    3000 puzzles generated by the script, so puzzle selection has plenty to choose from without downloading the database.
+18. **A custom look instead of a chess.com copy**: a navy background, teal as the player's colour, purple as the AI's colour,
+    a steel-blue board. Quality: all shapes (rounded cards, circles, arrows, icons) are drawn
+    at triple resolution and downscaled with a filter (`ui/gfx.py`), pieces at double. Finished shapes go
+    into a cache in the screen format — the interface stays at 60 fps even at 2560×1440.
+19. **Translations as dictionaries** (`tacticmind/i18n/`): each language is one file of keys; a missing key falls
+    back to English (the default language). On-screen game messages are stored as functions returning text, and the stream of thoughts is
+    rebuilt from the stored engine results — so switching the language takes effect immediately, even mid-puzzle.
+    To add a language, copy `en.py`, translate the values and register the code in `i18n/__init__.py`.
+20. **Player arrows** work like on chess.com/lichess (right button, colours with Shift/Ctrl/Alt, an L for the knight)
+    and disappear after a move so they are not confused with the engine's arrows.
+21. **The coach in the same application** (the "Coach" tab), not a separate program: it uses the same engine,
+    profile, sounds, languages and look. It has a separate rating (coach games) so that puzzle and game results
+    do not mix.
+22. **Coach strength via depth + softmax sampling + blunders** instead of, e.g., artificially degrading the evaluation function:
+    a weaker coach plays "human" weaker moves (close to the best ones), not strange moves nobody would play.
+23. **Rating moves on a win-chance scale**, not in centipawns — the same drop in evaluation means something different
+    in an equal and in a winning position. To rate the player's moves the coach uses a separate, more accurate analysis than for its own
+    play, so even a weak coach still rates the player's moves well.
+24. **"Your level" changes every 5 games** (after 10 calibration games), as intended: the opponent is
+    stable and does not "run away" after a single win. The coach's help (hints, take-backs) lowers the result counted towards the level,
+    so that the level does not rise thanks to taking back mistakes.
+25. **A custom, hand-made opening book** (15 lines of 12–16 plies) instead of downloading a ready-made database:
+    every move has an explanation in English and in Polish, and opening names are recognized from the position (EPD).
 
-## Etapy pracy
+## Work stages
 
-1. **Szkielet, szachownica, zadania** — pakiet `tacticmind`, okno pygame, własna szachownica, zestaw startowy
-   i przebieg zadania (`puzzles/session.py`).
-2. **Silnik: plansza i generator** — 0x88, FEN, make/unmake, Zobrist, perft (wszystkie wartości referencyjne zgodne).
-3. **Wyszukiwanie** — ocena, negamax + alfa-beta, ID, quiescence, TT, MultiPV, proces silnika, testy matów.
-4. **Panel „Mózg AI”** — pasek oceny, strzałki, liczniki na żywo, linie kandydujące, strumień myśli, drzewo, tryby widoczności.
-5. **Ranking i dobór zadań** — Elo, Glicko-2, model gracza, selektor, okienko „Dlaczego to zadanie?”.
-6. **Statystyki, ekran startowy, „Jak działa AI?”** — wykresy, porównanie na żywo, demonstracja alfa-bety krok
-   po kroku, dźwięki, animacje, responsywność.
-7. **Skrypt `build_puzzles.py` i README** — 3000 zadań z bazy Lichess, pomiary `scripts/benchmark.py`.
-8. **Druga wersja interfejsu** — własny wygląd (zamiast podobnego do chess.com), wygładzona grafika, skalowanie
-   do rozdzielczości okna i dopasowanie tekstów, nowe animacje, język angielski (system tłumaczeń gotowy na kolejne
-   języki), strzałki i zaznaczenia rysowane prawym przyciskiem myszy.
-9. **Gra z trenerem** — książka otwarć z objaśnieniami, siła gry zależna od Elo, klasy ruchów i celność, wyjaśnienia
-   trenera, kalibracja i „Twój poziom” co 5 partii, portret trenera z minami, ekrany „Trener” i partii, testy.
-10. **Silnik w C z NNUE** — bitboardy, PVS z przycinaniem, sieć NNUE z przyrostową aktualizacją, własny generator
-    danych i trener sieci, cztery rundy uczenia (27 mln pozycji), ok. 2890 Elo w skali Stockfisha z ograniczoną siłą.
-11. **Interfejs w TypeScript i okno Tauri 2** — ostry interfejs (SVG zamiast pikseli pygame) w React + TypeScript,
-    logika gry nadal w Pythonie za lokalnym serwerem (HTTP + SSE), ustawienia z licznikiem FPS i limitem klatek,
-    okno aplikacji w Tauri 2, które samo uruchamia Pythona; dawny interfejs dostępny przez `--pygame`.
+1. **Skeleton, board, puzzles** — the `tacticmind` package, a pygame window, a custom board, the starter set
+   and the puzzle flow (`puzzles/session.py`).
+2. **Engine: board and generator** — 0x88, FEN, make/unmake, Zobrist, perft (all reference values match).
+3. **Search** — evaluation, negamax + alpha-beta, ID, quiescence, TT, MultiPV, the engine process, mate tests.
+4. **The "AI Brain" panel** — evaluation bar, arrows, live counters, candidate lines, stream of thoughts, tree, visibility modes.
+5. **Rating and puzzle selection** — Elo, Glicko-2, player model, selector, the "Why this puzzle?" pop-up.
+6. **Statistics, start screen, "How does the AI work?"** — charts, live comparison, a step-by-step alpha-beta
+   demonstration, sounds, animations, responsiveness.
+7. **The `build_puzzles.py` script and the README** — 3000 puzzles from the Lichess database, `scripts/benchmark.py` measurements.
+8. **Second version of the interface** — a custom look (instead of one resembling chess.com), anti-aliased graphics, scaling
+   to the window resolution and fitting texts, new animations, English (a translation system ready for more
+   languages), arrows and highlights drawn with the right mouse button.
+9. **Game against the coach** — an opening book with explanations, Elo-dependent playing strength, move classes and accuracy, coach
+   explanations, calibration and "Your level" every 5 games, a coach portrait with facial expressions, the "Coach" and game screens, tests.
+10. **C engine with NNUE** — bitboards, PVS with pruning, an NNUE network with incremental updates, a custom data generator
+    and network trainer, four training rounds (27 M positions), about 2890 Elo on the scale of limited-strength Stockfish.
+11. **TypeScript interface and Tauri 2 window** — a sharp interface (SVG instead of pygame pixels) in React + TypeScript,
+    game logic still in Python behind a local server (HTTP + SSE), settings with an FPS counter and a frame limit,
+    an application window in Tauri 2 that starts Python by itself; the old interface is available via `--pygame`.
 
-## Źródła i licencje
+## Sources and licenses
 
-- Silnik w C i sieć NNUE: kod i wagi napisane i wytrenowane w tym projekcie. Opisy technik (magiczne bitboardy,
+- C engine and NNUE network: code and weights written and trained in this project. Descriptions of the techniques (magic bitboards,
   PVS, null move, LMR, SEE, NNUE) — [Chess Programming Wiki](https://www.chessprogramming.org/). Stockfish
-  (GPL-3.0) jest używany wyłącznie jako przeciwnik w `scripts/match.py` do pomiaru siły; nie jest częścią gry
-  i nie dostarcza ocen do uczenia sieci.
-- Zadania: [baza zadań Lichess](https://database.lichess.org/#puzzles), licencja **CC0** (domena publiczna).
-  Każde zadanie ma link do partii źródłowej (`url`).
-- Wartości perft: [Chess Programming Wiki — Perft Results](https://www.chessprogramming.org/Perft_Results).
+  (GPL-3.0) is used only as an opponent in `scripts/match.py` to measure strength; it is not part of the game
+  and does not provide evaluations for training the network.
+- Puzzles: [Lichess puzzle database](https://database.lichess.org/#puzzles), license **CC0** (public domain).
+  Each puzzle has a link to its source game (`url`).
+- Perft values: [Chess Programming Wiki — Perft Results](https://www.chessprogramming.org/Perft_Results).
 - Glicko-2: M. E. Glickman, *Example of the Glicko-2 system* (glicko.net).
-- Tablice pozycyjne oparte na „Simplified Evaluation Function” (T. Michniewski, Chess Programming Wiki),
-  rozszerzone o wartości dla końcówki.
-- Fonty Noto (Google) — licencja w `tacticmind/assets/fonts/`.
-- Figury w interfejsie TypeScript: zestaw „cburnett” (Colin M.L. Burnett, Wikimedia Commons), licencja
-  **CC BY-SA 3.0** (także GFDL, BSD i GPL), pliki z pakietu chessground (lichess.org) — `web/public/pieces/LICENSE.txt`.
-- Biblioteki: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, tylko warstwa interfejsu),
-  [React](https://react.dev/) i [Vite](https://vite.dev/) (MIT), [Tauri](https://tauri.app/) (MIT / Apache-2.0).
+- Piece-square tables based on the "Simplified Evaluation Function" (T. Michniewski, Chess Programming Wiki),
+  extended with endgame values.
+- Noto fonts (Google) — license in `tacticmind/assets/fonts/`.
+- Pieces in the TypeScript interface: the "cburnett" set (Colin M.L. Burnett, Wikimedia Commons), license
+  **CC BY-SA 3.0** (also GFDL, BSD and GPL), files from the chessground package (lichess.org) — `web/public/pieces/LICENSE.txt`.
+- Libraries: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
+  [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [Tauri](https://tauri.app/) (MIT / Apache-2.0).

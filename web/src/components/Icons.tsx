@@ -1,4 +1,4 @@
-// Ikony wektorowe (kolor z CSS: currentColor) — ostre przy każdej skali ekranu.
+// Vector icons (colour from CSS: currentColor) — sharp at any display scale.
 
 import type { ReactElement, SVGProps } from "react";
 

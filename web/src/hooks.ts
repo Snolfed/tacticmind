@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-/** Skróty klawiszowe ekranu (pomijane, gdy pisze się w polu tekstowym albo otwarte jest okno). */
+/** Screen keyboard shortcuts (ignored while typing in a text field or when a dialog is open). */
 export function useKeys(handler: (event: KeyboardEvent) => void, active = true): void {
   const ref = useRef(handler);
   ref.current = handler;

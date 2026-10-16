@@ -1,5 +1,5 @@
-/* TacticMind — ciemny motyw „nocnego granatu” z akcentami turkusu (gracz) i fioletu (AI).
-   Wszystko w CSS/SVG, więc wygląda ostro przy każdym skalowaniu ekranu. */
+/* TacticMind — a dark "midnight navy" theme with teal (player) and violet (AI) accents.
+   Everything is CSS/SVG, so it looks sharp at any display scale. */
 
 @font-face {
   font-family: "Noto Sans";
@@ -130,7 +130,7 @@ p {
   color: var(--text-soft);
 }
 
-/* ------------------------------------------------------------------ szkielet */
+/* ------------------------------------------------------------------ layout */
 .app {
   height: 100%;
   display: flex;
@@ -187,7 +187,7 @@ p {
   background: transparent;
 }
 
-/* ------------------------------------------------------------------ przyciski */
+/* ------------------------------------------------------------------ buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -315,7 +315,7 @@ p {
   color: var(--text);
 }
 
-/* przełącznik segmentowy z przesuwanym podświetleniem */
+/* segmented switch with a sliding highlight */
 .segmented {
   position: relative;
   display: grid;
@@ -365,7 +365,7 @@ p {
   color: white;
 }
 
-/* suwaki */
+/* sliders */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -404,7 +404,7 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.35);
 }
 
-/* przełącznik wł./wył. */
+/* on/off toggle */
 .switch {
   -webkit-appearance: none;
   appearance: none;
@@ -436,7 +436,7 @@ input[type="range"]::-moz-range-thumb {
   transform: translateX(18px);
 }
 
-/* ------------------------------------------------------------------ górny pasek */
+/* ------------------------------------------------------------------ top bar */
 .topbar {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
@@ -726,7 +726,7 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 
-/* ------------------------------------------------------------------ szachownica */
+/* ------------------------------------------------------------------ chessboard */
 .board {
   position: relative;
   width: var(--board, 480px);
@@ -917,7 +917,7 @@ input[type="range"]::-moz-range-thumb {
   display: block;
 }
 
-/* pasek oceny */
+/* evaluation bar */
 .eval-bar {
   position: relative;
   width: 100%;
@@ -1027,7 +1027,7 @@ input[type="range"]::-moz-range-thumb {
   left: auto;
 }
 
-/* ------------------------------------------------------------------ elementy wspólne ekranów gry */
+/* ------------------------------------------------------------------ elements shared by the game screens */
 .controls-row {
   display: flex;
   gap: 8px;
@@ -1069,7 +1069,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-soft);
 }
 
-/* modalne okna */
+/* modal dialogs */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1115,7 +1115,7 @@ input[type="range"]::-moz-range-thumb {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
-/* ------------------------------------------------------------------ ekran startowy */
+/* ------------------------------------------------------------------ home screen */
 .home {
   display: flex;
   align-items: center;
@@ -1197,7 +1197,7 @@ input[type="range"]::-moz-range-thumb {
   transform: none;
 }
 
-/* ------------------------------------------------------------------ zadania */
+/* ------------------------------------------------------------------ puzzles */
 .play {
   display: grid;
   grid-template-columns: auto minmax(360px, 1fr);
@@ -1365,7 +1365,7 @@ input[type="range"]::-moz-range-thumb {
   text-overflow: ellipsis;
 }
 
-/* panel „Mózg AI” */
+/* "AI Brain" panel */
 .brain {
   flex: 1;
   min-height: 300px;
@@ -1726,7 +1726,7 @@ button.candidate:hover {
   padding: 2px 8px;
 }
 
-/* ------------------------------------------------------------------ trener — menu */
+/* ------------------------------------------------------------------ coach — menu */
 .coach-menu {
   display: grid;
   grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
@@ -1934,7 +1934,7 @@ button.candidate:hover {
   fill: var(--surface);
 }
 
-/* ------------------------------------------------------------------ trener — partia */
+/* ------------------------------------------------------------------ coach — game */
 .coach-game {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(360px, 36cqw, 520px);
@@ -2251,7 +2251,7 @@ button.candidate:hover {
   color: var(--accent) !important;
 }
 
-/* ------------------------------------------------------------------ statystyki */
+/* ------------------------------------------------------------------ statistics */
 .stats {
   max-width: 1280px;
   margin: 0 auto;
@@ -2455,7 +2455,7 @@ button.candidate:hover {
   gap: 12px;
 }
 
-/* ------------------------------------------------------------------ jak działa AI */
+/* ------------------------------------------------------------------ how the AI works */
 .howto {
   display: flex;
   justify-content: center;
@@ -2662,7 +2662,7 @@ button.candidate:hover {
   user-select: text;
 }
 
-/* ------------------------------------------------------------------ węższe okna */
+/* ------------------------------------------------------------------ narrower windows */
 @media (max-width: 1180px) {
   .topbar {
     grid-template-columns: auto 1fr auto;

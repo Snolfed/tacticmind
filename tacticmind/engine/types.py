@@ -1,6 +1,6 @@
-"""Typy wymieniane między silnikiem, procesem silnika i interfejsem.
+"""Types exchanged between the engine, the engine process and the UI.
 
-Wszystkie oceny wysyłane do interfejsu są z perspektywy BIAŁYCH.
+All scores sent to the UI are from WHITE's perspective.
 """
 
 from __future__ import annotations
@@ -10,27 +10,27 @@ from typing import Literal
 
 from .constants import WHITE
 
-#: Wartość mata. Wynik MATE - n oznacza mata za n półruchów od korzenia.
+#: Mate value. A score of MATE - n means mate in n plies from the root.
 MATE = 32000
-#: Wyniki o module większym niż MATE_BOUND są wynikami matowymi.
+#: Scores with absolute value greater than MATE_BOUND are mate scores.
 MATE_BOUND = MATE - 1000
 INFINITY = 100_000
 
 
 @dataclass(slots=True, frozen=True)
 class EngineScore:
-    """Ocena pozycji z perspektywy białych."""
+    """Position score from White's perspective."""
 
-    #: Centypiony albo None, gdy jest mat.
+    #: Centipawns, or None when there is a mate.
     cp: int | None
-    #: Mat w N ruchów (dodatni: białe matują, ujemny: czarne matują, 0: pozycja już matowa).
+    #: Mate in N moves (positive: White mates, negative: Black mates, 0: already checkmate).
     mate: int | None
-    #: Wartość liczbowa do sortowania i paska oceny (mat = ±(MATE - półruchy)).
+    #: Numeric value for sorting and the eval bar (mate = ±(MATE - plies)).
     value: int
 
 
 def to_white_score(score: int, side_to_move: int) -> EngineScore:
-    """Zamiana wyniku wewnętrznego (perspektywa strony na ruchu) na ocenę z perspektywy białych."""
+    """Convert an internal score (side to move's perspective) to a score from White's perspective."""
     value = score if side_to_move == WHITE else -score
     if abs(value) > MATE_BOUND:
         plies = MATE - abs(value)
@@ -40,7 +40,7 @@ def to_white_score(score: int, side_to_move: int) -> EngineScore:
 
 
 def format_score(score: EngineScore) -> str:
-    """Ocena jak na chess.com: ``+1.5``, ``-0.3``, ``M3``, ``-M2``."""
+    """Score formatted like chess.com: ``+1.5``, ``-0.3``, ``M3``, ``-M2``."""
     if score.mate is not None:
         if score.mate == 0:
             return "1-0" if score.value > 0 else "0-1"
@@ -53,7 +53,7 @@ def format_score(score: EngineScore) -> str:
 
 @dataclass(slots=True)
 class PvLine:
-    """Jedna linia MultiPV: ruch kandydujący z oceną i wariantem (UCI)."""
+    """One MultiPV line: a candidate move with its score and line (UCI)."""
 
     move: str
     score: EngineScore
@@ -67,31 +67,31 @@ VariantName = Literal["minimax", "alphabeta", "alphabeta-ordered"]
 
 @dataclass(slots=True)
 class TreeNode:
-    """Węzeł mini-drzewa przeszukiwania (dwa pierwsze poziomy) do wizualizacji."""
+    """A node of the search mini tree (first two levels) for visualisation."""
 
     move: str
-    #: Ocena z perspektywy białych; None dla gałęzi odciętych (w ogóle nieliczonych).
+    #: Score from White's perspective; None for pruned branches (never searched).
     score: EngineScore | None
-    #: 'exact' — dokładna, 'upper' — co najwyżej (≤), 'lower' — co najmniej (≥).
+    #: 'exact' - exact, 'upper' - at most (≤), 'lower' - at least (≥).
     bound: Bound = "exact"
-    #: Gałąź odcięta przez alfa-betę.
+    #: Branch pruned by alpha-beta.
     pruned: bool = False
-    #: Węzeł rozstrzygnięty od razu przez tablicę transpozycji.
+    #: Node resolved immediately by the transposition table.
     tt_cut: bool = False
     children: list[TreeNode] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class SearchInfo:
-    """Wiadomość wysyłana po każdej ukończonej głębokości."""
+    """Message sent after each completed depth."""
 
     id: int
     fen: str
     depth: int
     seldepth: int
-    #: Ocena najlepszej linii w centypionach (perspektywa białych) albo None przy macie.
+    #: Best line score in centipawns (White's perspective), or None for a mate.
     score_cp: int | None
-    #: Mat w N (perspektywa białych) albo None.
+    #: Mate in N (White's perspective), or None.
     mate_in: int | None
     score: EngineScore
     best_move: str
@@ -100,20 +100,20 @@ class SearchInfo:
     nodes: int
     qnodes: int
     nps: int
-    #: Liczba cięć alfa-beta (beta cutoffs).
+    #: Number of alpha-beta cutoffs (beta cutoffs).
     cutoffs: int
     tt_hits: int
-    #: Jaki odsetek wygenerowanych ruchów alfa-beta pominęła.
+    #: Percentage of generated moves that alpha-beta skipped.
     pruned_percent: float
     time_ms: int
     tree: list[TreeNode]
-    #: Pozycja końcowa: mat albo pat (wtedy nie ma czego liczyć).
+    #: Terminal position: checkmate or stalemate (nothing to search then).
     terminal: Terminal | None = None
 
 
 @dataclass(slots=True)
 class SearchProgress:
-    """Liczniki na żywo w trakcie liczenia jednej głębokości."""
+    """Live counters while searching one depth."""
 
     id: int
     depth: int
@@ -126,7 +126,7 @@ class SearchProgress:
 
 @dataclass(slots=True)
 class CompareVariant:
-    """Wynik jednego algorytmu w trybie porównawczym."""
+    """Result of one algorithm in comparison mode."""
 
     name: VariantName
     nodes: int

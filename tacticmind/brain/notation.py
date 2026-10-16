@@ -1,8 +1,8 @@
-"""Notacja szachowa w języku interfejsu (warstwa UI, korzysta z python-chess).
+"""Chess notation in the interface language (UI layer, uses python-chess).
 
-Silnik zwraca ruchy w UCI (np. ``f3f7``); tu zamieniamy je na SAN z literami
-figur właściwymi dla języka: po polsku K — król, H — hetman, W — wieża,
-G — goniec, S — skoczek; po angielsku K, Q, R, B, N.
+The engine returns moves in UCI (e.g. ``f3f7``); here we convert them to SAN with the
+piece letters of the language: in Polish K — king (król), H — queen (hetman), W — rook (wieża),
+G — bishop (goniec), S — knight (skoczek); in English K, Q, R, B, N.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ _ENGLISH = "KQRBN"
 
 
 def localize_san(san: str, language: str | None = None) -> str:
-    """``Qxf7+`` → ``Hxf7+`` (po polsku). Roszady i kolumny (małe litery) bez zmian."""
+    """``Qxf7+`` → ``Hxf7+`` (in Polish). Castling and files (lowercase letters) unchanged."""
     if san.startswith("O-O"):
         return san
     pieces: str = LANGUAGES[language or get_language()][1].STRINGS.get("notation.pieces", _ENGLISH)
@@ -27,7 +27,7 @@ def localize_san(san: str, language: str | None = None) -> str:
 
 
 def to_polish(san: str) -> str:
-    """SAN z polskimi literami figur (niezależnie od bieżącego języka)."""
+    """SAN with Polish piece letters (regardless of the current language)."""
     return localize_san(san, "pl")
 
 
@@ -44,7 +44,7 @@ def uci_san(fen: str, uci: str) -> str:
 
 
 def san_list(fen: str, ucis: list[str], limit: int | None = None) -> list[str]:
-    """Wariant UCI jako lista ruchów SAN (przerywa na pierwszym nielegalnym ruchu)."""
+    """A UCI line as a list of SAN moves (stops at the first illegal move)."""
     board = chess.Board(fen)
     result = []
     for uci in ucis[:limit] if limit else ucis:
@@ -60,14 +60,14 @@ def san_list(fen: str, ucis: list[str], limit: int | None = None) -> list[str]:
 
 
 def format_line(fen: str, ucis: list[str], limit: int | None = 8) -> str:
-    """Wariant z numerami ruchów, np. ``1. Hxf7+ Kxf7 2. Sg5+`` (numeracja od 1 dla czytelności)."""
+    """A line with move numbers, e.g. ``1. Hxf7+ Kxf7 2. Sg5+`` (numbered from 1 for readability)."""
     return _format_line(fen, tuple(ucis), limit, get_language())
 
 
 @lru_cache(maxsize=2048)
 def _format_line(fen: str, ucis: tuple[str, ...], limit: int | None, language: str) -> str:
-    """Wersja z pamięcią podręczną (interfejs rysuje te same warianty 60 razy na sekundę)."""
-    del language  # część klucza pamięci podręcznej: litery figur zależą od języka
+    """Cached version (the interface draws the same lines 60 times per second)."""
+    del language  # part of the cache key: piece letters depend on the language
     ucis_list = list(ucis)
     white_to_move = chess.Board(fen).turn == chess.WHITE
     parts = []

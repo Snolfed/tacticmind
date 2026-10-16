@@ -1,4 +1,4 @@
-"""Uruchomienie gry poleceniem: python -m tacticmind (opcje jak w main.py, np. --pygame)."""
+"""Run the game with: python -m tacticmind (same options as main.py, e.g. --pygame)."""
 
 import sys
 

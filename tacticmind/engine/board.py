@@ -1,10 +1,10 @@
-"""Reprezentacja planszy 0x88: stan gry, FEN, wykonywanie i cofanie ruchów.
+"""0x88 board representation: game state, FEN, making and unmaking moves.
 
-Szczegóły kodowania pól, figur i ruchów są w ``constants.py``.
-Plansza przyrostowo utrzymuje:
- - hasz Zobrista (``hash``) — do tablicy transpozycji i wykrywania powtórzeń,
- - sumy materiał+PST dla gry środkowej i końcówki (``mg``, ``eg``) oraz fazę gry
-   (``phase``) — dzięki temu funkcja oceny nie liczy ich od zera w każdym liściu.
+Details of the square, piece and move encoding are in ``constants.py``.
+The board incrementally maintains:
+ - the Zobrist hash (``hash``), for the transposition table and repetition detection,
+ - material+PST sums for the middlegame and endgame (``mg``, ``eg``) and the game
+   phase (``phase``), so the evaluation function doesn't recompute them in every leaf.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from .constants import (
 from .pst import PIECE_PHASE, PSQ_EG, PSQ_MG
 from .zobrist import CASTLE_KEYS, EP_KEYS, PIECE_KEYS, SIDE_KEY
 
-#: Po ruchu z/na pole ``sq`` prawa do roszady zmieniają się na ``castling & CASTLE_MASK[sq]``.
+#: After a move from/to square ``sq``, castling rights become ``castling & CASTLE_MASK[sq]``.
 CASTLE_MASK = [15] * 128
 CASTLE_MASK[0] = 15 & ~CASTLE_WQ  # a1
 CASTLE_MASK[4] = 15 & ~(CASTLE_WK | CASTLE_WQ)  # e1
@@ -48,7 +48,7 @@ def piece_to_char(piece: int) -> str:
 
 
 class Board:
-    """Pozycja szachowa na planszy 0x88 z make/unmake."""
+    """A chess position on a 0x88 board with make/unmake."""
 
     __slots__ = ("sq", "side", "castling", "ep", "halfmove", "fullmove", "kings", "hash", "mg", "eg", "phase", "stack")
 
@@ -56,16 +56,16 @@ class Board:
         self.sq: list[int] = [EMPTY] * 128
         self.side = WHITE
         self.castling = 0
-        self.ep = -1  # pole, na które można bić w przelocie, albo -1
-        self.halfmove = 0  # licznik do reguły 50 ruchów
+        self.ep = -1  # en passant target square, or -1
+        self.halfmove = 0  # counter for the 50-move rule
         self.fullmove = 1
-        self.kings = [-1, -1]  # pola królów [białe, czarne]
+        self.kings = [-1, -1]  # king squares [white, black]
         self.hash = 0
         self.mg = 0
         self.eg = 0
         self.phase = 0
-        # Stos cofania: (ruch, zbita figura, roszady, ep, halfmove, hasz, mg, eg, faza).
-        # Hasze na stosie służą też do wykrywania powtórzeń pozycji.
+        # Undo stack: (move, captured piece, castling, ep, halfmove, hash, mg, eg, phase).
+        # The hashes on the stack are also used to detect position repetitions.
         self.stack: list[tuple[int, int, int, int, int, int, int, int, int]] = []
         self.load_fen(fen)
 
@@ -73,11 +73,11 @@ class Board:
     def load_fen(self, fen: str) -> None:
         parts = fen.split()
         if len(parts) < 4:
-            raise ValueError(f"Niepoprawny FEN: {fen}")
+            raise ValueError(f"Invalid FEN: {fen}")
         placement, side, castling, ep = parts[:4]
         rows = placement.split("/")
         if len(rows) != 8:
-            raise ValueError(f"Niepoprawny FEN (liczba rzędów): {fen}")
+            raise ValueError(f"Invalid FEN (number of ranks): {fen}")
         self.sq = [EMPTY] * 128
         self.kings = [-1, -1]
         for r, row in enumerate(rows):
@@ -89,7 +89,7 @@ class Board:
                     continue
                 piece_type = PIECE_CHARS.find(ch.lower())
                 if piece_type <= 0 or file > 7:
-                    raise ValueError(f"Niepoprawny FEN (figura '{ch}'): {fen}")
+                    raise ValueError(f"Invalid FEN (piece '{ch}'): {fen}")
                 color = WHITE if ch.isupper() else BLACK
                 sq = rank * 16 + file
                 self.sq[sq] = make_piece(color, piece_type)
@@ -97,9 +97,9 @@ class Board:
                     self.kings[color] = sq
                 file += 1
             if file != 8:
-                raise ValueError(f"Niepoprawny FEN (długość rzędu): {fen}")
+                raise ValueError(f"Invalid FEN (rank length): {fen}")
         if self.kings[0] < 0 or self.kings[1] < 0:
-            raise ValueError(f"FEN bez króla: {fen}")
+            raise ValueError(f"FEN without a king: {fen}")
         self.side = BLACK if side == "b" else WHITE
         self.castling = (
             (CASTLE_WK if "K" in castling else 0)
@@ -145,7 +145,7 @@ class Board:
         return Board(self.fen())
 
     def refresh(self) -> None:
-        """Liczy hasz i sumy oceny od zera (po wczytaniu FEN; w testach spójności)."""
+        """Recompute the hash and evaluation sums from scratch (after loading a FEN; in consistency tests)."""
         h = mg = eg = phase = 0
         for sq in SQUARES:
             piece = self.sq[sq]
@@ -163,7 +163,7 @@ class Board:
 
     # ------------------------------------------------------- make / unmake
     def make_move(self, move: int) -> None:
-        """Wykonuje ruch pseudolegalny (legalność sprawdza ``movegen.make_legal_move``)."""
+        """Make a pseudo-legal move (legality is checked by ``movegen.make_legal_move``)."""
         sq = self.sq
         frm = move & 0x7F
         to = (move >> 7) & 0x7F
@@ -176,13 +176,13 @@ class Board:
         eg = self.eg
         phase = self.phase
 
-        # Usuń z hasza stare prawa do roszady i pole en passant.
+        # Remove the old castling rights and en passant square from the hash.
         h ^= CASTLE_KEYS[self.castling]
         if self.ep >= 0:
             h ^= EP_KEYS[self.ep]
 
         if move & FLAG_EP:
-            # Bicie w przelocie: zbity pion stoi za polem docelowym.
+            # En passant: the captured pawn stands behind the target square.
             cap_sq = to - 16 if us == WHITE else to + 16
             captured = sq[cap_sq]
             sq[cap_sq] = EMPTY
@@ -199,7 +199,7 @@ class Board:
 
         self.stack.append((move, captured, self.castling, self.ep, self.halfmove, self.hash, self.mg, self.eg, self.phase))
 
-        # Przenieś figurę; przy promocji na polu docelowym staje nowa figura.
+        # Move the piece; on promotion the new piece is placed on the target square.
         sq[frm] = EMPTY
         idx = piece * 128 + frm
         h ^= PIECE_KEYS[idx]
@@ -217,7 +217,7 @@ class Board:
         if piece & 7 == KING:
             self.kings[us] = to
             if move & FLAG_CASTLE:
-                # Roszada: przestaw też wieżę.
+                # Castling: move the rook too.
                 rook_from, rook_to = (to + 1, to - 1) if to > frm else (to - 2, to + 1)
                 rook = sq[rook_from]
                 sq[rook_from] = EMPTY
@@ -242,7 +242,7 @@ class Board:
         self.phase = phase
 
     def unmake_move(self) -> None:
-        """Cofa ostatni ruch, przywracając stan zapisany na stosie."""
+        """Undo the last move, restoring the state saved on the stack."""
         move, captured, castling, ep, halfmove, h, mg, eg, phase = self.stack.pop()
         sq = self.sq
         frm = move & 0x7F
@@ -280,10 +280,10 @@ class Board:
         return self.stack[-1][0] if self.stack else 0
 
     def is_repetition(self) -> bool:
-        """Czy bieżąca pozycja już wystąpiła od ostatniego ruchu nieodwracalnego?
+        """Has the current position already occurred since the last irreversible move?
 
-        W wyszukiwaniu jedno powtórzenie traktujemy jak remis (dalsza gra
-        prowadziłaby do trzykrotnego powtórzenia).
+        In search a single repetition is treated as a draw (further play would
+        lead to threefold repetition).
         """
         stack = self.stack
         n = len(stack)

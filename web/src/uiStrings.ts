@@ -1,5 +1,5 @@
-// Napisy, których potrzebuje tylko interfejs w przeglądarce (ustawienia, łączenie z serwerem).
-// Reszta tekstów pochodzi z tych samych słowników co w Pythonie (tacticmind/i18n).
+// Strings needed only by the browser interface (settings, connecting to the server).
+// All other texts come from the same dictionaries as in Python (tacticmind/i18n).
 
 export const UI_STRINGS: Record<string, Record<string, string>> = {
   pl: {

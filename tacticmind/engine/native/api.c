@@ -1,10 +1,10 @@
 /*
- * Interfejs biblioteki dla Pythona (ctypes) — patrz tacticmind/engine/native.py.
+ * Library interface for Python (ctypes) - see tacticmind/engine/native.py.
  *
- * Python steruje iterative deepening (jedna głębokość = jedno wywołanie
- * tm_iterate), żeby po każdej głębokości wysłać do interfejsu SearchInfo,
- * tak jak robił to silnik w Pythonie. Wynik ukończonej głębokości
- * tm_report zapisuje jako prosty tekst, który Python zamienia na obiekty.
+ * Python drives iterative deepening (one depth = one tm_iterate call), so
+ * that after each depth it can send a SearchInfo to the UI, just like the
+ * Python engine did. tm_report writes the result of the completed depth as
+ * plain text, which Python turns into objects.
  */
 #include "tm.h"
 
@@ -12,13 +12,13 @@
 #include <stdio.h>
 #include <string.h>
 
-TM_API int tm_version(void) { return 2; } /* = API_VERSION w native.py */
+TM_API int tm_version(void) { return 2; } /* = API_VERSION in native.py */
 
 TM_API int tm_hidden_size(void) { return NNUE_HIDDEN; }
 
 TM_API int tm_load_net(const char *path) { return nnue_load(path); }
 
-/* Sieć z pamięci: Python czyta plik sam (ścieżki z polskimi znakami na Windowsie). */
+/* Network from memory: Python reads the file itself (paths with non-ASCII characters on Windows). */
 TM_API int tm_load_net_memory(const unsigned char *data, size_t size) { return nnue_load_memory(data, size); }
 
 TM_API int tm_net_loaded(void) { return NET_LOADED; }
@@ -31,7 +31,7 @@ TM_API void tm_engine_clear(void *e) { engine_clear((Engine *)e); }
 
 TM_API void tm_set_use_nnue(void *e, int flag) { ((Engine *)e)->pos.use_nnue = flag; }
 
-/* Nowe wyszukiwanie: pozycja z FEN, zerowanie statystyk. Zwraca liczbę legalnych ruchów albo -1 dla złego FEN. */
+/* New search: position from FEN, statistics reset. Returns the number of legal moves, or -1 for a bad FEN. */
 TM_API int tm_begin(void *ep, const char *fen, int multipv, int record_tree) {
     Engine *e = ep;
     if (!pos_set_fen(&e->pos, fen)) return -1;
@@ -42,7 +42,7 @@ TM_API int tm_begin(void *ep, const char *fen, int multipv, int record_tree) {
 
 TM_API int tm_terminal(void *e) { return ((Engine *)e)->terminal; }
 
-/* Jedna głębokość. stop_after_ms: limit liczony od tm_begin (< 0 — bez limitu). Zwraca 1, gdy ukończona. */
+/* One depth. stop_after_ms: limit counted from tm_begin (< 0 - no limit). Returns 1 when completed. */
 TM_API int tm_iterate(void *ep, int depth, double stop_after_ms, PollFn poll, void *user) {
     Engine *e = ep;
     e->poll = poll;
@@ -71,11 +71,11 @@ static void out(Out *o, const char *fmt, ...) {
 }
 
 /*
- * Wynik ostatniej ukończonej głębokości:
+ * Result of the last completed depth:
  *   stats depth seldepth nodes qnodes cutoffs tt_hits searched pruned time_ms
- *   line score ruch1 ruch2 …            (MultiPV, ocena z perspektywy strony na ruchu)
- *   node ruch score exact tt_cut        (mini-drzewo: ruch z korzenia)
- *   child ruch score bound pruned       (odpowiedź przeciwnika; bound 0 = dokładny, 1 = ≤, 2 = ≥)
+ *   line score move1 move2 ...          (MultiPV, score from the side to move's perspective)
+ *   node move score exact tt_cut        (mini tree: root move)
+ *   child move score bound pruned       (opponent reply; bound 0 = exact, 1 = <=, 2 = >=)
  */
 TM_API int tm_report(void *ep, char *buf, int size, int depth) {
     Engine *e = ep;
@@ -117,7 +117,7 @@ TM_API int tm_report(void *ep, char *buf, int size, int depth) {
     return o.len;
 }
 
-/* Ocena statyczna (perspektywa strony na ruchu) — testy i diagnostyka. */
+/* Static evaluation (side to move's perspective), for tests and diagnostics. */
 TM_API int tm_eval(const char *fen, int use_nnue) {
     static Position pos;
     pos.use_nnue = use_nnue;

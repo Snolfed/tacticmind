@@ -1,4 +1,4 @@
-// Migawki stanu wysyłane przez serwer Pythona (tacticmind/web). Nazwy pól jak w JSON.
+// State snapshots sent by the Python server (tacticmind/web). Field names as in the JSON.
 
 export type Color = "white" | "black";
 export type ScreenName = "home" | "play" | "coach" | "coach_game" | "stats" | "howto";
@@ -6,7 +6,7 @@ export type Tone = "text" | "muted" | "accent" | "red" | "amber" | "violet" | "b
 
 export interface Feedback {
   square: string;
-  kind: string; // ok | bad | brilliant | cls:<klasa>
+  kind: string; // ok | bad | brilliant | cls:<class>
   seq: number;
   effect: boolean;
 }
@@ -47,7 +47,7 @@ export interface TopBarSnapshot {
 
 export interface UiSettings {
   showFps: boolean;
-  fpsLimit: number; // 0 = bez limitu (częstotliwość ekranu)
+  fpsLimit: number; // 0 = unlimited (display refresh rate)
 }
 
 export interface Thought {

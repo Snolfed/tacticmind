@@ -1,12 +1,12 @@
-"""Rdzeń interfejsu w przeglądarce: stan aplikacji, ekrany, silnik i rozsyłanie migawek.
+"""Core of the browser interface: app state, screens, engine and snapshot broadcasting.
 
-Odpowiednik ``ui/app.py`` bez pygame. Wszystko dzieje się pod jedną blokadą (``lock``):
- - wątek zegara co ok. 40 ms odbiera wiadomości silnika, odlicza zaplanowane akcje ekranów
-   (np. odpowiedź przeciwnika po 400 ms) i rozsyła nową migawkę, jeśli stan się zmienił,
- - wątki serwera HTTP wykonują akcje z przeglądarki (``dispatch``) i od razu rozsyłają migawkę.
+Counterpart of ``ui/app.py`` without pygame. Everything happens under a single lock (``lock``):
+ - the clock thread, every ~40 ms, receives engine messages, counts down scheduled screen actions
+   (e.g. the opponent's reply after 400 ms) and broadcasts a new snapshot if the state changed,
+ - the HTTP server threads run actions from the browser (``dispatch``) and broadcast a snapshot right away.
 
-Do przeglądarki płyną dwa rodzaje wiadomości: ``state`` (pełny stan bieżącego ekranu)
-i ``fx`` (jednorazowe zdarzenia: dźwięk, konfetti, potrząśnięcie szachownicą).
+Two kinds of messages flow to the browser: ``state`` (the full state of the current screen)
+and ``fx`` (one-off events: sound, confetti, board shake).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from .screens.stats import StatsScreen
 
 TICK = 0.04
 SCREENS = ("home", "play", "coach", "coach_game", "stats", "howto")
-#: Ustawienia samego interfejsu (licznik FPS, limit klatek) — osobny plik obok profilu.
+#: Settings of the interface itself (FPS counter, frame limit) — a separate file next to the profile.
 FPS_LIMITS = (60, 120, 144, 170, 240, 0)
 DEFAULT_SETTINGS: dict[str, Any] = {"showFps": False, "fpsLimit": 0}
 
@@ -78,7 +78,7 @@ class WebApp:
         self._last_time = time.monotonic()
         self._running = False
         self._thread: threading.Thread | None = None
-        #: Kiedy ostatnio była podłączona jakakolwiek karta (do zamknięcia serwera po zamknięciu okna).
+        #: When any tab was last connected (to shut the server down after the window is closed).
         self.last_client = time.monotonic()
         self.screens: dict[str, WebScreen] = {
             "home": HomeScreen(self),
@@ -91,7 +91,7 @@ class WebApp:
         self.current_name = "home"
         self.screens["home"].enter()
 
-    # ================================================================ pomocnicze dla ekranów
+    # ================================================================ helpers for screens
     @property
     def current(self) -> WebScreen:
         return self.screens[self.current_name]
@@ -107,7 +107,7 @@ class WebApp:
             return
         coach_game = self.screens["coach_game"]
         if name == "coach_game" and isinstance(coach_game, CoachGameScreen) and coach_game.game is None:
-            return  # nie ma jeszcze żadnej partii
+            return  # there is no game yet
         self.current.leave()
         self.current_name = name
         self.current.enter()
@@ -145,9 +145,9 @@ class WebApp:
         for screen in self.screens.values():
             screen.on_language_change()
 
-    # ================================================================ akcje z przeglądarki
+    # ================================================================ actions from the browser
     def dispatch(self, action: dict[str, Any]) -> None:
-        """Akcja z przeglądarki: ``{"type": ..., ...}``. Akcje ekranów: ``{"type": "screen", "screen": ..., "name": ...}``."""
+        """Action from the browser: ``{"type": ..., ...}``. Screen actions: ``{"type": "screen", "screen": ..., "name": ...}``."""
         with self.lock:
             kind = action.get("type")
             if kind == "go":
@@ -170,7 +170,7 @@ class WebApp:
         if action.get("toggle"):
             profile.sound = not profile.sound
             if profile.sound and profile.volume < 0.02:
-                profile.volume = 0.5  # włączenie dźwięku przy suwaku na zerze
+                profile.volume = 0.5  # turning sound on while the slider is at zero
         volume = action.get("volume")
         if isinstance(volume, (int, float)) and not isinstance(volume, bool):
             profile.volume = min(1.0, max(0.0, float(volume)))
@@ -188,9 +188,9 @@ class WebApp:
             self.settings["fpsLimit"] = limit
         self.save_settings()
 
-    # ================================================================ zegar
+    # ================================================================ clock
     def tick(self) -> None:
-        """Jedna klatka logiki: wiadomości silnika, zaplanowane akcje, rozesłanie stanu."""
+        """One logic frame: engine messages, scheduled actions, state broadcast."""
         with self.lock:
             now = time.monotonic()
             dt = min(0.25, now - self._last_time)
@@ -208,7 +208,7 @@ class WebApp:
         if self._running:
             return
         self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="TacticMind-zegar")
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="TacticMind-clock")
         self._thread.start()
 
     def _loop(self) -> None:
@@ -216,7 +216,7 @@ class WebApp:
             started = time.monotonic()
             try:
                 self.tick()
-            except Exception:  # noqa: BLE001 — błąd jednej klatki nie może zatrzymać całej aplikacji
+            except Exception:  # noqa: BLE001 — an error in one frame must not stop the whole app
                 import traceback
 
                 traceback.print_exc()
@@ -230,7 +230,7 @@ class WebApp:
             self.save()
         self.engine.close()
 
-    # ================================================================ migawki
+    # ================================================================ snapshots
     def topbar(self) -> dict[str, Any]:
         profile = self.profile
         coach = self.current_name.startswith("coach")
@@ -276,7 +276,7 @@ class WebApp:
         return self._last_state
 
     def publish(self) -> None:
-        """Rozsyła stan (tylko gdy się zmienił) i zebrane zdarzenia ``fx``."""
+        """Broadcasts the state (only when it changed) and the collected ``fx`` events."""
         previous = self._last_state
         state = self._encode_state()
         messages: list[str] = []

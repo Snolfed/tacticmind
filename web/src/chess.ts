@@ -1,8 +1,8 @@
-// Małe, czyste funkcje szachowe potrzebne interfejsowi: FEN → rozstawienie, pola, animacja ruchu,
-// geometria strzałek. Zasady gry (legalność ruchów) zna Python — tu tylko rysujemy.
+// Small, pure chess functions the interface needs: FEN → placement, squares, move animation,
+// arrow geometry. Python knows the rules (move legality) — here we only draw.
 
 export type Piece = string; // "wK", "bP" …
-export type Placement = Map<number, Piece>; // pole (0 = a1 … 63 = h8) → figura
+export type Placement = Map<number, Piece>; // square (0 = a1 … 63 = h8) → piece
 
 export const FILES = "abcdefgh";
 
@@ -39,7 +39,7 @@ export function turnOf(fen: string): "white" | "black" {
   return fen.split(" ")[1] === "b" ? "black" : "white";
 }
 
-/** Kolumna i wiersz pola na ekranie (0..7) przy danym obrocie szachownicy. */
+/** On-screen column and row of a square (0..7) for the given board orientation. */
 export function toView(square: number, orientation: "white" | "black"): [number, number] {
   const file = square % 8;
   const rank = Math.floor(square / 8);
@@ -52,7 +52,7 @@ export function fromView(col: number, row: number, orientation: "white" | "black
   return rank * 8 + file;
 }
 
-/** Ruch gracza zastosowany od razu na ekranie (zanim serwer potwierdzi): roszada, bicie w przelocie, promocja. */
+/** The player's move applied on screen right away (before the server confirms): castling, en passant, promotion. */
 export function applyMove(placement: Placement, uci: string): Placement {
   const next = new Map(placement);
   const from = squareIndex(uci.slice(0, 2));
@@ -61,7 +61,7 @@ export function applyMove(placement: Placement, uci: string): Placement {
   if (!piece) return next;
   next.delete(from);
   if (piece[1] === "P" && from % 8 !== to % 8 && !placement.has(to)) {
-    next.delete(to + (piece[0] === "w" ? -8 : 8)); // bicie w przelocie
+    next.delete(to + (piece[0] === "w" ? -8 : 8)); // en passant
   }
   if (piece[1] === "K" && Math.abs((to % 8) - (from % 8)) === 2) {
     const rank = Math.floor(from / 8) * 8;
@@ -84,11 +84,11 @@ export interface Motion {
 }
 
 export interface Transition {
-  /** Figury, które się przesuwają. */
+  /** Pieces that move. */
   moves: Motion[];
-  /** Figury, które znikają (bite) — przenikanie do zera. */
+  /** Pieces that disappear (captured) — fade out to zero. */
   vanish: { piece: Piece; square: number }[];
-  /** Figury, które się pojawiają (np. zbita figura przy cofaniu ruchu). */
+  /** Pieces that appear (e.g. a captured piece when a move is taken back). */
   appear: { piece: Piece; square: number }[];
 }
 
@@ -97,9 +97,9 @@ function distance(a: number, b: number): number {
 }
 
 /**
- * Animacja między dwiema pozycjami: dopasowujemy figury, które zniknęły z jednych pól,
- * do figur, które pojawiły się na innych (ta sama figura, najbliższe pole). Działa tak samo
- * dla ruchu, cofnięcia, roszady, bicia w przelocie i promocji (pion „zamienia się” w figurę).
+ * Animation between two positions: we match pieces that vanished from some squares
+ * to pieces that appeared on others (same piece, nearest square). It works the same way
+ * for a move, a take-back, castling, en passant and promotion (the pawn "turns into" a piece).
  */
 export function transition(before: Placement, after: Placement): Transition {
   const appeared: number[] = [];
@@ -130,7 +130,7 @@ export function transition(before: Placement, after: Placement): Transition {
   for (const square of appeared) if (!match(square, (p, c) => p === c)) unmatched.push(square);
   const appear: { piece: Piece; square: number }[] = [];
   for (const square of unmatched) {
-    // Promocja (i jej cofnięcie): ta sama strona, inna figura.
+    // Promotion (and taking it back): same side, different piece.
     if (!match(square, (p, c) => p[0] === c[0] && (p[1] === "P" || c[1] === "P"))) appear.push({ piece: after.get(square) as Piece, square });
   }
   const vanish = vanished.filter((square) => !used.has(square)).map((square) => ({ piece: before.get(square) as Piece, square }));
@@ -143,7 +143,7 @@ export function isKnightJump(a: number, b: number): boolean {
   return (df === 1 && dr === 2) || (df === 2 && dr === 1);
 }
 
-/** Punkty strzałki w jednostkach pól (środek pola = x + 0.5); ruch skoczka jako litera L. */
+/** Arrow points in square units (square centre = x + 0.5); a knight move as an L shape. */
 export function arrowPoints(from: number, to: number, orientation: "white" | "black"): [number, number][] {
   const [ac, ar] = toView(from, orientation);
   const [bc, br] = toView(to, orientation);
@@ -163,7 +163,7 @@ export function arrowPoints(from: number, to: number, orientation: "white" | "bl
   ];
 }
 
-/** Ścieżka SVG strzałki (trzon + grot) jako jeden wielokąt — półprzezroczysta strzałka nie ma ciemniejszych nakładek. */
+/** SVG path of the arrow (shaft + head) as a single polygon — a semi-transparent arrow has no darker overlaps. */
 export function arrowPath(points: [number, number][], width: number): string {
   const head = width * 2.2;
   const headWidth = width * 2.4;
@@ -172,7 +172,7 @@ export function arrowPath(points: [number, number][], width: number): string {
   const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
   const ux = Math.cos(angle);
   const uy = Math.sin(angle);
-  // Koniec trzonu tuż przed grotem.
+  // End of the shaft just before the head.
   const shaftEnd: [number, number] = [last[0] - ux * head, last[1] - uy * head];
   const line = [...points.slice(0, -1), shaftEnd];
   const half = width / 2;
@@ -194,7 +194,7 @@ export function arrowPath(points: [number, number][], width: number): string {
       nx = -Math.sin(a0);
       ny = Math.cos(a0);
     } else {
-      // Załamanie (strzałka skoczka): wspólna normalna, wydłużona tak, by trzon miał stałą grubość.
+      // Bend (knight arrow): a shared normal, lengthened so that the shaft keeps a constant width.
       const mid = (a0 + a1) / 2 + (Math.abs(a1 - a0) > Math.PI ? Math.PI : 0);
       nx = -Math.sin(mid);
       ny = Math.cos(mid);
@@ -212,7 +212,7 @@ export function arrowPath(points: [number, number][], width: number): string {
   return "M" + outline.map(([x, y]) => `${x.toFixed(4)} ${y.toFixed(4)}`).join("L") + "Z";
 }
 
-/** "rgba(1,2,3,0.5)" → ["rgb(1,2,3)", 0.5] — przezroczystość nakładamy na całą strzałkę naraz. */
+/** "rgba(1,2,3,0.5)" → ["rgb(1,2,3)", 0.5] — opacity is applied to the whole arrow at once. */
 export function splitAlpha(color: string): [string, number] {
   const match = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/.exec(color);
   if (!match) return [color, 1];

@@ -1,13 +1,13 @@
-// Wspólna pętla animacji (requestAnimationFrame) z limitem klatek i licznikiem FPS.
-// Animacje rysowane w JS (figury, efekty, pasek oceny) dostają czas z tej pętli,
-// więc limit FPS z ustawień działa na nie wszystkie naraz.
+// Shared animation loop (requestAnimationFrame) with a frame limit and an FPS counter.
+// Animations drawn in JS (pieces, effects, evaluation bar) get their time from this loop,
+// so the FPS limit from the settings applies to all of them at once.
 
 import { useEffect, useRef } from "react";
 
 type Callback = (now: number, dt: number) => void;
 
 const callbacks = new Set<Callback>();
-let limit = 0; // 0 = bez limitu (częstotliwość odświeżania ekranu)
+let limit = 0; // 0 = unlimited (display refresh rate)
 let last = 0;
 let running = false;
 const frames: number[] = [];
@@ -17,7 +17,7 @@ export function setFpsLimit(value: number): void {
   limit = value;
 }
 
-/** Klatki na sekundę z ostatniej sekundy i średni czas klatki (ms). */
+/** Frames per second over the last second and the average frame time (ms). */
 export function fpsStats(): { fps: number; ms: number } {
   const now = performance.now();
   while (frames.length && (frames[0] ?? 0) < now - 1000) frames.shift();
@@ -27,11 +27,11 @@ export function fpsStats(): { fps: number; ms: number } {
 function loop(now: number): void {
   requestAnimationFrame(loop);
   const minGap = limit > 0 ? 1000 / limit : 0;
-  // Tolerancja 1 ms: przy limicie równym częstotliwości ekranu nie gubimy klatek przez drobne wahania zegara.
+  // 1 ms tolerance: with a limit equal to the display refresh rate we do not drop frames due to small clock jitter.
   if (minGap && now - last < minGap - 1) return;
   const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
   if (minGap && last && now - last < 2 * minGap) {
-    last += Math.max(1, Math.floor((now - last + 1) / minGap)) * minGap; // równe odstępy, bez dryfu
+    last += Math.max(1, Math.floor((now - last + 1) / minGap)) * minGap; // even spacing, no drift
   } else {
     last = now;
   }
@@ -50,7 +50,7 @@ export function subscribe(callback: Callback): () => void {
   return () => callbacks.delete(callback);
 }
 
-/** Hook: wywołuje funkcję w każdej klatce (z aktualną wersją funkcji, bez ponownej subskrypcji). */
+/** Hook: calls the function every frame (with the latest version of the function, without resubscribing). */
 export function useFrame(callback: Callback, active = true): void {
   const ref = useRef(callback);
   ref.current = callback;

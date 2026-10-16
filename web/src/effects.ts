@@ -1,5 +1,5 @@
-// Efekty na całym oknie: konfetti po rozwiązaniu zadania i rozchodzące się pierścienie
-// (port ui/effects.py). Jedno płótno nad interfejsem, rysowane tylko wtedy, gdy coś się dzieje.
+// Full-window effects: confetti after solving a puzzle and expanding rings
+// (port of ui/effects.py). A single canvas over the interface, drawn only while something is happening.
 
 import { subscribe } from "./ticker";
 
@@ -47,7 +47,7 @@ class Effects {
     this.canvas = canvas;
   }
 
-  /** Konfetti z punktu (współrzędne okna w pikselach CSS); ``scale`` — rozmiar szachownicy / 640. */
+  /** Confetti from a point (window coordinates in CSS pixels); ``scale`` — board size / 640. */
   burst(x: number, y: number, colors: Rgb[], count = 46, scale = 1): void {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() < 0.8 ? -Math.PI * Math.random() : Math.random() * Math.PI * 2;

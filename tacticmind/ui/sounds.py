@@ -1,18 +1,18 @@
-"""Dźwięki gry syntezowane w kodzie (bez plików z nagraniami, więc bez problemów z licencją).
+"""Game sounds synthesised in code (no recording files, so no licensing issues).
 
-Brzmienie wzorowane na chess.com:
- - ruch — krótkie, niskie, drewniane „puknięcie” figury o szachownicę,
- - bicie — podwójne, ostrzejsze „klaśnięcie” (figura uderza w figurę),
- - szach — puknięcie z jasnym dzwoneczkiem,
- - roszada — dwa szybkie puknięcia (król i wieża),
- - promocja — puknięcie z rosnącym tonem,
- - rozwiązane zadanie / genialny ruch — dzwonkowe arpeggio,
- - błąd — miękkie, opadające „bonk”.
+The sound is modelled on chess.com:
+ - move — a short, low, wooden "tap" of a piece on the board,
+ - capture — a double, sharper "clack" (piece hitting piece),
+ - check — a tap with a bright little bell,
+ - castling — two quick taps (king and rook),
+ - promotion — a tap with a rising tone,
+ - solved puzzle / brilliant move — a bell arpeggio,
+ - mistake — a soft, falling "bonk".
 
-Drewniane puknięcie to suma kilku szybko gasnących, niskich drgań własnych (jak deska) i krótkiego,
-stłumionego szumu uderzenia. Dzwonek to czysty ton z dwiema słabymi harmonicznymi. Na końcu każdy dźwięk
-przechodzi przez filtr dolnoprzepustowy i dostaje delikatne echo — brzmi miękko, nie „bije po uszach”.
-Próbki są generowane w formacie, w jakim system faktycznie otworzył dźwięk (mono albo stereo).
+The wooden tap is a sum of a few quickly decaying low resonances (like a board) and a short,
+muffled impact noise. The bell is a pure tone with two faint harmonics. Finally every sound goes
+through a low-pass filter and gets a gentle echo — it sounds soft rather than harsh.
+Samples are generated in the format the system actually opened the audio device with (mono or stereo).
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ from array import array
 import pygame
 
 PREFERRED_RATE = 44100
-#: Mały bufor = dźwięk ruchu słychać od razu po puszczeniu figury.
+#: Small buffer = the move sound is heard right after the piece is dropped.
 BUFFER = 512
 
 
 def pre_init() -> None:
-    """Wywoływane przed ``pygame.init()``: format i mały bufor (niskie opóźnienie)."""
+    """Called before ``pygame.init()``: format and a small buffer (low latency)."""
     pygame.mixer.pre_init(PREFERRED_RATE, -16, 2, BUFFER)
 
 
@@ -43,9 +43,9 @@ class _Synth:
         return [0.0] * int(self.rate * seconds)
 
     def knock(self, out: list[float], start: float, gain: float = 1.0, brightness: float = 1.0) -> None:
-        """Drewniane puknięcie: drgania własne deski + krótki, przefiltrowany szum uderzenia."""
+        """Wooden tap: board resonances + a short, filtered impact noise."""
         rate = self.rate
-        # Niskie, „ciepłe” drgania (bez ostrych wysokich tonów, które męczą ucho).
+        # Low, warm resonances (no harsh high tones that tire the ear).
         modes = ((140.0, 30.0, 0.7), (290.0, 42.0, 1.0), (560.0, 65.0, 0.45), (980.0 * brightness, 95.0, 0.15))
         begin = int(start * rate)
         length = min(len(out) - begin, int(0.15 * rate))
@@ -53,7 +53,7 @@ class _Synth:
         alpha = min(0.5, 0.1 * brightness)
         for i in range(length):
             t = i / rate
-            drop = 1 + 0.05 * math.exp(-t * 70)  # lekkie opadanie wysokości tuż po uderzeniu
+            drop = 1 + 0.05 * math.exp(-t * 70)  # slight pitch drop right after the impact
             value = 0.0
             for freq, decay, amp in modes:
                 value += amp * math.exp(-t * decay) * math.sin(2 * math.pi * freq * drop * t)
@@ -64,9 +64,9 @@ class _Synth:
             out[begin + i] += gain * attack * value
 
     def bell(self, out: list[float], start: float, freq: float, gain: float = 1.0, decay: float = 5.0, length: float = 0.6) -> None:
-        """Dzwonek: tony o proporcjach dzwonu, wyższe gasną szybciej."""
+        """Bell: tones in bell-like ratios, higher ones decay faster."""
         rate = self.rate
-        partials = ((1.0, 1.0, 1.0), (2.0, 0.2, 1.8), (3.0, 0.06, 2.6))  # miękki, „szklany” dzwoneczek
+        partials = ((1.0, 1.0, 1.0), (2.0, 0.2, 1.8), (3.0, 0.06, 2.6))  # soft, glassy little bell
         begin = int(start * rate)
         count = min(len(out) - begin, int(length * rate))
         for i in range(count):
@@ -78,7 +78,7 @@ class _Synth:
             out[begin + i] += gain * attack * value
 
     def tone(self, out: list[float], start: float, f0: float, f1: float, length: float, gain: float, decay: float) -> None:
-        """Miękki ton z przesuwaną wysokością (do dźwięku błędu i promocji)."""
+        """Soft tone with a sliding pitch (for the mistake and promotion sounds)."""
         rate = self.rate
         begin = int(start * rate)
         count = min(len(out) - begin, int(length * rate))
@@ -92,7 +92,7 @@ class _Synth:
 
 
 def _soften(samples: list[float], rate: int, cutoff: float = 2600.0, echo: float = 0.12) -> list[float]:
-    """Filtr dolnoprzepustowy (zabiera ostre „cyknięcia”) i delikatne, krótkie echo dla ciepła."""
+    """Low-pass filter (removes sharp clicks) and a gentle, short echo for warmth."""
     alpha = 1 - math.exp(-2 * math.pi * cutoff / rate)
     out: list[float] = []
     state = 0.0
@@ -106,7 +106,7 @@ def _soften(samples: list[float], rate: int, cutoff: float = 2600.0, echo: float
 
 
 def _pcm(samples: list[float], channels: int, peak: float) -> array:
-    """Normalizacja do zadanego poziomu, łagodne wyciszenie końcówki i zamiana na 16-bitowe PCM."""
+    """Normalises to the given level, fades out the tail gently and converts to 16-bit PCM."""
     top = max((abs(x) for x in samples), default=1.0) or 1.0
     scale = peak / top
     fade = min(len(samples), 220)
@@ -121,7 +121,7 @@ def _pcm(samples: list[float], channels: int, peak: float) -> array:
 
 
 def build_sounds(rate: int) -> dict[str, list[float]]:
-    """Wszystkie dźwięki jako próbki (float) — osobno od pygame, żeby dało się je testować."""
+    """All sounds as float samples — separate from pygame so they can be tested."""
     s = _Synth(rate)
     move = s.buffer(0.18)
     s.knock(move, 0.0, 1.0, 1.0)
@@ -160,13 +160,13 @@ def build_sounds(rate: int) -> dict[str, list[float]]:
     return {name: _soften(samples, rate) for name, samples in sounds.items()}
 
 
-#: Głośność poszczególnych dźwięków (szczyt próbek, 0..1).
+#: Volume of each sound (sample peak, 0..1).
 _LEVELS = {"move": 0.45, "capture": 0.52, "check": 0.45, "castle": 0.45, "promote": 0.45, "success": 0.42, "brilliant": 0.45, "error": 0.32}
 
 
 class Sounds:
     def __init__(self, enabled: bool = True, background: bool = False, volume: float = 0.7) -> None:
-        """``background=True``: dźwięki syntezują się w osobnym wątku (ok. 0,6 s), a okno startuje od razu."""
+        """``background=True``: sounds are synthesised in a separate thread (about 0.6 s) and the window starts immediately."""
         self.enabled = enabled
         self.volume = volume
         self.available = False
@@ -176,14 +176,14 @@ class Sounds:
                 pygame.mixer.init(PREFERRED_RATE, -16, 2, BUFFER)
             init = pygame.mixer.get_init()
             if init is None:
-                raise pygame.error("brak dźwięku")
+                raise pygame.error("no audio")
             rate, size, channels = init
             if size != -16:
-                raise pygame.error("nieobsługiwany format próbek")
+                raise pygame.error("unsupported sample format")
         except (pygame.error, NotImplementedError):
             return
         if background:
-            threading.Thread(target=self._build, args=(rate, channels), daemon=True, name="TacticMind-dźwięki").start()
+            threading.Thread(target=self._build, args=(rate, channels), daemon=True, name="TacticMind-sounds").start()
         else:
             self._build(rate, channels)
 
@@ -197,7 +197,7 @@ class Sounds:
         self.available = True
 
     def set_volume(self, volume: float) -> None:
-        """Głośność 0..1 (krzywa kwadratowa — suwak zmienia głośność „naturalnie” dla ucha)."""
+        """Volume 0..1 (quadratic curve — the slider changes loudness in a way that feels natural to the ear)."""
         self.volume = min(1.0, max(0.0, volume))
         for sound in self._sounds.values():
             sound.set_volume(self.volume**2)

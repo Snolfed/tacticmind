@@ -8,3 +8,4 @@ __pycache__/
 *.csv.zst
 tacticmind/engine/native/build/
 *.bin
+*.egg-info/

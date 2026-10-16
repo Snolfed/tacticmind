@@ -1,4 +1,4 @@
-"""Elo, Glicko-2, wynik zadania, model gracza i profil."""
+"""Elo, Glicko-2, puzzle score, player model and profile."""
 
 import math
 
@@ -13,10 +13,10 @@ from tacticmind.rating.profile import PlayerProfile, load_profile, puzzle_score,
 
 def test_expected_score_examples() -> None:
     assert elo.expected_score(1500, 1500) == pytest.approx(0.5)
-    # Różnica 400 punktów = szanse 10:1.
+    # A 400-point difference = 10:1 odds.
     assert elo.expected_score(1600, 1200) == pytest.approx(10 / 11)
     assert elo.expected_score(1200, 1600) == pytest.approx(1 / 11)
-    # Zadanie o 100 łatwiejsze niż gracz ≈ 64% szans (stąd cel R − 100 dla „strefy flow”).
+    # A puzzle 100 easier than the player ≈ 64% chance (hence the R − 100 target for the "flow zone").
     assert elo.expected_score(1500, 1400) == pytest.approx(0.6401, abs=1e-4)
 
 
@@ -45,7 +45,7 @@ def test_target_rating_inverts_expected_score() -> None:
 
 
 def test_glicko2_paper_example() -> None:
-    """Przykład z artykułu Glickmana: 1500/200/0.06 kontra trzech przeciwników."""
+    """The example from Glickman's paper: 1500/200/0.06 against three opponents."""
     player = glicko2.Glicko2Rating(1500, 200, 0.06)
     result = glicko2.update(player, [(1400, 30, 1.0), (1550, 100, 0.0), (1700, 300, 0.0)])
     assert result.rating == pytest.approx(1464.06, abs=0.01)
@@ -70,7 +70,7 @@ def test_puzzle_score_rules() -> None:
     assert puzzle_score(outcome(hint=True), None) == 0.5
     assert puzzle_score(outcome(solved=False, mistake=True), None) == 0.0
     assert puzzle_score(outcome(solved=False, revealed=True), None) == 0.0
-    # Kara za czas: powyżej 3× średniej, maksymalnie −0.2.
+    # Time penalty: above 3× the average, at most −0.2.
     assert puzzle_score(outcome(t=29), 10.0) == 1.0
     assert puzzle_score(outcome(t=45), 10.0) == pytest.approx(0.9)
     assert puzzle_score(outcome(t=1000), 10.0) == pytest.approx(0.8)
@@ -117,9 +117,9 @@ def test_player_model_weakest() -> None:
         model.record(["fork", "short"], True, 1.0)
     for success in (False, False, True):
         model.record(["pin"], success, 1.0 if success else 0.0)
-    model.record(["skewer"], False, 0.0)  # za mało prób, żeby uznać za słabą stronę
+    model.record(["skewer"], False, 0.0)  # too few attempts to count as a weakness
     weakest = model.weakest()
     assert weakest[0][0] == "pin"
     assert math.isclose(weakest[0][1], 1 / 3)
-    assert all(theme != "short" for theme, _ in weakest)  # motywy „meta” nie są śledzone
+    assert all(theme != "short" for theme, _ in weakest)  # "meta" themes are not tracked
     assert "skewer" not in [t for t, _ in weakest]

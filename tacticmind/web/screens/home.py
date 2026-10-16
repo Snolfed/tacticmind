@@ -1,4 +1,4 @@
-"""Ekran startowy: nazwa gry, opis, przyciski i ozdobna szachownica, na której AI pokazuje mata."""
+"""Home screen: game title, description, buttons and a decorative board on which the AI shows a mate."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from ...brain.notation import uci_san
 from ...i18n import t
 from .base import WebScreen
 
-#: Pozycja na ozdobnej szachownicy: mat szewski — AI pokazuje strzałką ruch Hxf7#.
+#: Position on the decorative board: Scholar's mate — the AI shows the move Qxf7# with an arrow.
 DEMO_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
 DEMO_MOVE = "h5f7"
 DEMO_LAST = "f1c4"

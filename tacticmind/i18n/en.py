@@ -610,5 +610,5 @@ STRINGS: dict[str, str] = {
     "theme_expl.xRayAttack": "X-ray attack: a piece acts “through” another piece on the same line.",
 }
 
-# Nazwy i objaśnienia otwarć są w osobnym pliku (jest ich kilkaset).
+# Opening names and explanations live in a separate file (there are several hundred of them).
 STRINGS.update(_OPENINGS)

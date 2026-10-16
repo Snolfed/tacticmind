@@ -1,5 +1,5 @@
-// Portret trenera („Trener Maks”) w SVG — port ui/coach_avatar.py (te same kształty w jednostkach 0–100).
-// Miny: neutral, happy, excited, thinking, concerned, shocked; trener mruga co kilka sekund.
+// The coach's portrait ("Coach Max") in SVG — port of ui/coach_avatar.py (same shapes in 0–100 units).
+// Expressions: neutral, happy, excited, thinking, concerned, shocked; the coach blinks every few seconds.
 
 import { useEffect, useId, useState, type ReactElement } from "react";
 
@@ -129,7 +129,7 @@ export function CoachAvatar({ expression = "neutral", size = 64 }: { expression?
         <rect width="100" height="100" fill={`url(#${id}-bg)`} />
         <g fill="rgba(255,255,255,0.055)">{cells}</g>
         <circle cx="30" cy="22" r="34" fill="rgba(255,255,255,0.13)" />
-        {/* tułów */}
+        {/* torso */}
         <ellipse cx="50" cy="106" rx="44" ry="32" fill={HOODIE} />
         <ellipse cx="50" cy="81" rx="28" ry="11" fill={HOODIE_LIGHT} />
         <ellipse cx="50" cy="78" rx="13" ry="6" fill={SHIRT} />
@@ -151,7 +151,7 @@ export function CoachAvatar({ expression = "neutral", size = 64 }: { expression?
           1.2,
         )}
         <image href="/pieces/wN.svg" x="58" y="80" width="14" height="14" />
-        {/* głowa */}
+        {/* head */}
         <ellipse cx="50" cy="30" rx="23" ry="17" fill={HAIR} />
         <ellipse cx="29.5" cy="45" rx="4" ry="6" fill={SKIN_SHADE} />
         <ellipse cx="70.5" cy="45" rx="4" ry="6" fill={SKIN_SHADE} />
@@ -169,7 +169,7 @@ export function CoachAvatar({ expression = "neutral", size = 64 }: { expression?
         )}
         <Eyebrows expression={expression} />
         <Eyes expression={expression} blink={blink} />
-        {/* okulary */}
+        {/* glasses */}
         <circle cx="42" cy="45" r="7.3" fill="rgba(200,230,255,0.16)" />
         <circle cx="58" cy="45" r="7.3" fill="rgba(200,230,255,0.16)" />
         <circle cx="42" cy="45" r="7.6" fill="none" stroke={GLASSES} strokeWidth="1.35" />

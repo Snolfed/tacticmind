@@ -1,16 +1,16 @@
-"""Słowne wyjaśnienia trenera: co robi ruch, czym grozi przeciwnik i jaki ruch byłby lepszy.
+"""The coach's verbal explanations: what a move does, what the opponent threatens and which move would be better.
 
-Wyjaśnienia są **danymi** (``Phrase`` — klucz tłumaczenia + parametry), a nie gotowym tekstem.
-Tekst powstaje dopiero przy rysowaniu (``render``), więc po zmianie języka w trakcie partii
-wszystkie komentarze trenera od razu mówią w nowym języku, z właściwymi literami figur w notacji.
+Explanations are **data** (``Phrase`` - a translation key + parameters), not ready-made text.
+The text is produced only when drawing (``render``), so after a language change mid-game
+all the coach's comments immediately speak the new language, with the right piece letters in the notation.
 
-Skąd trener wie, co powiedzieć (bez modelu językowego — tylko reguły i wyniki silnika):
- - **co robi ruch** — proste fakty z pozycji: bicie, szach, roszada, atak na figurę (także dwie
-   naraz — widełki), zabranie figury spod ataku, osłona figury, rozwój, walka o centrum, wieża
-   na otwartej linii,
- - **co było lepsze** — najlepszy ruch i wariant z analizy silnika (MultiPV) przed ruchem gracza;
-   bilans materiału na końcu wariantu mówi, czy lepszy ruch wygrywał materiał albo dawał mata,
- - **czym grozi przeciwnik** — wariant silnika po ruchu gracza: mat albo strata materiału.
+How the coach knows what to say (no language model - only rules and engine results):
+ - **what the move does** - simple facts from the position: capture, check, castling, attack on a piece
+   (also two at once - a fork), moving a piece out of attack, defending a piece, development, fighting
+   for the centre, a rook on an open file,
+ - **what was better** - the best move and line from the engine analysis (MultiPV) before the player's move;
+   the material balance at the end of the line tells whether the better move won material or gave mate,
+ - **what the opponent threatens** - the engine line after the player's move: mate or loss of material.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from ..engine.types import MATE, MATE_BOUND, EngineScore, format_score
 from ..i18n import t, tn
 from .review import WEAK, Classification
 
-Person = str  # "you" (gracz) | "me" (trener) | "it" (proponowany ruch)
+Person = str  # "you" (player) | "me" (coach) | "it" (suggested move)
 
 _VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 _NAMES = {chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop", chess.ROOK: "rook", chess.QUEEN: "queen", chess.KING: "king"}
@@ -37,11 +37,11 @@ _HOME = {
 
 
 # ---------------------------------------------------------------------------
-# Elementy wyjaśnień (tłumaczone przy rysowaniu)
+# Explanation elements (translated when drawn)
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class San:
-    """Ruch w notacji SAN z literami figur w języku interfejsu."""
+    """A move in SAN notation with piece letters in the interface language."""
 
     fen: str
     uci: str
@@ -49,7 +49,7 @@ class San:
 
 @dataclass(frozen=True)
 class Line:
-    """Wariant z numerami ruchów, np. „1. Hxf7+ Kxf7 2. Sg5+”."""
+    """A line with move numbers, e.g. "1. Qxf7+ Kxf7 2. Ng5+"."""
 
     fen: str
     ucis: tuple[str, ...]
@@ -57,21 +57,21 @@ class Line:
 
 @dataclass(frozen=True)
 class PieceName:
-    """Nazwa figury w bierniku („skoczka”, „wieżę” / “knight”, “rook”)."""
+    """Piece name in the accusative case ("knight", "rook" / Polish "skoczka", "wieżę")."""
 
     piece_type: int
 
 
 @dataclass(frozen=True)
 class Material:
-    """Ilość materiału w pionach: „piona”, „figurę”, „wieżę”, „hetmana” albo „5 pkt materiału”."""
+    """Amount of material in pawns: "a pawn", "a piece", "a rook", "the queen" or "5 points of material"."""
 
     points: int
 
 
 @dataclass(frozen=True)
 class Score:
-    """Ocena z perspektywy gracza (wartość silnika, mat = ±(32000 − półruchy))."""
+    """Score from the player's perspective (engine value, mate = ±(32000 − plies))."""
 
     value: int
 
@@ -80,13 +80,13 @@ class Score:
 class Phrase:
     key: str
     params: tuple[tuple[str, object], ...] = ()
-    #: Liczba do odmiany (klucz z końcówkami .one/.few/.many), np. „2 błędy”, „5 błędów”.
+    #: Number for pluralisation (key with .one/.few/.many suffixes), e.g. "1 mistake", "5 mistakes".
     count: int | None = None
 
 
 @dataclass(frozen=True)
 class Features:
-    """Lista cech ruchu połączona spójnikiem („rozwijasz skoczka i walczysz o centrum”)."""
+    """List of move features joined with a conjunction ("you develop the knight and fight for the centre")."""
 
     items: tuple[Phrase, ...]
 
@@ -99,7 +99,7 @@ Comment = tuple[Phrase, ...]
 
 
 def render(item: object) -> str:
-    """Zamiana elementu wyjaśnienia na tekst w bieżącym języku."""
+    """Turn an explanation element into text in the current language."""
     if isinstance(item, Phrase):
         params = {name: render(value) for name, value in item.params}
         if item.count is not None:
@@ -125,7 +125,7 @@ def render(item: object) -> str:
 
 
 def render_comment(comment: Comment) -> str:
-    """Kilka zdań komentarza, każde zaczęte wielką literą."""
+    """Several comment sentences, each starting with a capital letter."""
     return " ".join(_capitalize(render(p)) for p in comment if p.key)
 
 
@@ -142,10 +142,10 @@ def _format_value(value: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fakty o pozycji
+# Facts about the position
 # ---------------------------------------------------------------------------
 def is_hanging(board: chess.Board, square: chess.Square) -> bool:
-    """Figura „wisi”: jest atakowana i nie ma obrony albo atakuje ją tańsza figura."""
+    """A piece is "hanging": it is attacked and undefended, or attacked by a cheaper piece."""
     piece = board.piece_at(square)
     if piece is None or piece.piece_type == chess.KING:
         return False
@@ -163,7 +163,7 @@ def _hanging_pieces(board: chess.Board, color: chess.Color) -> set[chess.Square]
 
 
 def move_features(board: chess.Board, move: chess.Move, person: Person, limit: int = 2) -> Features:
-    """Najważniejsze cechy ruchu (co najwyżej ``limit``), od najważniejszych."""
+    """The most important features of a move (at most ``limit``), most important first."""
     piece = board.piece_at(move.from_square)
     if piece is None:
         return Features(())
@@ -181,7 +181,7 @@ def move_features(board: chess.Board, move: chess.Move, person: Person, limit: i
         victim = chess.PAWN if board.is_en_passant(move) else board.piece_type_at(move.to_square) or chess.PAWN
         found.append(phrase(f"feat.capture.{person}", piece=PieceName(victim), square=chess.square_name(move.to_square)))
 
-    # Nowe cele ruszonej figury: cenniejsze od niej albo bez obrony (bez pionów i króla).
+    # New targets of the moved piece: more valuable than it or undefended (excluding pawns and the king).
     moved = after.piece_type_at(move.to_square) or piece.piece_type
     targets = []
     for sq in after.attacks(move.to_square):
@@ -230,12 +230,12 @@ def move_features(board: chess.Board, move: chess.Move, person: Person, limit: i
 
 
 def material_after(board: chess.Board, pv: list[str], color: chess.Color, plies: int) -> tuple[int, int]:
-    """Zmiana materiału (w pionach) dla ``color`` po co najwyżej ``plies`` półruchach wariantu.
+    """Material change (in pawns) for ``color`` after at most ``plies`` plies of the line.
 
-    Zwraca (zmiana, liczba półruchów do pokazania). Liczymy do końca pełnej wymiany: jeśli ostatni
-    ruch był biciem, a następny ruch wariantu jest odbiciem, doliczamy także odbicie. Ciche ruchy
-    na końcu wariantu (po których bilans już się nie zmienia) odcinamy — komentarz kończy się
-    na ruchu, który naprawdę zabiera materiał.
+    Returns (change, number of plies to show). We count to the end of a full exchange: if the last
+    move was a capture and the next move of the line is a recapture, the recapture is counted too. Quiet
+    moves at the end of the line (after which the balance no longer changes) are cut off - the comment
+    ends on the move that actually wins material.
     """
     start = material(board, color)
     work = board.copy(stack=False)
@@ -262,7 +262,7 @@ def _mate_moves(value: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Komentarze trenera
+# Coach comments
 # ---------------------------------------------------------------------------
 def player_comment(
     board: chess.Board,
@@ -274,11 +274,11 @@ def player_comment(
     played_value: int,
     reply_pv: list[str],
 ) -> Comment:
-    """Komentarz do ruchu gracza (wartości ocen z perspektywy gracza).
+    """Comment on the player's move (score values from the player's perspective).
 
-    :param board: pozycja przed ruchem,
-    :param best_pv: wariant najlepszego ruchu (od niego),
-    :param reply_pv: najlepszy wariant przeciwnika po ruchu gracza.
+    :param board: position before the move,
+    :param best_pv: line of the best move (starting with it),
+    :param reply_pv: the opponent's best line after the player's move.
     """
     me = board.turn
     fen = board.fen()
@@ -296,7 +296,7 @@ def player_comment(
     after = board.copy(stack=False)
     after.push(move)
     after_fen = after.fen()
-    # 1. Co się stanie po ruchu gracza.
+    # 1. What happens after the player's move.
     if played_value < -MATE_BOUND and reply_pv:
         n = _mate_moves(played_value)
         parts.append(phrase("coach.allows_mate", line=Line(after_fen, tuple(reply_pv[: 2 * n - 1]))))
@@ -306,7 +306,7 @@ def player_comment(
             parts.append(phrase("coach.loses", line=Line(after_fen, tuple(reply_pv[:played])), material=Material(-change)))
         elif played_value < best_value - 100:
             parts.append(phrase("coach.reply_advantage", move=San(after_fen, reply_pv[0])))
-    # 2. Co było lepsze i dlaczego.
+    # 2. What was better and why.
     if best_uci and best_uci != move.uci():
         if best_value > MATE_BOUND:
             n = _mate_moves(best_value)
@@ -326,7 +326,7 @@ def player_comment(
 
 
 def find_threat(board: chess.Board, threatening: chess.Color) -> Phrase | None:
-    """Czym grozi ``threatening`` (ta strona właśnie wykonała ruch): matem albo zbiciem wiszącej figury."""
+    """What ``threatening`` threatens (that side has just moved): mate or capturing a hanging piece."""
     if board.is_check() or board.is_game_over():
         return None
     null = board.copy(stack=False)
@@ -345,7 +345,7 @@ def find_threat(board: chess.Board, threatening: chess.Color) -> Phrase | None:
 
 
 def trainer_comment(board: chess.Board, move: chess.Move) -> Comment:
-    """Trener objaśnia własny ruch i ostrzega przed swoją groźbą."""
+    """The coach explains its own move and warns about its threat."""
     parts = [phrase("coach.trainer_move", move=San(board.fen(), move.uci()), features=move_features(board, move, "me"))]
     after = board.copy(stack=False)
     after.push(move)
@@ -356,7 +356,7 @@ def trainer_comment(board: chess.Board, move: chess.Move) -> Comment:
 
 
 def book_comment(board: chess.Board, move: chess.Move, name_id: str | None, comment_key: str | None, trainer: bool) -> Comment:
-    """Komentarz do ruchu z teorii: nazwa debiutu i objaśnienie ruchu z linii otwarcia."""
+    """Comment on a book move: the opening name and the explanation of the move from the opening line."""
     parts: list[Phrase] = []
     san = San(board.fen(), move.uci())
     name = Phrase(f"opening.{name_id}.name") if name_id else None

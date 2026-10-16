@@ -1,9 +1,9 @@
-"""Teksty po polsku (język domyślny)."""
+"""Polish strings."""
 
 from .openings_pl import STRINGS as _OPENINGS
 
 STRINGS: dict[str, str] = {
-    # --- ogólne -----------------------------------------------------------
+    # --- general ----------------------------------------------------------
     "app.caption": "TacticMind — zadania taktyczne i trener szachowy z AI, które myśli na głos",
     "lang.name": "Polski",
     "common.cancel": "Anuluj",
@@ -14,7 +14,7 @@ STRINGS: dict[str, str] = {
     "notation.pieces": "KHWGS",
     "side.white": "Białe",
     "side.black": "Czarne",
-    # --- górny pasek ------------------------------------------------------
+    # --- top bar ----------------------------------------------------------
     "nav.play": "Zadania",
     "nav.stats": "Statystyki",
     "nav.howto": "Jak działa AI?",
@@ -34,7 +34,7 @@ STRINGS: dict[str, str] = {
     "settings.hint": "F3 — szybkie włączenie licznika FPS",
     "settings.tooltip": "Ustawienia",
     "fps.overlay": "{fps} FPS · {ms} ms",
-    # --- ekran startowy ---------------------------------------------------
+    # --- home -------------------------------------------------------------
     "home.tagline": "Zadania taktyczne i partie z trenerem — z AI, które myśli na głos",
     "home.desc": "Własny silnik (alfa-beta) pokazuje na żywo, co liczy. Ranking dopasowuje zadania do Twojego poziomu, a trener tłumaczy każdy ruch i uczy otwarć.",
     "home.play": "Zadania taktyczne",
@@ -46,7 +46,7 @@ STRINGS: dict[str, str] = {
     "home.hint_arrows": "Wskazówka: prawym przyciskiem myszy rysujesz strzałki i zaznaczasz pola.",
     "source.full": "pełny zestaw",
     "source.starter": "zestaw startowy",
-    # --- ekran gry --------------------------------------------------------
+    # --- play screen ------------------------------------------------------
     "play.title": "Zadanie · grasz: {side}",
     "play.rating": "Ranking zadania: {rating}",
     "play.rating_hidden": "Ranking zadania: ukryty",
@@ -89,7 +89,7 @@ STRINGS: dict[str, str] = {
     "play.new_position": "Nowa pozycja po {move} — liczę od nowa.",
     "play.new_position_plain": "Nowa pozycja — liczę od nowa.",
     "play.engine_error": "Błąd silnika: {msg}",
-    # --- panel Mózg AI ----------------------------------------------------
+    # --- AI brain panel ---------------------------------------------------
     "brain.title": "Mózg AI",
     "brain.thinking": "liczy…",
     "brain.ready": "gotowe",
@@ -115,7 +115,7 @@ STRINGS: dict[str, str] = {
     "brain.tree.more": "… i jeszcze {n} ruchów",
     "brain.tree.pruned": "odcięte (cięcie β)",
     "brain.tree.tt": "(z TT)",
-    # --- myśli AI (szablony) ----------------------------------------------
+    # --- AI thoughts (templates) ------------------------------------------
     "thought.first": "Głębokość {d}: na pierwszy rzut oka najlepsze wydaje się {move} ({score}).",
     "thought.change_mate": "Zmieniam zdanie! Na głębokości {d} widzę mata w {n} po {move}.",
     "thought.change": "Zmieniam zdanie! Na głębokości {d} lepsze jest {move} ({score}) niż {old}.",
@@ -137,7 +137,7 @@ STRINGS: dict[str, str] = {
     "gain.piece": "wygrywam figurę",
     "gain.exchange": "wygrywam jakość",
     "gain.pawn": "wygrywam piona",
-    # --- wyjaśnienie zadania i błędu -------------------------------------
+    # --- puzzle and mistake explanations ----------------------------------
     "explain.solution": "Rozwiązanie: {line}",
     "explain.key_mate": "Kluczowy ruch {move} prowadzi do mata w {n}.",
     "explain.key": "Kluczowy ruch: {move}.",
@@ -153,7 +153,7 @@ STRINGS: dict[str, str] = {
     "refute.material": "Tracisz materiał ({n} pkt).",
     "refute.eval": "Ocena: {score}.",
     "refute.lost": "Przewaga przepada.",
-    # --- trener: wyjaśnienia ruchów ---------------------------------------
+    # --- coach: move explanations ---------------------------------------
     "list.and": " i ",
     "piece.acc.pawn": "piona",
     "piece.acc.knight": "skoczka",
@@ -241,7 +241,7 @@ STRINGS: dict[str, str] = {
     "cls.inaccuracy": "Niedokładność",
     "cls.mistake": "Błąd",
     "cls.blunder": "Przeoczenie",
-    # --- trener: ekrany ---------------------------------------------------
+    # --- coach: screens ---------------------------------------------------
     "nav.coach": "Trener",
     "home.coach": "Graj z trenerem",
     "rating.coach_caption": "Partie z trenerem",
@@ -353,7 +353,7 @@ STRINGS: dict[str, str] = {
         "widełki, rozwój) i z wariantów silnika. Po 10 partiach kalibracji ranking Glicko-2 z partii z trenerem "
         "ustala „Twój poziom”, który zmienia się co 5 partii."
     ),
-    # --- dobór zadania ----------------------------------------------------
+    # --- puzzle selection -------------------------------------------------
     "reason.flow": "Ranking zadania ok. {target}, celuję w {pct}% szans (strefa flow).",
     "reason.easier.one": "{n} porażka z rzędu — daję wyraźnie łatwiejsze zadanie, żeby odbudować pewność.",
     "reason.easier.few": "{n} porażki z rzędu — daję wyraźnie łatwiejsze zadanie, żeby odbudować pewność.",
@@ -365,7 +365,7 @@ STRINGS: dict[str, str] = {
     "reason.weak": "Twoja słaba strona: {theme} ({pct}%).",
     "reason.fresh": "Dla odmiany nowy motyw: {theme}.",
     "reason.calibration": "Kalibracja: zadanie {n}/10 — ranking zmienia się teraz szybciej.",
-    # --- statystyki ---------------------------------------------------------
+    # --- statistics -------------------------------------------------------
     "stats.title": "Statystyki",
     "stats.system": "System rankingowy:",
     "stats.rating": "Ranking",
@@ -383,7 +383,7 @@ STRINGS: dict[str, str] = {
     "stats.reset_yes": "Tak, usuń",
     "charts.no_data": "Za mało danych — rozwiąż kilka zadań.",
     "charts.no_themes": "Brak danych o motywach.",
-    # --- Jak działa AI? -----------------------------------------------------
+    # --- How the AI works -------------------------------------------------
     "howto.title": "Jak działa AI?",
     "howto.intro": (
         "TacticMind ma dwa elementy sztucznej inteligencji: własny silnik szachowy (przeszukiwanie drzewa gry "
@@ -516,7 +516,7 @@ STRINGS: dict[str, str] = {
         "(kliknij). Z klawiszem Shift kolor jest czerwony, z Ctrl — niebieski, z Alt — turkusowy. Lewy klik "
         "na szachownicy usuwa rysunki."
     ),
-    # --- motywy (baza Lichess) -------------------------------------------
+    # --- themes (Lichess database) ----------------------------------------
     "theme.advancedPawn": "zaawansowany pion",
     "theme.advantage": "przewaga",
     "theme.anastasiaMate": "mat Anastazji",
@@ -590,7 +590,7 @@ STRINGS: dict[str, str] = {
     "theme.vukovicMate": "mat Vukovicia",
     "theme.xRayAttack": "atak rentgenowski",
     "theme.zugzwang": "zugzwang",
-    # --- wyjaśnienia motywów ---------------------------------------------
+    # --- theme explanations -----------------------------------------------
     "theme_expl.fork": "Widełki: jedna figura atakuje naraz dwa cele — przeciwnik nie obroni obu.",
     "theme_expl.pin": "Związanie: zaatakowana figura nie może się ruszyć, bo odsłoniłaby cenniejszą figurę za sobą.",
     "theme_expl.skewer": "Przeszycie: atak na cenną figurę, która musi uciec i odsłania figurę za sobą.",
@@ -617,5 +617,5 @@ STRINGS: dict[str, str] = {
     "theme_expl.xRayAttack": "Atak rentgenowski: figura działa „przez” inną figurę na tej samej linii.",
 }
 
-# Nazwy i objaśnienia otwarć są w osobnym pliku (jest ich kilkaset).
+# Opening names and explanations live in a separate file (there are several hundred of them).
 STRINGS.update(_OPENINGS)

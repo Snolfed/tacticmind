@@ -1,23 +1,23 @@
-"""Silnik w osobnym procesie, żeby interfejs nigdy się nie przycinał (odpowiednik Web Workera).
+"""The engine in a separate process, so the UI never stutters (the equivalent of a Web Worker).
 
-Protokół — małe obiekty przesyłane przez ``multiprocessing.Queue``:
+Protocol: small objects sent through ``multiprocessing.Queue``:
 
-Zapytania do silnika:
- - ``AnalyzeRequest`` — wyszukiwanie z iterative deepening (FEN, maks. głębokość, czas, MultiPV),
- - ``CompareRequest`` — tryb porównawczy minimaks vs alfa-beta,
- - ``StopRequest`` — przerwanie bieżącego liczenia,
- - ``QuitRequest`` — zakończenie procesu.
+Requests to the engine:
+ - ``AnalyzeRequest`` - iterative deepening search (FEN, max depth, time, MultiPV),
+ - ``CompareRequest`` - minimax vs alpha-beta comparison mode,
+ - ``StopRequest`` - stop the current search,
+ - ``QuitRequest`` - terminate the process.
 
-Odpowiedzi silnika:
- - ``InfoEvent`` — po każdej ukończonej głębokości: ``SearchInfo`` z polami
-   depth, score (cp lub mat), pv, multi_pv, nodes, nps, cutoffs, tt_hits, time_ms,
- - ``ProgressEvent`` — co ok. 100 ms (liczniki na żywo w trakcie głębokości),
- - ``DoneEvent`` — koniec wyszukiwania (wynik ostatniej pełnej głębokości),
+Engine responses:
+ - ``InfoEvent`` - after each completed depth: ``SearchInfo`` with the fields
+   depth, score (cp or mate), pv, multi_pv, nodes, nps, cutoffs, tt_hits, time_ms,
+ - ``ProgressEvent`` - every ~100 ms (live counters during a depth),
+ - ``DoneEvent`` - end of search (result of the last full depth),
  - ``CompareEvent``, ``ErrorEvent``.
 
-Przerwanie działa natychmiast: interfejs ustawia współdzieloną flagę
-``multiprocessing.Event``, a wyszukiwanie sprawdza ją co 1024 węzły.
-Proces obsługuje kolejne zapytania bez restartu.
+Stopping is immediate: the UI sets a shared ``multiprocessing.Event`` flag,
+and the search checks it every 1024 nodes.
+The process handles successive requests without restarting.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from .csearch import AnySearcher, make_searcher
 from .search import SearchLimits
 from .types import CompareResult, SearchInfo, SearchProgress
 
-# ----------------------------------------------------------------- zapytania
+# ----------------------------------------------------------------- requests
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class QuitRequest:
 
 Request = AnalyzeRequest | CompareRequest | StopRequest | QuitRequest
 
-# ----------------------------------------------------------------- odpowiedzi
+# ----------------------------------------------------------------- responses
 
 
 @dataclass(frozen=True)
@@ -103,15 +103,15 @@ class ErrorEvent:
 EngineEvent = InfoEvent | ProgressEvent | DoneEvent | CompareEvent | ErrorEvent
 
 
-# ----------------------------------------------------------------- proces silnika
+# ----------------------------------------------------------------- engine process
 
 
 def _engine_main(requests: Queue[Request], responses: Queue[EngineEvent], stop_event: Event) -> None:
-    """Pętla procesu silnika."""
-    searcher = make_searcher()  # silnik w C (NNUE), a bez kompilatora — w Pythonie
+    """Engine process loop."""
+    searcher = make_searcher()  # C engine (NNUE), or the Python one when there is no compiler
     while True:
         message = requests.get()
-        # Jeśli w kolejce czeka więcej zapytań, ważne jest tylko najnowsze (chyba że to „quit”).
+        # If more requests are queued, only the newest matters (unless it's "quit").
         while not isinstance(message, QuitRequest):
             try:
                 message = requests.get_nowait()
@@ -128,7 +128,7 @@ def _engine_main(requests: Queue[Request], responses: Queue[EngineEvent], stop_e
             try:
                 result = compare_algorithms(message.fen, message.depth, message.include_minimax)
                 responses.put(CompareEvent(message.id, result))
-            except Exception as error:  # noqa: BLE001 — błąd raportujemy do interfejsu
+            except Exception as error:  # noqa: BLE001 - report the error to the UI
                 responses.put(ErrorEvent(message.id, str(error)))
 
 
@@ -165,15 +165,15 @@ def _analyze(
 
 
 class EngineClient:
-    """Strona interfejsu: wysyła zapytania do procesu silnika i odbiera wyniki bez blokowania."""
+    """UI side: sends requests to the engine process and receives results without blocking."""
 
     def __init__(self) -> None:
-        ctx = mp.get_context("spawn")  # ten sam sposób startu na Linuksie, Windowsie i macOS
+        ctx = mp.get_context("spawn")  # the same start method on Linux, Windows and macOS
         self._requests: Queue[Request] = ctx.Queue()
         self._responses: Queue[EngineEvent] = ctx.Queue()
         self._stop = ctx.Event()
         self._process = ctx.Process(
-            target=_engine_main, args=(self._requests, self._responses, self._stop), daemon=True, name="TacticMind-silnik"
+            target=_engine_main, args=(self._requests, self._responses, self._stop), daemon=True, name="TacticMind-engine"
         )
         self._process.start()
         self._next_id = 0
@@ -183,7 +183,7 @@ class EngineClient:
         return self._next_id
 
     def analyze(self, fen: str, *, max_depth: int = 32, time_ms: int = 3000, multi_pv: int = 3) -> int:
-        """Rozpoczyna analizę (przerywając poprzednią). Zwraca id zapytania."""
+        """Start an analysis (interrupting the previous one). Return the request id."""
         req_id = self._new_id()
         self._stop.set()
         self._requests.put(AnalyzeRequest(req_id, fen, max_depth, time_ms, multi_pv))
@@ -200,7 +200,7 @@ class EngineClient:
         self._requests.put(StopRequest())
 
     def poll(self) -> list[EngineEvent]:
-        """Wszystkie wiadomości, które przyszły od ostatniego wywołania (nie blokuje)."""
+        """All messages that arrived since the last call (non-blocking)."""
         events: list[EngineEvent] = []
         while True:
             try:

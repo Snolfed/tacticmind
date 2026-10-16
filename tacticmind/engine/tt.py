@@ -1,15 +1,15 @@
-"""Tablica transpozycji (TT).
+"""Transposition table (TT).
 
-Ta sama pozycja często pojawia się w drzewie wiele razy (inna kolejność tych
-samych ruchów = transpozycja). TT zapamiętuje dla pozycji (po haszu Zobrista):
-głębokość, ocenę, typ oceny i najlepszy ruch. Przy ponownym spotkaniu pozycji
-możemy od razu zwrócić wynik albo przynajmniej zacząć od najlepszego ruchu
-(co poprawia cięcia alfa-beta).
+The same position often appears in the tree many times (a different order of
+the same moves = a transposition). The TT remembers, per position (keyed by
+Zobrist hash): depth, score, score type and best move. When we meet the
+position again we can return the result immediately, or at least start from
+the best move (which improves alpha-beta cutoffs).
 
-Typ oceny wynika z alfa-bety:
- - EXACT: dokładna wartość (alfa < ocena < beta),
- - LOWER: ocena >= zapisanej (było cięcie beta),
- - UPPER: ocena <= zapisanej (żaden ruch nie poprawił alfy).
+The score type follows from alpha-beta:
+ - EXACT: exact value (alpha < score < beta),
+ - LOWER: score >= the stored one (there was a beta cutoff),
+ - UPPER: score <= the stored one (no move improved alpha).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ TT_UPPER = 3
 
 
 class TranspositionTable:
-    """Słownik hasz → (głębokość, typ, ocena, ruch, wiek) z ograniczonym rozmiarem."""
+    """Size-bounded dict hash -> (depth, type, score, move, age)."""
 
     def __init__(self, max_entries: int = 400_000) -> None:
         self.max_entries = max_entries
@@ -28,7 +28,7 @@ class TranspositionTable:
         self.age = 0
 
     def new_search(self) -> None:
-        """Nowe wyszukiwanie: wpisy z poprzednich wyszukiwań można nadpisywać w pierwszej kolejności."""
+        """New search: entries from previous searches are overwritten first."""
         self.age = (self.age + 1) & 0xFF
 
     def clear(self) -> None:
@@ -41,13 +41,13 @@ class TranspositionTable:
         table = self.table
         old = table.get(key)
         if old is not None:
-            # Głębszy wpis z bieżącego wyszukiwania jest cenniejszy — nie nadpisuj go płytszą granicą.
+            # A deeper entry from the current search is more valuable; don't overwrite it with a shallower bound.
             if old[4] == self.age and old[0] > depth and flag != TT_EXACT:
                 return
             if move == 0:
-                move = old[3]  # nie gub najlepszego ruchu
+                move = old[3]  # don't lose the best move
         elif len(table) >= self.max_entries:
-            # Prosta strategia przy przepełnieniu: wyrzuć wszystkie stare wpisy (albo wszystko).
+            # Simple overflow strategy: drop all stale entries (or everything).
             current = self.age
             stale = [k for k, v in table.items() if v[4] != current]
             if len(stale) > len(table) // 4:

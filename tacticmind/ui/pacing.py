@@ -1,9 +1,9 @@
-"""Równe tempo klatek: precyzyjny limiter FPS i licznik FPS w rogu okna.
+"""Even frame pacing: a precise FPS limiter and an FPS counter in the window corner.
 
-``pygame.time.Clock.tick`` liczy w pełnych milisekundach i usypia przez ``SDL_Delay``, które
-potrafi zaspać o kilka ms — klatki przychodzą wtedy nierówno (np. 15, 18, 16, 21 ms) i ruch
-wygląda, jakby drgał. Tutaj śpimy prawie do celu, a ostatnią chwilę odliczamy aktywnie na zegarze
-o rozdzielczości mikrosekund; kolejne cele są w stałych odstępach, więc tempo jest równe.
+``pygame.time.Clock.tick`` counts in whole milliseconds and sleeps via ``SDL_Delay``, which
+can oversleep by a few ms — frames then arrive unevenly (e.g. 15, 18, 16, 21 ms) and motion
+looks jittery. Here we sleep almost up to the target and busy-wait the last moment on a
+microsecond-resolution clock; successive targets are evenly spaced, so the pace is steady.
 """
 
 from __future__ import annotations
@@ -19,12 +19,12 @@ from .anim import clock
 from .scale import fs, px
 from .widgets import draw_text
 
-#: Ostatni fragment oczekiwania odliczany aktywnie (sen systemowy bywa mniej dokładny).
+#: The final part of the wait is busy-waited (OS sleep can be less accurate).
 SPIN = 0.0015
 
 
 class FramePacer:
-    """Pilnuje, żeby kolejne klatki zaczynały się co ``1 / fps`` sekundy."""
+    """Makes successive frames start every ``1 / fps`` seconds."""
 
     def __init__(self) -> None:
         self._target: float | None = None
@@ -34,7 +34,7 @@ class FramePacer:
         current = clock()
         target = current if self._target is None else self._target + period
         if target < current - period:
-            # Duże opóźnienie (np. przeciąganie okna, wczytywanie) — bez nadrabiania serią szybkich klatek.
+            # Large delay (e.g. dragging the window, loading) — don't catch up with a burst of fast frames.
             target = current
         remaining = target - current
         if remaining > SPIN:
@@ -45,10 +45,10 @@ class FramePacer:
 
 
 class FpsCounter:
-    """Średnia liczba klatek na sekundę i czas przygotowania klatki z ostatniej sekundy."""
+    """Average frames per second and frame preparation time over the last second."""
 
     WINDOW = 1.0
-    REFRESH = 0.25  # wartości na ekranie odświeżamy 4× na sekundę, żeby dało się je przeczytać
+    REFRESH = 0.25  # on-screen values are refreshed 4× per second so they stay readable
 
     def __init__(self) -> None:
         self._frames: deque[tuple[float, float]] = deque()
@@ -57,7 +57,7 @@ class FpsCounter:
         self._shown_at = -10.0
 
     def record(self, start: float, end: float) -> None:
-        """Zapisuje klatkę: moment rozpoczęcia i zakończenia (razem z wyświetleniem)."""
+        """Records a frame: its start and end time (including presenting it)."""
         frames = self._frames
         frames.append((start, end - start))
         while frames and frames[0][0] < start - self.WINDOW:

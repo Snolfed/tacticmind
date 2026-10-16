@@ -1,9 +1,9 @@
 /*
- * Pozycja: FEN, wykonywanie i cofanie ruchów, hasz Zobrista, ataki na pola.
+ * Position: FEN, making and unmaking moves, Zobrist hash, square attacks.
  *
- * Przy każdym ruchu aktualizujemy też przyrostowo akumulator sieci NNUE:
- * zamiast liczyć pierwszą warstwę od zera (768 wejść × 256 neuronów),
- * dodajemy i odejmujemy tylko wagi figur, które się ruszyły (2–4 kolumny).
+ * On every move we also update the NNUE accumulator incrementally:
+ * instead of computing the first layer from scratch (768 inputs x 256 neurons),
+ * we only add and subtract the weights of the pieces that moved (2-4 columns).
  */
 #include "tm.h"
 
@@ -16,7 +16,7 @@ static uint64_t Z_CASTLE[16];
 static uint64_t Z_EP[8];
 static uint64_t Z_SIDE;
 
-/* Maska praw do roszady, które zostają po ruchu z/na dane pole. */
+/* Mask of the castling rights that remain after a move from/to a given square. */
 static int CASTLE_MASK[64];
 
 void nnue_refresh(const Position *pos, Accumulator *acc);
@@ -115,7 +115,7 @@ int pos_set_fen(Position *pos, const char *fen) {
         if (*p == 'k') pos->castling |= CASTLE_BK;
         if (*p == 'q') pos->castling |= CASTLE_BQ;
     }
-    /* Prawa do roszady tylko, gdy król i wieża stoją na swoich polach. */
+    /* Castling rights only when the king and rook stand on their home squares. */
     if (pos->board[4] != PIECE(WHITE, KING)) pos->castling &= ~(CASTLE_WK | CASTLE_WQ);
     if (pos->board[7] != PIECE(WHITE, ROOK)) pos->castling &= ~CASTLE_WK;
     if (pos->board[0] != PIECE(WHITE, ROOK)) pos->castling &= ~CASTLE_WQ;
@@ -126,8 +126,8 @@ int pos_set_fen(Position *pos, const char *fen) {
     pos->ep = -1;
     if (*p >= 'a' && *p <= 'h' && p[1] >= '1' && p[1] <= '8') {
         int sq = (p[1] - '1') * 8 + (p[0] - 'a');
-        /* Pole bicia w przelocie zapamiętujemy tylko, gdy bicie jest naprawdę możliwe: właściwy rząd,
-           puste pole bicia i pole startowe piona, pion przeciwnika obok i nasz pion, który go zbije. */
+        /* The en passant square is kept only when the capture is really possible: correct rank,
+           empty target and pawn origin squares, an enemy pawn next to it and our pawn that can capture it. */
         int up = pos->side == WHITE ? 8 : -8;
         if (RANK_OF(sq) == (pos->side == WHITE ? 5 : 2) && pos->board[sq] == NO_PIECE && pos->board[sq + up] == NO_PIECE &&
             pos->board[sq - up] == PIECE(pos->side ^ 1, PAWN) &&
@@ -224,7 +224,7 @@ void pos_make(Position *pos, Move m) {
     int from = M_FROM(m), to = M_TO(m), flag = M_FLAG(m);
     int pc = pos->board[from];
     uint64_t key = pos->key ^ Z_SIDE;
-    int add[2] = {0, 0}, sub[2] = {0, 0}, nadd = 0, nsub = 0; /* zmiany dla NNUE: (figura*64 + pole) */
+    int add[2] = {0, 0}, sub[2] = {0, 0}, nadd = 0, nsub = 0; /* changes for NNUE: (piece*64 + square) */
 
     if (pos->ep >= 0) key ^= Z_EP[FILE_OF(pos->ep)];
     pos->ep = -1;
@@ -339,12 +339,12 @@ void pos_unmake_null(Position *pos) {
 }
 
 int pos_is_repetition(const Position *pos, int search_ply) {
-    /* Powtórzenie w obrębie przeszukiwania liczymy już przy pierwszym razie (2-krotne),
-       sprzed korzenia — dopiero przy trzecim wystąpieniu. */
+    /* A repetition within the search counts on its first occurrence (twofold);
+       one from before the root counts only on the third occurrence. */
     int count = 0;
     int limit = pos->halfmove < pos->ply ? pos->halfmove : pos->ply;
     for (int i = 1; i <= limit; i++) {
-        /* Nie cofamy się poza ruch zerowy (null move) — pozycje sprzed niego nie wystąpiły w partii. */
+        /* Don't go back past a null move: positions before it did not occur in the game. */
         if (pos->hist[pos->ply - i].move == 0) break;
         if (i < 4 || (i & 1)) continue;
         if (pos->hist[pos->ply - i].key == pos->key) {
@@ -393,5 +393,5 @@ int pos_parse_uci(Position *pos, const char *uci, Move *out) {
     return 0;
 }
 
-/* Pomocnicze dla nnue.c */
+/* Helpers for nnue.c */
 int nnue_feature(int persp, int piece, int sq) { return feature(persp, piece, sq); }
