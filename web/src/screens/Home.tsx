@@ -27,7 +27,7 @@ export function Home({ view }: { view: HomeSnapshot }): ReactElement {
       lastMove: demo.last,
       check: null,
       hint: null,
-      arrows: thinking ? [[demo.move.slice(0, 2), demo.move.slice(2, 4), "rgba(45,212,191,0.85)"]] : [],
+      arrows: thinking ? [[demo.move.slice(0, 2), demo.move.slice(2, 4), "rgba(198,241,53,0.85)"]] : [],
       feedback: null,
     }),
     [demo.fen, demo.last, demo.move, thinking],

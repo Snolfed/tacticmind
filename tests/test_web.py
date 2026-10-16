@@ -77,15 +77,22 @@ def test_settings_file_is_validated(home: Path) -> None:
     path.write_text(json.dumps({"showFps": "yes", "fpsLimit": 999}), encoding="utf-8")
     assert load_settings(path) == DEFAULT_SETTINGS
     path.write_text(json.dumps({"showFps": True, "fpsLimit": 144}), encoding="utf-8")
-    assert load_settings(path) == {"showFps": True, "fpsLimit": 144}
+    assert load_settings(path) == {**DEFAULT_SETTINGS, "showFps": True, "fpsLimit": 144}
+    path.write_text(json.dumps({"theme": "light", "board": "slate"}), encoding="utf-8")
+    assert load_settings(path) == {**DEFAULT_SETTINGS, "theme": "light", "board": "slate"}
+    path.write_text(json.dumps({"theme": "neon", "board": 3}), encoding="utf-8")
+    assert load_settings(path) == DEFAULT_SETTINGS
 
 
 def test_settings_actions_are_saved(home: Path) -> None:
     app = WebApp(engine=StubEngine())  # type: ignore[arg-type]
     app.dispatch({"type": "settings", "showFps": True, "fpsLimit": 240})
     app.dispatch({"type": "settings", "fpsLimit": 75})  # not in the list — ignored
-    assert view(app)["settings"] == {"showFps": True, "fpsLimit": 240}
-    assert load_settings(home / "ui_settings.json") == {"showFps": True, "fpsLimit": 240}
+    app.dispatch({"type": "settings", "theme": "light", "board": "terracotta"})
+    app.dispatch({"type": "settings", "theme": "neon", "board": "marble"})  # unknown — ignored
+    expected = {"showFps": True, "fpsLimit": 240, "theme": "light", "board": "terracotta"}
+    assert view(app)["settings"] == expected
+    assert load_settings(home / "ui_settings.json") == expected
     app.dispatch({"type": "sound", "volume": 0.3})
     app.dispatch({"type": "language", "code": "en"})
     state = view(app)
@@ -288,6 +295,7 @@ def test_window_shows_the_game_and_closing_it_ends_the_game(home: Path, monkeypa
 
     monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(create_window=create_window, start=start))
     monkeypatch.setattr(window, "check", lambda: None)
+    monkeypatch.setattr(window, "find_browser", lambda: None)  # no Chromium: the pywebview window
     monkeypatch.setattr(launcher, "WebApp", lambda: WebApp(engine=StubEngine()))  # type: ignore[arg-type]
     launcher.main([])
 
@@ -305,6 +313,7 @@ def test_without_the_window_the_game_explains_what_to_install(home: Path, monkey
     from tacticmind.web import window
 
     monkeypatch.setitem(sys.modules, "webview", None)  # pywebview not installed
+    monkeypatch.setattr(window, "find_browser", lambda: None)  # and no Chromium-based browser
     assert window.check() == window.MISSING_PYWEBVIEW
     monkeypatch.setattr(window, "check", lambda: "no window here")
     started: list[bool] = []
@@ -314,6 +323,67 @@ def test_without_the_window_the_game_explains_what_to_install(home: Path, monkey
     assert exit_info.value.code == 1
     assert "no window here" in capsys.readouterr().err
     assert not started  # nothing starts in the background
+
+
+FAKE_BROWSER = """#!/bin/sh
+# Records how it was started, fetches the page like the real window would, then "closes".
+printf '%s\\n' "$@" > "$(dirname "$0")/args.txt"
+for arg in "$@"; do
+  case "$arg" in --app=*) "{python}" -c "import sys, urllib.request; urllib.request.urlopen(sys.argv[1] + 'api/state').read()" "${{arg#--app=}}" ;; esac
+done
+"""
+
+
+def fake_browser(folder: Path) -> Path:
+    browser = folder / "fake-browser"
+    browser.write_text(FAKE_BROWSER.format(python=sys.executable))
+    browser.chmod(0o755)
+    return browser
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the app window of a browser is used on Linux")
+def test_on_linux_the_game_opens_in_an_app_window_of_a_chromium_browser(home: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """WebKitGTK and Qt WebEngine stop at 60 FPS with the NVIDIA driver; Chromium follows the monitor."""
+    from tacticmind.web import app as launcher
+    from tacticmind.web import window
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    browser = fake_browser(tools)
+    monkeypatch.setenv(window.BROWSER_VARIABLE, str(browser))
+    monkeypatch.delenv(window.WINDOW_VARIABLE, raising=False)
+    monkeypatch.setitem(sys.modules, "webview", None)  # pywebview is not needed then
+    assert window.find_browser() == str(browser)
+    assert window.check() is None
+    monkeypatch.setattr(launcher, "WebApp", lambda: WebApp(engine=StubEngine()))  # type: ignore[arg-type]
+    launcher.main([])  # returns once the "window" closes
+
+    args = (tools / "args.txt").read_text().splitlines()
+    assert args[0].startswith("--app=http://127.0.0.1:")
+    assert f"--user-data-dir={home / 'window'}" in args  # the game's own browser profile
+    assert "--no-first-run" in args
+
+    monkeypatch.setenv(window.WINDOW_VARIABLE, "webview")  # the player can keep the pywebview window
+    assert window.find_browser() is None
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the app window of a browser is used on Linux")
+def test_a_second_game_gets_its_own_browser_profile(home: Path, tmp_path: Path) -> None:
+    """With the profile already open, the browser would hand the window to the first game and exit at once."""
+    from tacticmind.web import window
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    browser = fake_browser(tools)
+    profile = home / "window"
+    profile.mkdir()
+    (profile / "SingletonLock").symlink_to(f"host-{os.getpid()}")  # a running browser has it open
+    assert window._profile_in_use(profile)
+    window.show_in_browser(str(browser), "http://127.0.0.1:1/")
+    used = next(arg for arg in (tools / "args.txt").read_text().splitlines() if arg.startswith("--user-data-dir="))
+    spare = Path(used.split("=", 1)[1])
+    assert spare != profile
+    assert not spare.exists()  # removed after the game
 
 
 def test_nvidia_under_wayland_turns_off_explicit_sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

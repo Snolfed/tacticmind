@@ -36,9 +36,12 @@ from .screens.stats import StatsScreen
 
 TICK = 0.04
 SCREENS = ("home", "play", "coach", "coach_game", "stats", "howto")
-#: Settings of the interface itself (FPS counter, frame limit) — a separate file next to the profile.
+#: Settings of the interface itself (FPS counter, frame limit, look) — a separate file next to the profile.
 FPS_LIMITS = (60, 120, 144, 170, 240, 0)
-DEFAULT_SETTINGS: dict[str, Any] = {"showFps": False, "fpsLimit": 0}
+#: Colour theme of the app and colours of the board (web/src/styles.css, ``data-theme`` / ``data-board``).
+THEMES = ("dark", "light")
+BOARDS = ("green", "terracotta", "slate")
+DEFAULT_SETTINGS: dict[str, Any] = {"showFps": False, "fpsLimit": 0, "theme": "dark", "board": "green"}
 
 
 def settings_path() -> Path:
@@ -56,6 +59,10 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
             settings["showFps"] = raw["showFps"]
         if raw.get("fpsLimit") in FPS_LIMITS and not isinstance(raw.get("fpsLimit"), bool):
             settings["fpsLimit"] = raw["fpsLimit"]
+        if raw.get("theme") in THEMES:
+            settings["theme"] = raw["theme"]
+        if raw.get("board") in BOARDS:
+            settings["board"] = raw["board"]
     return settings
 
 
@@ -191,6 +198,10 @@ class WebApp:
         limit = action.get("fpsLimit")
         if limit in FPS_LIMITS and not isinstance(limit, bool):
             self.settings["fpsLimit"] = limit
+        if action.get("theme") in THEMES:
+            self.settings["theme"] = action["theme"]
+        if action.get("board") in BOARDS:
+            self.settings["board"] = action["board"]
         self.save_settings()
 
     # ================================================================ clock

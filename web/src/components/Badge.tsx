@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 
 export const BADGE_COLORS: Record<string, string> = {
-  brilliant: "rgb(34,211,238)",
+  brilliant: "rgb(46,230,200)",
   great: "rgb(96,145,250)",
   best: "rgb(52,211,153)",
   excellent: "rgb(110,200,120)",
@@ -11,9 +11,9 @@ export const BADGE_COLORS: Record<string, string> = {
   book: "rgb(196,156,112)",
   inaccuracy: "rgb(245,192,50)",
   mistake: "rgb(251,146,60)",
-  blunder: "rgb(244,63,94)",
-  ok: "rgb(45,212,191)",
-  bad: "rgb(244,63,94)",
+  blunder: "rgb(255,81,72)",
+  ok: "rgb(198,241,53)",
+  bad: "rgb(255,81,72)",
 };
 
 const GLYPHS: Record<string, string> = { brilliant: "!!", great: "!", inaccuracy: "?!", mistake: "?", blunder: "??" };
@@ -55,7 +55,7 @@ function Glyph({ kind }: { kind: string }): ReactElement | null {
   if (kind === "bad") {
     return <path d="M-0.4 -0.4L0.4 0.4M0.4 -0.4L-0.4 0.4" stroke="#fff" strokeWidth={0.22} strokeLinecap="round" />;
   }
-  const color = kind === "ok" ? "rgb(8,28,34)" : "#fff";
+  const color = kind === "ok" ? "rgb(18,16,13)" : "#fff";
   return <polyline points="-0.46,0.02 -0.14,0.34 0.46,-0.3" fill="none" stroke={color} strokeWidth={0.22} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
@@ -66,7 +66,7 @@ export function Badge({ kind, size = 22, className }: { kind: string; size?: num
   return (
     <svg className={className} width={size} height={size} viewBox="-58 -56 116 120" aria-hidden="true">
       <g transform="scale(50)">
-        <circle cx="0" cy="0.12" r="1.06" fill="rgba(5,6,12,0.45)" />
+        <circle cx="0.1" cy="0.12" r="1.06" fill="rgba(10,8,5,0.6)" />
         <circle cx="0" cy="0" r="1" fill={color} />
         <Glyph kind={kind} />
       </g>

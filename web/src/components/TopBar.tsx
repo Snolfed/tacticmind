@@ -18,6 +18,13 @@ const NAV: { screen: ScreenName; key: string; active: ScreenName[] }[] = [
 ];
 
 export const FPS_LIMITS = [60, 120, 144, 170, 240, 0];
+const THEMES: UiSettings["theme"][] = ["dark", "light"];
+/** Board colours (light, dark square) — the same as ``:root[data-board=…]`` in styles.css. */
+const BOARDS: [UiSettings["board"], string, string][] = [
+  ["green", "#ece2c9", "#7f9a5c"],
+  ["terracotta", "#f0e5cd", "#c98559"],
+  ["slate", "#e9e2d0", "#6f8296"],
+];
 
 // In the game window (pywebview), full screen is toggled by the window itself: with requestFullscreen WebView2
 // (Windows) only enlarges the page to the window size, and WKWebView (macOS) has no Fullscreen API. The two methods
@@ -186,6 +193,35 @@ function SettingsMenu({ settings, onClose }: { settings: UiSettings; onClose: ()
           onChange={(value) => send({ type: "settings", fpsLimit: value })}
         />
         <small>{settings.fpsLimit === 0 ? t("ui.fps_unlimited_hint") : `${settings.fpsLimit} FPS`}</small>
+      </div>
+      <div className="settings-block">
+        <span>{t("ui.theme")}</span>
+        <Segmented
+          options={THEMES.map((theme) => ({ value: theme, label: t(`ui.theme_${theme}`) }))}
+          value={settings.theme}
+          onChange={(value) => send({ type: "settings", theme: value })}
+        />
+      </div>
+      <div className="settings-block">
+        <span>{t("ui.board")}</span>
+        <Segmented
+          className="board-choice"
+          accent="accent"
+          options={BOARDS.map(([board, light, dark]) => ({
+            value: board,
+            label: (
+              <>
+                <span className="board-swatch" aria-hidden="true">
+                  <i style={{ background: light }} />
+                  <i style={{ background: dark }} />
+                </span>
+                {t(`ui.board_${board}`)}
+              </>
+            ),
+          }))}
+          value={settings.board}
+          onChange={(value) => send({ type: "settings", board: value })}
+        />
       </div>
       <button type="button" className="btn btn-secondary settings-full" onClick={toggleFullscreen}>
         {fullscreen ? <IconFullscreenExit size={18} /> : <IconFullscreen size={18} />}

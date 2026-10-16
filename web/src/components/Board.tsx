@@ -30,9 +30,9 @@ const MOVE_TIME = 200;
 const PROMOTION_PIECES = ["q", "n", "r", "b"];
 const USER_COLORS = {
   plain: "rgba(251,191,36,0.8)",
-  shift: "rgba(244,63,94,0.8)",
+  shift: "rgba(255,81,72,0.8)",
   ctrl: "rgba(96,165,250,0.8)",
-  alt: "rgba(45,212,191,0.8)",
+  alt: "rgba(198,241,53,0.8)",
 };
 
 export function pieceUrl(piece: string): string {
@@ -75,6 +75,10 @@ interface DragInfo {
   lastX: number;
   lastY: number;
   moved: boolean;
+  /** Board position on screen, measured once when the piece is grabbed (no layout reads while dragging). */
+  left: number;
+  top: number;
+  size: number;
 }
 
 export interface BoardProps {
@@ -203,7 +207,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const x = rect.left + (col + 0.9) * s;
     const y = rect.top + (row + 0.1) * s;
     const kind = feedback.kind.startsWith("cls:") ? feedback.kind.slice(4) : feedback.kind;
-    effects.ring(x, y, s * 0.3, rgbOf(BADGE_COLORS[kind] ?? "rgb(45,212,191)"));
+    effects.ring(x, y, s * 0.3, rgbOf(BADGE_COLORS[kind] ?? "rgb(198,241,53)"));
     if (kind === "brilliant") {
       effects.ring(x, y, s * 0.55, BRILLIANT, 0.9);
       effects.burst(x, y, [BRILLIANT, WHITE, ACCENT], 22, Math.min(1.6, Math.max(0.6, s / 80)));
@@ -262,11 +266,10 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   }
 
   function moveGhost(clientX: number, clientY: number): void {
-    const el = wrap.current;
     const ghost = dragEl.current;
-    if (!el || !ghost) return;
-    const rect = el.getBoundingClientRect();
-    ghost.style.transform = `translate(${clientX - rect.left}px, ${clientY - rect.top}px) translate(-50%, -50%)`;
+    const info = dragInfo.current;
+    if (!ghost || !info) return;
+    ghost.style.transform = `translate3d(${(clientX - info.left).toFixed(1)}px, ${(clientY - info.top).toFixed(1)}px, 0) translate(-50%, -50%)`;
   }
 
   // The dragged piece appears under the cursor immediately (before the next mouse move arrives).
@@ -306,7 +309,18 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const piece = placement.get(square);
     if (canMove && piece && piece[0] === playerPrefix) {
       setSelected(square);
-      dragInfo.current = { from: square, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
+      const rect = event.currentTarget.getBoundingClientRect();
+      dragInfo.current = {
+        from: square,
+        x: event.clientX,
+        y: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        moved: false,
+        left: rect.left,
+        top: rect.top,
+        size: rect.width / 8,
+      };
       event.currentTarget.setPointerCapture(event.pointerId);
     } else {
       setSelected(null);
@@ -324,8 +338,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     info.lastX = event.clientX;
     info.lastY = event.clientY;
     if (!info.moved) {
-      const size = (wrap.current?.getBoundingClientRect().width ?? 400) / 8;
-      if (Math.hypot(event.clientX - info.x, event.clientY - info.y) <= Math.max(10, size * 0.2)) return;
+      if (Math.hypot(event.clientX - info.x, event.clientY - info.y) <= Math.max(6, info.size * 0.12)) return;
       info.moved = true;
       setDragFrom(info.from);
     }
@@ -434,7 +447,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     glows.push(
       <g key={`hint-${board.hint}`} className="glow-hint">
         <circle cx={x + 0.5} cy={y + 0.5} r={0.75} fill="url(#hint-glow)" />
-        <circle cx={x + 0.5} cy={y + 0.5} r={0.45} fill="none" stroke="rgba(167,139,250,0.9)" strokeWidth={0.05} />
+        <circle cx={x + 0.5} cy={y + 0.5} r={0.45} fill="none" stroke="rgba(255,106,168,0.9)" strokeWidth={0.05} />
       </g>,
     );
   }
@@ -558,7 +571,9 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     );
   }
 
-  const dragPiece = dragFrom !== null ? placement.get(dragFrom) : undefined;
+  // The dragged piece is rendered (hidden) as soon as a piece is picked, so its image is ready before the drag starts.
+  const liftFrom = dragFrom ?? (canMove ? selected : null);
+  const dragPiece = liftFrom !== null ? placement.get(liftFrom) : undefined;
 
   return (
     <div
@@ -581,13 +596,13 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
         <svg className="board-layer" viewBox="0 0 8 8">
           <defs>
             <radialGradient id="check-glow">
-              <stop offset="0" stopColor="rgb(244,63,94)" stopOpacity={0.95} />
-              <stop offset="0.45" stopColor="rgb(244,63,94)" stopOpacity={0.6} />
-              <stop offset="1" stopColor="rgb(244,63,94)" stopOpacity={0} />
+              <stop offset="0" stopColor="rgb(255,81,72)" stopOpacity={0.95} />
+              <stop offset="0.45" stopColor="rgb(255,81,72)" stopOpacity={0.6} />
+              <stop offset="1" stopColor="rgb(255,81,72)" stopOpacity={0} />
             </radialGradient>
             <radialGradient id="hint-glow">
-              <stop offset="0.35" stopColor="rgb(167,139,250)" stopOpacity={0.55} />
-              <stop offset="1" stopColor="rgb(167,139,250)" stopOpacity={0} />
+              <stop offset="0.35" stopColor="rgb(255,106,168)" stopOpacity={0.55} />
+              <stop offset="1" stopColor="rgb(255,106,168)" stopOpacity={0} />
             </radialGradient>
           </defs>
           {tints}
@@ -602,7 +617,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       </div>
       {badge}
       {chooser}
-      {dragPiece && <img ref={dragEl} className="drag-piece" src={pieceUrl(dragPiece)} alt="" draggable={false} />}
+      {dragPiece && <img ref={dragEl} className={`drag-piece${dragFrom !== null ? " lifted" : ""}`} src={pieceUrl(dragPiece)} alt="" draggable={false} />}
     </div>
   );
 }

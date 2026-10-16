@@ -15,13 +15,13 @@ function BrainIcon({ running }: { running: boolean }): ReactElement {
   ];
   return (
     <svg className={`brain-icon${running ? " running" : ""}`} width="24" height="22" viewBox="0 0 24 20" aria-hidden="true">
-      <g stroke="rgba(167,139,250,0.55)" strokeWidth="2">
+      <g stroke="rgba(255,106,168,0.55)" strokeWidth="2">
         <line x1={4.3} y1={15} x2={19.7} y2={15} />
         <line x1={4.3} y1={15} x2={12} y2={4.3} />
         <line x1={19.7} y1={15} x2={12} y2={4.3} />
       </g>
       {nodes.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3.6} fill="rgb(167,139,250)" style={{ animationDelay: `${-i * 0.35}s` }} />
+        <circle key={i} cx={x} cy={y} r={3.6} fill="rgb(255,106,168)" style={{ animationDelay: `${-i * 0.35}s` }} />
       ))}
     </svg>
   );

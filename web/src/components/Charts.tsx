@@ -84,8 +84,8 @@ export function LineChart({ values, band }: { values: number[]; band: number[] |
         <svg width={width} height={height}>
           <defs>
             <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="rgb(45,212,191)" stopOpacity={0.22} />
-              <stop offset="1" stopColor="rgb(45,212,191)" stopOpacity={0} />
+              <stop offset="0" style={{ stopColor: "var(--accent)" }} stopOpacity={0.3} />
+              <stop offset="1" style={{ stopColor: "var(--accent)" }} stopOpacity={0} />
             </linearGradient>
           </defs>
           {grid}
@@ -94,7 +94,7 @@ export function LineChart({ values, band }: { values: number[]; band: number[] |
               {i}
             </text>
           ))}
-          {bandPath && <path d={bandPath} fill="rgba(45,212,191,0.1)" />}
+          {bandPath && <path d={bandPath} style={{ fill: "rgba(var(--accent-rgb), 0.12)" }} />}
           <path d={area} fill={`url(#${id}-fill)`} />
           <polyline points={line} className="chart-line" />
           {values.length <= 60 && values.map((v, i) => <circle key={i} cx={px(i)} cy={py(v)} r={3} className="chart-dot" />)}

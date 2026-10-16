@@ -1,7 +1,9 @@
-"""The game window: a native window (pywebview) showing the interface served by the local server.
+"""The game window: a native window showing the interface served by the local server.
 
-pywebview uses the web engine the system already has: WebKitGTK on Linux, WebView2 (Edge) on Windows 10 and 11,
-WKWebView on macOS. No browser is opened and nothing has to be built.
+On Linux the window is an app window of an installed Chromium-based browser (``--app``: no tabs, no address bar, its
+own profile), because the engines pywebview has there draw at most 60 frames per second on some systems (see
+``find_browser``). Without such a browser, and on Windows and macOS, it is a pywebview window with the system's engine:
+WebKitGTK on Linux, WebView2 (Edge) on Windows 10 and 11, WKWebView on macOS. Nothing has to be built.
 """
 
 from __future__ import annotations
@@ -9,10 +11,15 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import os
+import shutil
 import site
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from ..rating.profile import data_dir
 
 TITLE = "TacticMind"
 SIZE = (1360, 860)
@@ -24,6 +31,21 @@ ICON = Path(__file__).resolve().parent / "static" / "icon.png"
 APP_ID = "tacticmind"
 #: Present when the proprietary NVIDIA driver is loaded.
 NVIDIA_DRIVER = Path("/proc/driver/nvidia/version")
+#: Chromium-based browsers whose app mode can hold the game on Linux, in order of preference.
+BROWSERS = (
+    "chromium",
+    "chromium-browser",
+    "google-chrome-stable",
+    "google-chrome",
+    "brave",
+    "brave-browser",
+    "microsoft-edge-stable",
+    "vivaldi-stable",
+    "vivaldi",
+)
+#: ``TACTICMIND_WINDOW=webview`` keeps the pywebview window on Linux; ``TACTICMIND_BROWSER`` names a browser to use.
+WINDOW_VARIABLE = "TACTICMIND_WINDOW"
+BROWSER_VARIABLE = "TACTICMIND_BROWSER"
 
 MISSING_PYWEBVIEW = """TacticMind: the pywebview library for the game window is not installed.
 Install the game's libraries in the activated .venv:  pip install -r requirements.txt"""
@@ -32,7 +54,8 @@ MISSING_GTK = """TacticMind: the game window needs WebKitGTK and the GTK binding
   Arch / Manjaro:         sudo pacman -S --needed python-gobject webkit2gtk-4.1
   Debian / Ubuntu / Mint: sudo apt install python3-gi gir1.2-webkit2-4.1
   Fedora:                 sudo dnf install python3-gobject webkit2gtk4.1
-The .venv uses the system PyGObject by itself, as long as it was created with the system Python."""
+The .venv uses the system PyGObject by itself, as long as it was created with the system Python.
+With a Chromium-based browser installed (Chromium, Chrome, Brave, Edge, Vivaldi) the game opens in its app window instead."""
 
 
 class WindowApi:
@@ -81,8 +104,64 @@ def _avoid_nvidia_wayland_crash() -> None:
         os.environ.setdefault("__NV_DISABLE_EXPLICIT_SYNC", "1")
 
 
+def find_browser() -> str | None:
+    """Linux: the Chromium-based browser that will hold the game window, or ``None`` (then pywebview).
+
+    Chromium paces frames by the monitor (170 Hz stays 170 Hz). Both engines pywebview has on Linux may not: WebKitGTK
+    falls back to a 60 Hz timer when it cannot use the display's vblank (the proprietary NVIDIA driver does not support
+    the call it needs), and Qt WebEngine always draws at 60 Hz."""
+    if not sys.platform.startswith("linux") or os.environ.get(WINDOW_VARIABLE, "").strip().lower() == "webview":
+        return None
+    chosen = os.environ.get(BROWSER_VARIABLE, "").strip()
+    for name in (chosen, *BROWSERS) if chosen else BROWSERS:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def _profile_in_use(profile: Path) -> bool:
+    """Chromium's lock is a symlink to "host-pid" while a browser has the profile open."""
+    try:
+        pid = int(os.readlink(profile / "SingletonLock").rsplit("-", 1)[1])
+        os.kill(pid, 0)
+    except (OSError, ValueError, IndexError):
+        return False
+    return True
+
+
+def show_in_browser(browser: str, url: str) -> None:
+    """Shows the game in an app window of the browser and returns once the player closes it."""
+    profile = data_dir() / "window"
+    spare = None
+    if _profile_in_use(profile):  # a second game: the browser would hand the window over to the first one and exit at once
+        spare = tempfile.mkdtemp(prefix="tacticmind-window-")
+        profile = Path(spare)
+    command = [
+        browser,
+        f"--app={url}",
+        f"--user-data-dir={profile}",  # the game's own profile: no extensions, history or sign-in of the player's browser
+        f"--window-size={SIZE[0]},{SIZE[1]}",
+        f"--class={APP_ID}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-features=Translate",
+    ]
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        process.wait()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(5)
+        if spare:
+            shutil.rmtree(spare, ignore_errors=True)
+
+
 def check() -> str | None:
     """Prepares the window (Linux) and says why it cannot open on this computer (with what to install), or ``None``."""
+    if find_browser():
+        return None
     if importlib.util.find_spec("webview") is None:
         return MISSING_PYWEBVIEW
     if sys.platform.startswith("linux"):
@@ -102,6 +181,10 @@ def check() -> str | None:
 
 def show(url: str) -> None:
     """Shows the game in its window and returns once the player closes it. Must run on the main thread."""
+    browser = find_browser()
+    if browser:
+        show_in_browser(browser, url)
+        return
     import webview
 
     api = WindowApi()

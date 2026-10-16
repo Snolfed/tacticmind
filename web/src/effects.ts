@@ -27,13 +27,13 @@ interface Ring {
   color: Rgb;
 }
 
-export const ACCENT: Rgb = [45, 212, 191];
-export const VIOLET: Rgb = [167, 139, 250];
-export const AMBER: Rgb = [251, 191, 36];
-export const ROSE: Rgb = [251, 113, 133];
-export const BLUE: Rgb = [96, 165, 250];
-export const RED: Rgb = [244, 63, 94];
-export const BRILLIANT: Rgb = [34, 211, 238];
+export const ACCENT: Rgb = [198, 241, 53];
+export const VIOLET: Rgb = [255, 106, 168];
+export const AMBER: Rgb = [255, 197, 61];
+export const ROSE: Rgb = [255, 125, 140];
+export const BLUE: Rgb = [98, 176, 255];
+export const RED: Rgb = [255, 81, 72];
+export const BRILLIANT: Rgb = [46, 230, 200];
 export const WHITE: Rgb = [255, 255, 255];
 export const CONFETTI: Rgb[] = [ACCENT, VIOLET, AMBER, ROSE, BLUE, WHITE];
 
