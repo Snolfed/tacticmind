@@ -1,6 +1,6 @@
-"""Game against the coach and opening lesson (counterpart of ``ui/screens/coach_game.py`` without drawing).
+"""Game against the coach and opening lesson.
 
-The turn flow is the same as in the pygame version:
+The turn flow:
  1. **Player's move** — the engine analyses the position in the background (MultiPV 3); a theory move is "book" right away.
  2. **Evaluation** — move class and the coach's comment; after a mistake or a blunder the game pauses.
  3. **Coach's move** — from the opening book or from a search whose strength depends on Elo.

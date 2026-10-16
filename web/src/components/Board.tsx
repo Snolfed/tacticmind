@@ -25,7 +25,7 @@ import { useFrame } from "../ticker";
 import type { BoardSnapshot, Color } from "../types";
 import { BADGE_COLORS, Badge } from "./Badge";
 
-/** Move animation duration (as in the pygame version). */
+/** Move animation duration. */
 const MOVE_TIME = 200;
 const PROMOTION_PIECES = ["q", "n", "r", "b"];
 const USER_COLORS = {

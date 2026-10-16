@@ -1,4 +1,4 @@
-"""Browser interface: screen logic without pygame, state snapshots, the HTTP server and ``--server`` mode (Tauri)."""
+"""Browser interface: screen logic, state snapshots, the HTTP server and ``--server`` mode (Tauri)."""
 
 from __future__ import annotations
 
@@ -215,8 +215,8 @@ def test_server_serves_page_strings_and_state(server: TacticMindServer) -> None:
     assert payload["languages"]["pl"]["strings"]["nav.play"] == "Zadania"
     status, _, body = request(server, "GET", "/api/state")
     assert status == 200 and json.loads(body)["screen"] == "home"
-    status, headers, _ = request(server, "GET", "/fonts/NotoSans-Regular.ttf")
-    assert status == 200 and headers["content-type"] == "font/ttf"
+    status, headers, _ = request(server, "GET", "/fonts/NotoSans-Regular.woff2")
+    assert status == 200 and headers["content-type"] == "font/woff2"
 
 
 def test_server_rejects_foreign_requests(server: TacticMindServer) -> None:
@@ -231,7 +231,7 @@ def test_server_rejects_foreign_requests(server: TacticMindServer) -> None:
     status, _, body = request(server, "GET", "/fonts/../../web/core.py")
     assert status == 404
     assert b"class WebApp" not in body
-    status, _, _ = request(server, "GET", "/fonts/no-such-file.ttf")
+    status, _, _ = request(server, "GET", "/fonts/no-such-file.woff2")
     assert status == 404
     _, _, body = request(server, "GET", "/../web/core.py")
     assert b"class WebApp" not in body

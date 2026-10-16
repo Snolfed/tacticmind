@@ -26,9 +26,6 @@ MIN_RD = 50.0
 #: Penalty for a very long time: from 3× the average time, linearly down to −0.2 at 6×.
 SLOW_FACTOR = 3.0
 MAX_TIME_PENALTY = 0.2
-#: Available frames-per-second limits (settings) and the default value.
-FPS_LIMITS = (60, 120, 144, 170, 240)
-DEFAULT_FPS_LIMIT = 60
 
 
 def puzzle_score(outcome: PuzzleOutcome, average_time_s: float | None) -> float:
@@ -89,9 +86,6 @@ class PlayerProfile:
     #: Sound volume 0..1 (slider in the top bar).
     volume: float = 0.7
     language: str = "en"
-    #: FPS counter in the window corner and frames-per-second limit (settings window, F3).
-    show_fps: bool = False
-    fps_limit: int = DEFAULT_FPS_LIMIT
     #: Games against the coach and opening study (a separate rating and "Your level").
     coach: CoachProfile = field(default_factory=CoachProfile)
 
@@ -173,8 +167,6 @@ class PlayerProfile:
             "sound": self.sound,
             "volume": self.volume,
             "language": self.language,
-            "show_fps": self.show_fps,
-            "fps_limit": self.fps_limit,
             "coach": self.coach.to_json(),
         }
 
@@ -202,8 +194,6 @@ class PlayerProfile:
             sound=bool(data.get("sound", True)),
             volume=min(1.0, max(0.0, as_float(data.get("volume"), 0.7))),
             language=str(data.get("language", "pl")),
-            show_fps=data.get("show_fps") is True,
-            fps_limit=fps_limit if (fps_limit := as_int(data.get("fps_limit"))) in FPS_LIMITS else DEFAULT_FPS_LIMIT,
             coach=CoachProfile.from_json(data.get("coach")),
         )
 

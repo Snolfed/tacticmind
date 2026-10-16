@@ -4,7 +4,6 @@ from .openings_en import STRINGS as _OPENINGS
 
 STRINGS: dict[str, str] = {
     # --- general ----------------------------------------------------------
-    "app.caption": "TacticMind — tactics puzzles and a chess coach with an AI that thinks out loud",
     "lang.name": "English",
     "common.cancel": "Cancel",
     "fmt.decimal": ".",
@@ -21,19 +20,8 @@ STRINGS: dict[str, str] = {
     "nav.howto_short": "AI?",
     "sound.on": "Sound: on",
     "sound.off": "Sound: off",
-    "sound.short_on": "Sound",
-    "sound.short_off": "Muted",
     "rating.caption": "Rating ({system})",
     "rating.calibration": "calibration {n}/10",
-    "rating.calibrating": "calibrating",
-    "settings.title": "Settings",
-    "settings.show_fps": "FPS counter",
-    "settings.fps_limit": "Frame rate limit",
-    "settings.on": "On",
-    "settings.off": "Off",
-    "settings.hint": "F3 toggles the FPS counter",
-    "settings.tooltip": "Settings",
-    "fps.overlay": "{fps} FPS · {ms} ms",
     # --- home -------------------------------------------------------------
     "home.tagline": "Tactics puzzles and games against a coach — with an AI that thinks out loud",
     "home.desc": "A home-made alpha-beta engine shows what it is calculating, live. Your rating picks puzzles at your level, and the coach explains every move and teaches openings.",
@@ -265,7 +253,6 @@ STRINGS: dict[str, str] = {
     "coach.color.black": "Black",
     "coach.play": "Play",
     "coach.resume": "Back to the game",
-    "coach.new_game": "New game",
     "coach.openings_title": "Learn openings",
     "coach.openings_desc": "You play the moves of the main line and the coach explains each of them. Stars: completed, no mistakes, 3× no mistakes.",
     "coach.filter.all": "All",

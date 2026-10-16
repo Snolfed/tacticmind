@@ -1,4 +1,4 @@
-// The coach's portrait ("Coach Max") in SVG — port of ui/coach_avatar.py (same shapes in 0–100 units).
+// The coach's portrait ("Coach Max") in SVG (shapes in 0–100 units).
 // Expressions: neutral, happy, excited, thinking, concerned, shocked; the coach blinks every few seconds.
 
 import { useEffect, useId, useState, type ReactElement } from "react";

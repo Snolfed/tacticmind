@@ -4,7 +4,6 @@ from .openings_pl import STRINGS as _OPENINGS
 
 STRINGS: dict[str, str] = {
     # --- general ----------------------------------------------------------
-    "app.caption": "TacticMind — zadania taktyczne i trener szachowy z AI, które myśli na głos",
     "lang.name": "Polski",
     "common.cancel": "Anuluj",
     "fmt.decimal": ",",
@@ -21,19 +20,8 @@ STRINGS: dict[str, str] = {
     "nav.howto_short": "AI?",
     "sound.on": "Dźwięk: wł.",
     "sound.off": "Dźwięk: wył.",
-    "sound.short_on": "Dźwięk",
-    "sound.short_off": "Cisza",
     "rating.caption": "Ranking ({system})",
     "rating.calibration": "kalibracja {n}/10",
-    "rating.calibrating": "kalibracja",
-    "settings.title": "Ustawienia",
-    "settings.show_fps": "Licznik FPS",
-    "settings.fps_limit": "Limit klatek na sekundę",
-    "settings.on": "Wł.",
-    "settings.off": "Wył.",
-    "settings.hint": "F3 — szybkie włączenie licznika FPS",
-    "settings.tooltip": "Ustawienia",
-    "fps.overlay": "{fps} FPS · {ms} ms",
     # --- home -------------------------------------------------------------
     "home.tagline": "Zadania taktyczne i partie z trenerem — z AI, które myśli na głos",
     "home.desc": "Własny silnik (alfa-beta) pokazuje na żywo, co liczy. Ranking dopasowuje zadania do Twojego poziomu, a trener tłumaczy każdy ruch i uczy otwarć.",
@@ -268,7 +256,6 @@ STRINGS: dict[str, str] = {
     "coach.color.black": "Czarne",
     "coach.play": "Zagraj",
     "coach.resume": "Wróć do partii",
-    "coach.new_game": "Nowa partia",
     "coach.openings_title": "Nauka otwarć",
     "coach.openings_desc": "Grasz ruchy głównej linii, a trener tłumaczy każdy z nich. Gwiazdki: ukończone, bez błędu, 3 razy bez błędu.",
     "coach.filter.all": "Wszystkie",

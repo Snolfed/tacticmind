@@ -1,7 +1,7 @@
-"""Puzzle screen (counterpart of ``ui/screens/play.py`` without drawing).
+"""Puzzle screen.
 
 The puzzle flow, engine checking of moves outside the solution, rating, line preview
-and move browsing (◀ ▶) work the same as in the pygame version. Messages are functions
+and move browsing (◀ ▶). Messages are functions
 returning text (``Text``), so after a language change the snapshot speaks the new language immediately.
 """
 

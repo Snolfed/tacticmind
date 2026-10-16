@@ -1,13 +1,8 @@
-"""Run the game with: python -m tacticmind (same options as main.py, e.g. --pygame)."""
+"""Run the game with: python -m tacticmind (same options as main.py, e.g. --browser)."""
 
 import sys
 
 if __name__ == "__main__":
-    if "--pygame" in sys.argv:
-        from tacticmind.ui.app import main as run_pygame
+    from tacticmind.web.app import main
 
-        run_pygame()
-    else:
-        from tacticmind.web.app import main
-
-        main(sys.argv[1:])
+    main(sys.argv[1:])

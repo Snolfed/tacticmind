@@ -1,6 +1,6 @@
 """Core of the browser interface: app state, screens, engine and snapshot broadcasting.
 
-Counterpart of ``ui/app.py`` without pygame. Everything happens under a single lock (``lock``):
+Everything happens under a single lock (``lock``):
  - the clock thread, every ~40 ms, receives engine messages, counts down scheduled screen actions
    (e.g. the opponent's reply after 400 ms) and broadcasts a new snapshot if the state changed,
  - the HTTP server threads run actions from the browser (``dispatch``) and broadcast a snapshot right away.

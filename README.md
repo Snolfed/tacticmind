@@ -46,7 +46,7 @@ Requirements: **Python 3.11+** (tested on Python 3.14). No backend and no intern
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt    # pygame-ce, python-chess, pytest
+pip install -r requirements.txt    # python-chess, pytest
 python main.py                     # or: python -m tacticmind
 ```
 
@@ -66,7 +66,6 @@ in app mode (no browser toolbars); if neither is installed — in the default br
 |---|---|
 | `python main.py --browser` | interface in a regular tab of the default browser |
 | `python main.py --no-window` | game server only (address printed in the console), e.g. for working on the interface |
-| `python main.py --pygame` | the old pygame interface |
 
 ### Application window (Tauri 2)
 
@@ -74,7 +73,7 @@ A dedicated game window, without a browser. Node.js is not needed — the built 
 
 1. **Python with the libraries in `.venv`** — as in the commands above (`python3 -m venv .venv`, then
    `pip install -r requirements.txt` in the activated `.venv`). The window uses the `.venv` in the game directory on its
-   own; without it, it falls back to the system Python (`python`, `py -3`, `python3`), which usually lacks pygame-ce and
+   own; without it, it falls back to the system Python (`python`, `py -3`, `python3`), which usually lacks
    python-chess. A different interpreter can be set with the `TACTICMIND_PYTHON` variable.
 2. **[Rust](https://rustup.rs)** and the system libraries for the window:
 
@@ -167,23 +166,19 @@ npm run build                      # new build into tacticmind/web/static
   fit their boxes (they shrink the font or get truncated with "…" instead of overflowing).
   In a wide window the board has the panel beside it and a vertical evaluation bar; in a narrow one (like a phone) there is a
   two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
-- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile), drawn in code;
-  `python -m tacticmind.ui.icon` saves it as `tacticmind/assets/icon.png` (e.g. for a desktop shortcut).
+- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile): `web/public/icon.png`,
+  and the Tauri app icons in `web/src-tauri/icons/`.
 - **Sounds (chess.com style)**: a wooden "knock" on a move, a double "clack" on a capture, a little bell
   on check, two knocks on castling, a rising tone on promotion, a chime arpeggio after solving a puzzle
   (brighter for a brilliant move) and a soft "bonk" after a mistake. All of them are synthesized in code
-  (`ui/sounds.py`, and in the TypeScript interface the same synthesizer on Web Audio: `web/src/sound.ts`), so there are no
+  on Web Audio (`web/src/sound.ts`), so there are no
   files under someone else's license. They sound soft: low, "warm" wooden tones, a low-pass
   filter and a light echo, with no harsh high frequencies.
 - **Volume**: the top bar has a volume slider (drag it, click it or scroll the mouse wheel over it);
   the speaker icon mutes/unmutes the sound. The volume is remembered in the profile.
-- **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode; Esc exits it.
-- **Settings (gear ⚙, pygame interface)**: an FPS counter in the window corner (also F3) and a frame-rate limit: 60, 120, 144, 170
-  or 240. Frames start at even intervals (a precise limiter in `ui/pacing.py`), and all animations
-  in a given frame are computed from one exact clock — so motion does not "jitter".
 - **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode (in the browser Esc also
   exits it).
-- **Settings** (gear in the top bar, TypeScript interface): an FPS counter in the bottom-left corner (F3 toggles it) and an animation
+- **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it) and an animation
   frame limit: 60, 120, 144, 170, 240 or unlimited (as fast as the monitor refreshes).
 - **Dragging with a "dead zone"**: a piece starts being dragged only once the mouse moves away from the click point
   by about 1/5 of a square — a small twitch while clicking does not "grab" the piece, it just selects it (click-click).
@@ -195,7 +190,7 @@ npm run build                      # new build into tacticmind/web/static
 ## Playing against the coach
 
 The **"Coach"** tab. The coach is called Maks — his portrait (with several facial expressions that change during the game)
-is drawn in code (`ui/coach_avatar.py`), without image files.
+is drawn in SVG (`web/src/components/CoachAvatar.tsx`), without image files.
 
 - **Game settings**: the coach's strength set with a slider from 400 to 2000 Elo (with a label: beginner, amateur,
   intermediate, advanced, expert), colour (white / random / black) and a "Play" button.
@@ -239,7 +234,7 @@ is drawn in code (`ui/coach_avatar.py`), without image files.
 ## Architecture
 
 ```
-main.py                     # game entry point (TypeScript interface; --pygame = old interface)
+main.py                     # game entry point (starts the server and the interface window)
 tacticmind/
   engine/                   # OWN ENGINE
     native/                 #   C engine: bitboard.c, position.c (make/unmake + NNUE accumulator),
@@ -259,7 +254,7 @@ tacticmind/
     types.py                #   SearchInfo, EngineScore, TreeNode…
   rating/                   # elo.py, glicko2.py, player_model.py, selector.py, profile.py,
                             #   coach_profile.py (coach games, calibration, "Your level", opening stars)
-  coach/                    # GAME AGAINST THE COACH (no pygame): openings.py (opening book, opening names),
+  coach/                    # GAME AGAINST THE COACH: openings.py (opening book, opening names),
                             #   strength.py (playing strength by Elo), review.py (move classes, accuracy),
                             #   advice.py (coach explanations), game.py (game and lesson flow),
                             #   archive.py (saved games for the review, advantage graph, PGN export)
@@ -267,18 +262,13 @@ tacticmind/
   brain/                    # notation.py (SAN in the interface language), thoughts.py (stream of thoughts), demo.py
   i18n/                     # translations: pl.py, en.py (one dictionary per language) + plurals, number formats;
                             #   openings_pl.py / openings_en.py — opening names and explanations
-  ui/                       # pygame: app, board_view (with arrow drawing), eval_bar, brain_panel, topbar,
-                            #   charts, sounds, screens/, as well as scale.py (scaling), gfx.py (anti-aliased
-                            #   graphics, shadows), anim.py (animation easing), effects.py (confetti, ripples),
-                            #   coach_avatar.py (coach portrait), badges.py (badges !!, ?, ?? …),
-                            #   screens/coach_menu.py and screens/coach_game.py (coach screens)
-  web/                      # TYPESCRIPT INTERFACE SERVER (no pygame): core.py (screens → state snapshots, actions),
+  web/                      # TYPESCRIPT INTERFACE SERVER: core.py (screens → state snapshots, actions),
                             #   screens/ (puzzle, coach, statistics, "How does the AI work?"), board.py, brain.py,
                             #   server.py (HTTP + SSE on 127.0.0.1), app.py (launch modes, window),
                             #   static/ (built interface — produced by `npm run build`, do not edit by hand)
   data/                     # starter_puzzles.json (50 puzzles), puzzles.json (3000 puzzles)
-  assets/fonts/             # Noto fonts (text and piece symbols)
-  assets/coach.png          # coach portrait (generated by code: python -m tacticmind.ui.coach_avatar)
+  assets/fonts/             # Noto fonts (WOFF2 subsets, about 60 KB each)
+  assets/coach.png          # coach portrait for this README
 web/                        # TYPESCRIPT INTERFACE
   src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — SVG board, BrainPanel,
                             #   EvalBar, TopBar with settings, CoachAvatar…), chess.ts (FEN, animations, arrows),
@@ -294,7 +284,7 @@ tests/                      # pytest
 ```
 
 Game logic and the engine are separated from the interface: `engine/`, `rating/`, `puzzles/`, `brain/` and `coach/` are pure
-modules without pygame, covered by unit tests. The interface only calls them and draws the results.
+modules without any interface code, covered by unit tests. The interface only calls them and draws the results.
 
 **TypeScript interface.** Python holds the game state: `tacticmind/web/core.py` runs the screens (puzzle, game
 against the coach, statistics…) without drawing, and after every change sends a state snapshot (JSON) over the SSE stream
@@ -304,16 +294,16 @@ and charts — all in a single `requestAnimationFrame` loop with the frame limit
 immediately (optimistically), and Python confirms or reverts it. The server listens only on `127.0.0.1`, rejects a foreign
 `Host` header (DNS rebinding) and actions without the `X-TacticMind` header. The Tauri window (`web/src-tauri`) starts
 `python main.py --server --port 0`, reads the address from it and shows the same interface; Python exits when
-the window closes its standard input. The engine is used through the same `EngineClient` interface as in pygame.
+the window closes its standard input. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
 
 ```mermaid
 flowchart LR
-    subgraph UI["Main process — interface (pygame)"]
-        App["ui/app.py<br/>game loop"] --> Play["screens/play.py<br/>puzzle screen"]
-        App --> Other["screens: start, statistics,<br/>How does the AI work?"]
-        Play --> BoardView["board_view.py<br/>board, arrows"]
-        Play --> Brain["brain_panel.py<br/>AI Brain"]
-        Play --> EvalBar["eval_bar.py"]
+    Browser["web/src (React)<br/>SVG board, AI Brain, charts"] -- "POST /api/action" --> App
+    App -- "SSE /api/events<br/>state snapshots" --> Browser
+    subgraph UI["Main process — game server (Python)"]
+        App["web/core.py<br/>screens, clock"] --> Play["web/screens/play.py<br/>puzzle screen"]
+        App --> Other["screens: coach, statistics,<br/>How does the AI work?"]
+        Play --> Brain["web/brain.py<br/>AI Brain"]
         Play --> Session["puzzles/session.py<br/>puzzle flow"]
         Play --> Selector["rating/selector.py<br/>puzzle selection"]
         Selector --> Model["rating/player_model.py"]
@@ -729,7 +719,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 173 tests, including:
+`python -m pytest` — 164 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -741,10 +731,9 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_selector.py` | the selector hits the target rating range, an easier puzzle after 3 failures, a bonus after 5 successes, ~30% weak themes, no repeats, variety |
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
 | `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
-| `test_pacing.py` | the FPS limiter keeps even intervals between frames, FPS counter, saving FPS settings in the profile (invalid values → 60) |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
 | `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), `--server` mode for the Tauri window |
-| `test_ui_smoke.py` | the game run headless: solving a puzzle, a mistake, a brilliant move, stepping back ◀ ▶ (with the animation restoring a captured piece), drag dead zone, sounds, volume slider and full screen, settings pop-up (FPS limit, F3, Esc), switching language mid-puzzle, all screens (including the coach) at resolutions from 430×640 to 2560×1440, drawing arrows with the right mouse button; a coach game (book move, blunder → pause and an arrow for the better move, take-back, resignation, summary and calibration), an opening lesson from a mistake to the end of the line, the coach menu and portrait; the alpha-beta demonstration |
+| `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
 The TypeScript interface has its own tests (`cd web && npm test`, vitest): FEN, trial moves (castling, en passant,
 promotion), transition animations between positions, arrows, the evaluation bar, translations and plurals.
@@ -782,12 +771,13 @@ and the player plays the side to move after it (the board flips to that side).
 
 ## Design decisions
 
-1. **Python + pygame instead of Vite/React/TypeScript.** The original specification (PROMPT.md) assumed a web stack;
-   at the client's request everything is in Python. Equivalents: `react-chessboard` → a custom board
-   in pygame (`ui/board_view.py`: dragging, click-click, dots, promotion, animations, arrows); `chess.js` →
-   `python-chess` (interface only); Web Worker → a separate `multiprocessing` process; Recharts → custom charts
-   (`ui/charts.py`); Vitest → pytest; localStorage → a JSON file in the home directory; Tailwind → `ui/theme.py`;
-   TypeScript strict → type annotations + mypy (`--disallow-untyped-defs`).
+1. **Game logic in Python, drawing in TypeScript.** The original specification (PROMPT.md) assumed a pure web stack.
+   The engine, rating, puzzles and coach are in Python (and C), and the browser only draws the state it receives:
+   `react-chessboard` → a custom SVG board (`web/src/components/Board.tsx`: dragging, click-click, dots, promotion,
+   animations, arrows); `chess.js` → `python-chess` (interface layer only); Web Worker → a separate `multiprocessing`
+   process; Recharts → custom SVG charts (`Charts.tsx`); localStorage → a JSON file in the home directory;
+   TypeScript strict on the interface and type annotations + mypy (`--disallow-untyped-defs`) on the Python side.
+   The first interface was written in pygame; it was removed once the TypeScript one covered everything.
 2. **0x88 + legality via a king check.** Simpler and more reliable than detecting pins; confirmed by perft.
 3. **Incremental hash and evaluation** (material + PST) in `make_move` — in pure Python this is the biggest saving
    at the leaves.
@@ -814,26 +804,19 @@ and the player plays the side to move after it (the board flips to that side).
     rating ("about 1380"), and the exact one is shown once the puzzle is over.
 13. **Time penalty** computed from the average time of the last 20 solved puzzles (at least 3), linearly from
     3× to 6× the average (max. −0.2).
-14. **Pieces from Unicode symbols** (Noto Sans Symbols 2 font) and **sounds synthesized in code** — no
-    image or sound files with unclear licensing. Sounds are generated in the format in which the system opened
-    the sound card (mono/stereo), in a separate thread at start-up, with a small buffer (low latency). The volume
-    slider uses a quadratic curve (volume = value²), because the ear perceives loudness logarithmically — so
-    half the slider is noticeably quieter, not almost as loud. The king and queen symbols are narrow in this font,
-    so we widen them horizontally (×1.22 and ×1.14) while downscaling from double resolution.
+14. **"cburnett" SVG pieces and sounds synthesized in code** — no sound files with unclear licensing (`web/src/sound.ts`,
+    Web Audio). The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
+    logarithmically — so half the slider is noticeably quieter, not almost as loud.
 15. **Notation in the interface language** (in English K, Q, R, B, N; in the Polish locale K, H, W, G, S) in the panel and messages;
     the engine and the protocol use UCI.
-16. **Responsiveness and scaling**: the interface is designed for a 1360×860 window (or 560×1000 in the narrow
-    layout), and all dimensions and fonts are multiplied by a factor that depends on the window size (`ui/scale.py`).
-    Texts fit their boxes via `fonts.fit` / `fonts.fit_wrapped` (first a smaller font,
-    then "…"), and their layout is cached so it is not recomputed 60 times per second.
-    A wide layout (panel beside the board) or a narrow, phone-like one (panel below the
-    board, horizontal evaluation bar, scrolling page).
+16. **Responsiveness and scaling**: the layout uses CSS container queries — a wide layout (panel beside the board) or a
+    narrow, phone-like one (panel below the board, horizontal evaluation bar, scrolling page) — and everything is SVG/CSS,
+    so it stays sharp at any resolution and display scaling.
 17. **Two puzzle sets in the repository**: the starter set required by the specification and the full set of
     3000 puzzles generated by the script, so puzzle selection has plenty to choose from without downloading the database.
 18. **A custom look instead of a chess.com copy**: a navy background, teal as the player's colour, purple as the AI's colour,
-    a steel-blue board. Quality: all shapes (rounded cards, circles, arrows, icons) are drawn
-    at triple resolution and downscaled with a filter (`ui/gfx.py`), pieces at double. Finished shapes go
-    into a cache in the screen format — the interface stays at 60 fps even at 2560×1440.
+    a steel-blue board. Fonts are WOFF2 subsets of Noto Sans (Latin with Polish letters, Greek, arrows and symbols),
+    about 60 KB each instead of 600 KB.
 19. **Translations as dictionaries** (`tacticmind/i18n/`): each language is one file of keys; a missing key falls
     back to English (the default language). On-screen game messages are stored as functions returning text, and the stream of thoughts is
     rebuilt from the stored engine results — so switching the language takes effect immediately, even mid-puzzle.
@@ -874,7 +857,9 @@ and the player plays the side to move after it (the board flips to that side).
     and network trainer, four training rounds (27 M positions), about 2890 Elo on the scale of limited-strength Stockfish.
 11. **TypeScript interface and Tauri 2 window** — a sharp interface (SVG instead of pygame pixels) in React + TypeScript,
     game logic still in Python behind a local server (HTTP + SSE), settings with an FPS counter and a frame limit,
-    an application window in Tauri 2 that starts Python by itself; the old interface is available via `--pygame`.
+    an application window in Tauri 2 that starts Python by itself.
+12. **Game review and a lighter repository** — saved coach games with the advantage graph and PGN export; the old pygame
+    interface removed (about 7 000 lines and the pygame-ce dependency) and the fonts reduced to WOFF2 subsets.
 
 ## Sources and licenses
 
@@ -891,5 +876,5 @@ and the player plays the side to move after it (the board flips to that side).
 - Noto fonts (Google) — license in `tacticmind/assets/fonts/`.
 - Pieces in the TypeScript interface: the "cburnett" set (Colin M.L. Burnett, Wikimedia Commons), license
   **CC BY-SA 3.0** (also GFDL, BSD and GPL), files from the chessground package (lichess.org) — `web/public/pieces/LICENSE.txt`.
-- Libraries: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
+- Libraries: [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
   [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [Tauri](https://tauri.app/) (MIT / Apache-2.0).

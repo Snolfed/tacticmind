@@ -1,4 +1,4 @@
-"""Board state for the browser interface (counterpart of ``ui/board_view.py`` without drawing).
+"""Board state for the browser interface.
 
 Python decides what is on the board (position, last move, arrows, badges, hint),
 and the browser draws and animates it. Every position change gets a new number (``seq``) and an
