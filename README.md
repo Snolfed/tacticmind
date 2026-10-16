@@ -298,7 +298,8 @@ immediately (optimistically), and Python confirms or reverts it. The server list
 `Host` header (DNS rebinding) and actions without the `X-TacticMind` header. `python main.py` starts
 the server on a free port and opens the game window on its address (`tacticmind/web/window.py`: a Chromium app window on
 Linux when one is installed, otherwise pywebview); in pywebview full screen (F11) goes through a small Python API the
-window gives the page, and closing the window shuts the server down. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
+window gives the page, and closing the window shuts the server down. The engine runs in a separate process behind `EngineClient` (`engine/process.py`); if the game crashes or is killed
+with `kill -9`, that process notices within a second and ends too, so nothing is left running in the background.
 
 ```mermaid
 flowchart LR
@@ -736,14 +737,14 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 181 tests, including:
+`python -m pytest` — 182 tests, including:
 
 | File | What it checks |
 |---|---|
 | `test_perft.py` | perft from the starting position (1–4: 20, 400, 8 902, 197 281), Kiwipete (1–3: 48, 2 039, 97 862), position 3 (1–4: 14, 191, 2 812, 43 238) and positions 4 and 5 from CPW; FEN round-trip and incremental hash/evaluation consistency |
 | `test_search.py` | mates in 1, 2 and 3 (classic positions and ones from the Lichess database, also for Black), faster mate, stalemate/mate at the root, MultiPV, statistics, tree, interruption, minimax = alpha-beta with fewer nodes |
 | `test_native.py` | C engine: perft (5 positions), mates in 1–3, stalemate/mate at the root, MultiPV, statistics and mini tree, interruption and live counters, NNUE evaluation symmetry, bundled network, C engine selection, mate on the hundredth ply, impossible en passant capture in a FEN |
-| `test_engine_process.py` | engine process: `info` after each depth, interruption by a new request, comparison mode |
+| `test_engine_process.py` | engine process: `info` after each depth, interruption by a new request, comparison mode, and it ends by itself when the game is killed the hard way |
 | `test_rating.py` | Elo E and ΔR for sample values, K during calibration, the Glicko-2 example from the paper, score S and the time penalty, profile and saving |
 | `test_selector.py` | the selector hits the target rating range, an easier puzzle after 3 failures, a bonus after 5 successes, ~30% weak themes, no repeats, variety |
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |

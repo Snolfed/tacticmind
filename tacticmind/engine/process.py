@@ -17,7 +17,8 @@ Engine responses:
 
 Stopping is immediate: the UI sets a shared ``multiprocessing.Event`` flag,
 and the search checks it every 1024 nodes.
-The process handles successive requests without restarting.
+The process handles successive requests without restarting. It also ends on its own when the game that started it is
+gone (a crash or ``kill -9`` leaves no chance to send ``QuitRequest``), instead of waiting for requests forever.
 """
 
 from __future__ import annotations
@@ -105,12 +106,26 @@ EngineEvent = InfoEvent | ProgressEvent | DoneEvent | CompareEvent | ErrorEvent
 
 # ----------------------------------------------------------------- engine process
 
+#: How often a waiting engine process checks that the game that started it is still running (s).
+PARENT_CHECK = 1.0
+
+
+def _next_request(requests: Queue[Request]) -> Request:
+    """The next request, or ``QuitRequest`` once the game process is gone."""
+    parent = mp.parent_process()
+    while True:
+        try:
+            return requests.get(timeout=PARENT_CHECK)
+        except queue.Empty:
+            if parent is not None and not parent.is_alive():
+                return QuitRequest()
+
 
 def _engine_main(requests: Queue[Request], responses: Queue[EngineEvent], stop_event: Event) -> None:
     """Engine process loop."""
     searcher = make_searcher()  # C engine (NNUE), or the Python one when there is no compiler
     while True:
-        message = requests.get()
+        message = _next_request(requests)
         # If more requests are queued, only the newest matters (unless it's "quit").
         while not isinstance(message, QuitRequest):
             try:
