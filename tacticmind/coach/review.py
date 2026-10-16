@@ -11,7 +11,7 @@ Winning-chance drop thresholds (percentage points):
 ==================  ===========  =================================================
 Class               Drop         Notes
 ==================  ===========  =================================================
-brilliant (!!)      ≤ 2          a piece sacrifice without which the position was not winning
+brilliant (!!)      ≤ 1          a real piece sacrifice; without it the position was not winning
 great (!)           0            the only good move: the second best loses ≥ 15 pts
 best                0            the move suggested by the engine
 excellent           ≤ 2
@@ -22,8 +22,10 @@ mistake (?)         ≤ 20
 blunder (??)        > 20
 ==================  ===========  =================================================
 
-Move accuracy (%) is also as on Lichess: ``103.1668 · e^(−0.04354 · drop) − 3.1669``;
-game accuracy is the mean of the move accuracies.
+Move accuracy (%) is also as on Lichess: ``103.1668 · e^(−0.04354 · drop) − 3.1669``.
+Game accuracy is also Lichess's: the average of the volatility-weighted mean and the **harmonic** mean of
+the move accuracies. A plain mean hides blunders among many easy moves (six blunders in a long game still
+gave ~87%); the harmonic mean is pulled down hard by every very bad move.
 """
 
 from __future__ import annotations
@@ -45,7 +47,8 @@ SERIOUS: frozenset[str] = frozenset({"mistake", "blunder"})
 WEAK: frozenset[str] = frozenset({"inaccuracy", "mistake", "blunder"})
 
 GREAT_GAP = 15.0
-BRILLIANT_MAX_DROP = 2.0
+#: A brilliant move must be the engine's move or practically equal to it.
+BRILLIANT_MAX_DROP = 1.0
 #: A sacrifice is not brilliant when the position is 97% winning even without it - then everything wins.
 #: What counts is the second best move: a sacrifice that itself leads to mate can be brilliant.
 BRILLIANT_MAX_WIN = 97.0
@@ -76,8 +79,38 @@ def move_accuracy(drop: float) -> float:
     return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * drop) - 3.1669))
 
 
-def game_accuracy(accuracies: list[float]) -> float | None:
-    return sum(accuracies) / len(accuracies) if accuracies else None
+#: Lowest move accuracy used in the harmonic mean (one 0% move would otherwise make the whole game 0%).
+HARMONIC_FLOOR = 1.0
+
+
+def game_accuracy(accuracies: list[float], weights: list[float] | None = None) -> float | None:
+    """Game accuracy as on Lichess: (weighted mean + harmonic mean) / 2 of the move accuracies."""
+    if not accuracies:
+        return None
+    if weights is None or len(weights) != len(accuracies):
+        weights = [1.0] * len(accuracies)
+    weighted = sum(a * w for a, w in zip(accuracies, weights)) / sum(weights)
+    harmonic = len(accuracies) / sum(1 / max(HARMONIC_FLOOR, a) for a in accuracies)
+    return (weighted + harmonic) / 2
+
+
+def volatility_weights(win_percents: list[float]) -> list[float]:
+    """Weight of each move in the game accuracy (Lichess): moves in sharp phases of the game count more.
+
+    :param win_percents: White's winning chance before the first move and after every move (moves + 1 values).
+    :return: one weight per move: the standard deviation of the winning chance in a window around it, in 0.5–12.
+    """
+    moves = len(win_percents) - 1
+    if moves <= 0:
+        return []
+    size = max(2, min(8, moves // 10))
+    windows = [win_percents[:size]] * (size - 2) + [win_percents[i : i + size] for i in range(len(win_percents) - size + 1)]
+    weights = []
+    for window in windows[:moves]:
+        mean = sum(window) / len(window)
+        deviation = math.sqrt(sum((x - mean) ** 2 for x in window) / len(window))
+        weights.append(max(0.5, min(12.0, deviation)))
+    return weights
 
 
 def classify(
@@ -99,7 +132,7 @@ def classify(
     :param second_drop: how much worse the second best move is (for a "great" move),
     :param win_before: winning chance with best play; without the sacrifice (with the second best move,
         ``win_before − second_drop``) the position must not already be winning, and after the move it must not be lost,
-    :param recapture: a recapture - obvious, so never "great".
+    :param recapture: an obvious capture (a recapture, or taking a piece left hanging), so never "great".
     """
     if book:
         return "book"

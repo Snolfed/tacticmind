@@ -15,7 +15,7 @@ import chess
 
 from .advice import Comment
 from .openings import Opening, line_ucis, opening_at
-from .review import CLASSES, Classification, game_accuracy
+from .review import CLASSES, Classification, game_accuracy, volatility_weights, win_percent
 
 Result = Literal["win", "loss", "draw"]
 EndReason = Literal["checkmate", "stalemate", "material", "repetition", "fifty", "resign"]
@@ -183,8 +183,13 @@ class CoachGame:
 
     # ------------------------------------------------------------ summary
     def accuracy(self, player: bool = True) -> float | None:
-        values = [r.accuracy for r in self.records if r.by_player == player and r.accuracy is not None]
-        return game_accuracy(values)
+        """Game accuracy of the player (or the coach), weighted by how sharp the game was at each move."""
+        series = [50.0]
+        for record in self.records:
+            series.append(win_percent(record.score) if record.score is not None else series[-1])
+        weights = volatility_weights(series)
+        chosen = [(r.accuracy, w) for r, w in zip(self.records, weights) if r.by_player == player and r.accuracy is not None]
+        return game_accuracy([a for a, _ in chosen], [w for _, w in chosen])
 
     def counts(self, player: bool = True) -> dict[str, int]:
         result: dict[str, int] = {cls: 0 for cls in CLASSES}

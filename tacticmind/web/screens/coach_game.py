@@ -30,7 +30,7 @@ from ...coach.strength import choose_move, describe_level, strength_for
 from ...engine.process import DoneEvent, EngineEvent, ErrorEvent
 from ...engine.types import MATE, SearchInfo
 from ...i18n import fmt_decimal, get_language, t, tn
-from ...puzzles.validator import is_sacrifice
+from ...puzzles.validator import SACRIFICE_MIN_LOSS, is_sacrifice, see
 from ...rating.coach_profile import CALIBRATION_GAMES, CoachGameRecord, LevelChange
 from ...rating.profile import RatingChange, data_dir
 from ..board import BoardModel
@@ -385,7 +385,10 @@ class CoachGameScreen(WebScreen):
         drop = 0.0 if is_best else win_drop(best_value, played)
         second = win_drop(best_value, score_for(info.multi_pv[1].score, me)) if len(info.multi_pv) > 1 else None
         last = board.peek() if board.move_stack else None
-        recapture = last is not None and board.is_capture(move) and move.to_square == last.to_square
+        # Recapturing, or taking a piece the opponent left hanging, is obvious: never a "great" move.
+        recapture = board.is_capture(move) and (
+            (last is not None and move.to_square == last.to_square) or see(board, move.to_square) >= SACRIFICE_MIN_LOSS
+        )
         cls = classify(
             drop, is_best=is_best, sacrifice=is_sacrifice(board, move), second_drop=second, win_before=win_percent(best_value), recapture=recapture
         )
