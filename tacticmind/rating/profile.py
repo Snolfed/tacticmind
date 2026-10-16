@@ -26,6 +26,10 @@ MIN_RD = 50.0
 #: Penalty for a very long time: from 3× the average time, linearly down to −0.2 at 6×.
 SLOW_FACTOR = 3.0
 MAX_TIME_PENALTY = 0.2
+#: At most this many failed puzzles wait in the review queue (the oldest drop out first).
+REVIEW_LIMIT = 200
+#: Puzzle Rush variants: minutes on the clock (0 = "Survival", no clock, only 3 strikes).
+RUSH_VARIANTS = (3, 5, 0)
 
 
 def puzzle_score(outcome: PuzzleOutcome, average_time_s: float | None) -> float:
@@ -88,6 +92,10 @@ class PlayerProfile:
     language: str = "en"
     #: Games against the coach and opening study (a separate rating and "Your level").
     coach: CoachProfile = field(default_factory=CoachProfile)
+    #: Failed puzzles to review (ids, oldest first) — a puzzle leaves the queue once solved cleanly in the review.
+    review: list[str] = field(default_factory=list)
+    #: Best Puzzle Rush scores: variant (minutes as text, "0" = Survival) → puzzles solved.
+    rush_best: dict[str, int] = field(default_factory=dict)
 
     # ------------------------------------------------------------ rating
     @property
@@ -130,6 +138,10 @@ class PlayerProfile:
         self.model.record(puzzle.themes, success, score)
         if puzzle.id not in self.seen:
             self.seen.append(puzzle.id)
+        if score == 0.0:
+            self.add_to_review(puzzle.id)
+        else:
+            self.review_result(puzzle.id, success and not outcome.hint_used)
 
         after = self.rating
         self.history.append(
@@ -150,6 +162,30 @@ class PlayerProfile:
         )
         return RatingChange(before, after, after - before, score, self.rd)
 
+    # ------------------------------------------------------------ review of failed puzzles
+    def add_to_review(self, puzzle_id: str) -> None:
+        if puzzle_id in self.review:
+            self.review.remove(puzzle_id)
+        self.review.append(puzzle_id)
+        del self.review[:-REVIEW_LIMIT]
+
+    def review_result(self, puzzle_id: str, success: bool) -> None:
+        """A puzzle from the review: solved cleanly — it leaves the queue; failed again — it goes to the end."""
+        if puzzle_id not in self.review:
+            return
+        self.review.remove(puzzle_id)
+        if not success:
+            self.review.append(puzzle_id)
+
+    # ------------------------------------------------------------ Puzzle Rush
+    def record_rush(self, minutes: int, solved: int) -> bool:
+        """Saves a Puzzle Rush score; True when it is a new best for this variant."""
+        key = str(minutes)
+        if solved > self.rush_best.get(key, 0):
+            self.rush_best[key] = solved
+            return True
+        return False
+
     # ------------------------------------------------------------ persistence
     def to_json(self) -> dict[str, object]:
         return {
@@ -168,6 +204,8 @@ class PlayerProfile:
             "volume": self.volume,
             "language": self.language,
             "coach": self.coach.to_json(),
+            "review": self.review,
+            "rush_best": self.rush_best,
         }
 
     @classmethod
@@ -178,6 +216,9 @@ class PlayerProfile:
         themes = data.get("themes")
         history = data.get("history")
         seen = data.get("seen")
+        records = [PuzzleRecord(**r) for r in history if isinstance(r, dict)] if isinstance(history, list) else []
+        review = data.get("review")
+        rush = data.get("rush_best")
         return cls(
             system="elo" if data.get("system") == "elo" else "glicko",
             elo_rating=as_float(data.get("elo_rating"), elo.START_RATING),
@@ -189,13 +230,26 @@ class PlayerProfile:
             best_streak=as_int(data.get("best_streak")),
             fail_streak=as_int(data.get("fail_streak")),
             model=PlayerModel.from_json(themes if isinstance(themes, dict) else {}),
-            history=[PuzzleRecord(**r) for r in history if isinstance(r, dict)] if isinstance(history, list) else [],
+            history=records,
             seen=[str(s) for s in seen] if isinstance(seen, list) else [],
             sound=bool(data.get("sound", True)),
             volume=min(1.0, max(0.0, as_float(data.get("volume"), 0.7))),
             language=str(data.get("language", "pl")),
             coach=CoachProfile.from_json(data.get("coach")),
+            review=[str(i) for i in review][-REVIEW_LIMIT:] if isinstance(review, list) else _review_from_history(records),
+            rush_best={str(k): v for k, v in rush.items() if isinstance(v, int) and not isinstance(v, bool) and v > 0} if isinstance(rush, dict) else {},
         )
+
+
+def _review_from_history(history: list[PuzzleRecord]) -> list[str]:
+    """Review queue for a profile from before the review existed: puzzles whose last attempt failed."""
+    queue: list[str] = []
+    for record in history:
+        if record.puzzle_id in queue:
+            queue.remove(record.puzzle_id)
+        if record.score == 0.0:
+            queue.append(record.puzzle_id)
+    return queue[-REVIEW_LIMIT:]
 
 
 def as_float(value: object, default: float) -> float:

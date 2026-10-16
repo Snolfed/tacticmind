@@ -6,6 +6,7 @@ import { Board } from "../components/Board";
 import { BrainPanel } from "../components/BrainPanel";
 import { EvalBar } from "../components/EvalBar";
 import { IconChevronLeft, IconChevronRight, IconClose } from "../components/Icons";
+import { ModeDialog, RushBar, RushSummary } from "../components/Training";
 import { ConfirmDialog } from "../components/Widgets";
 import { useKeys } from "../hooks";
 import { t, useLanguage } from "../i18n";
@@ -13,12 +14,18 @@ import type { PlaySnapshot } from "../types";
 
 const act = (name: string, data: Record<string, unknown> = {}): void => screenAction("play", name, data);
 
-function PuzzleCard({ view }: { view: PlaySnapshot }): ReactElement {
+function PuzzleCard({ view, onMode }: { view: PlaySnapshot; onMode: () => void }): ReactElement {
   const card = view.card;
   const [why, setWhy] = useState(false);
   useEffect(() => setWhy(false), [view.puzzle]);
   return (
     <section className="card puzzle-card">
+      <button type="button" className={`mode-chip kind-${view.training.kind}`} onClick={onMode} title={t("training.title")}>
+        <span className="mode-chip-label">{view.training.label}</span>
+        <span className="mode-chip-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
       <div className="puzzle-head">
         <span className={`side-dot ${card.side}`} />
         <span className="puzzle-title">{card.title}</span>
@@ -32,7 +39,9 @@ function PuzzleCard({ view }: { view: PlaySnapshot }): ReactElement {
         {card.finished ? (
           <>
             <span className="puzzle-themes">{card.themes}</span>
-            {card.delta !== null && <span className={`puzzle-delta ${card.delta >= 0 ? "up" : "down"}`}>{card.delta >= 0 ? `+${card.delta}` : `−${Math.abs(card.delta)}`}</span>}
+            {card.delta !== null && (
+              <span className={`puzzle-delta ${card.delta >= 0 ? "up" : "down"}`}>{card.delta >= 0 ? `+${card.delta}` : `−${Math.abs(card.delta)}`}</span>
+            )}
           </>
         ) : (
           card.why.length > 0 && (
@@ -66,10 +75,22 @@ function Controls({ view }: { view: PlaySnapshot }): ReactElement {
           <span className="preview-label">{preview.label}</span>
           <span className="preview-line">{preview.line}</span>
         </div>
-        <button type="button" className="btn btn-secondary square" onClick={() => act("step", { delta: -1 })} disabled={preview.index <= 0} title={t("ui.prev")}>
+        <button
+          type="button"
+          className="btn btn-secondary square"
+          onClick={() => act("step", { delta: -1 })}
+          disabled={preview.index <= 0}
+          title={t("ui.prev")}
+        >
           <IconChevronLeft />
         </button>
-        <button type="button" className="btn btn-secondary square" onClick={() => act("step", { delta: 1 })} disabled={preview.index >= preview.total} title={t("ui.next")}>
+        <button
+          type="button"
+          className="btn btn-secondary square"
+          onClick={() => act("step", { delta: 1 })}
+          disabled={preview.index >= preview.total}
+          title={t("ui.next")}
+        >
           <IconChevronRight />
         </button>
         <button type="button" className="btn btn-secondary" onClick={() => act("preview_close")}>
@@ -111,8 +132,9 @@ function Controls({ view }: { view: PlaySnapshot }): ReactElement {
 
 export function Play({ view }: { view: PlaySnapshot }): ReactElement {
   useLanguage();
+  const [modes, setModes] = useState(false);
   useKeys((event) => {
-    if (!view.board) return;
+    if (!view.board || modes) return;
     if (event.key === "ArrowLeft") act("step", { delta: -1 });
     else if (event.key === "ArrowRight") act("step", { delta: 1 });
     else if (event.key === "Escape" && view.preview) act("preview_close");
@@ -137,14 +159,17 @@ export function Play({ view }: { view: PlaySnapshot }): ReactElement {
         <Controls view={view} />
       </div>
       <div className="play-side">
-        <PuzzleCard view={view} />
-        <BrainPanel
-          brain={view.brain}
-          onMode={(mode) => act("mode", { mode })}
-          onPreview={(index) => act("preview", { index })}
-          resetKey={view.puzzle}
-        />
+        {view.training.rush && <RushBar rush={view.training.rush} />}
+        <PuzzleCard view={view} onMode={() => setModes(true)} />
+        <BrainPanel brain={view.brain} onMode={(mode) => act("mode", { mode })} onPreview={(index) => act("preview", { index })} resetKey={view.puzzle} />
       </div>
+      {modes && <ModeDialog training={view.training} onClose={() => setModes(false)} />}
+      {view.training.rush?.over && !modes && <RushSummary rush={view.training.rush} />}
+      {view.notice && (
+        <div className="notice" role="status">
+          {view.notice}
+        </div>
+      )}
       {view.confirm && <ConfirmDialog text={view.confirm.text} yes={view.confirm.yes} onYes={() => act("confirm_yes")} onNo={() => act("confirm_no")} />}
     </div>
   );

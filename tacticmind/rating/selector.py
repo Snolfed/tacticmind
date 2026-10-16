@@ -34,7 +34,11 @@ WEAKNESS_SHARE = 0.30
 REPEAT_THEME_PENALTY = 40
 RECENT = 3
 
-Mode = Literal["flow", "easier", "bonus", "weakness"]
+#: Puzzle Rush: the first puzzle is about this rating, and every next one is this much harder.
+RUSH_START = 600
+RUSH_STEP = 55
+
+Mode = Literal["flow", "easier", "bonus", "weakness", "theme", "review", "rush"]
 
 
 @dataclass(frozen=True)
@@ -65,8 +69,12 @@ class Selection:
         return [reason.text() for reason in self.reasons]
 
 
-def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.Random | None = None) -> Selection:
-    """Picks the next puzzle for the player and returns it together with the justification."""
+def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.Random | None = None, theme: str | None = None) -> Selection:
+    """Picks the next puzzle for the player and returns it together with the justification.
+
+    With ``theme`` only puzzles with that theme are drawn (theme training) - still at the player's level."""
+    if theme is not None:
+        puzzles = [p for p in puzzles if theme in p.themes] or list(puzzles)
     if not puzzles:
         raise ValueError("No puzzles to choose from")
     rng = rng or random.Random()
@@ -93,7 +101,11 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
 
     # 3) ~30% of puzzles from the player's weakest themes.
     weak_theme: tuple[str, float] | None = None
-    if mode == "flow":
+    if theme is not None:
+        reasons.append(Reason("reason.theme", (("theme", theme),)))
+        if mode == "flow":
+            mode = "theme"
+    elif mode == "flow":
         weakest = profile.model.weakest()
         if weakest and rng.random() < WEAKNESS_SHARE:
             theme, rate = weakest[0] if len(weakest) == 1 or rng.random() < 0.6 else rng.choice(weakest)
@@ -122,7 +134,7 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
     expected = expected_score(rating, puzzle.rating)
 
     # 5) Justification.
-    if mode in ("flow", "weakness"):
+    if mode in ("flow", "weakness", "theme"):
         reasons.insert(0, Reason("reason.flow", (("target", round(target)), ("pct", round(expected * 100)))))
     else:
         reasons.append(Reason("reason.chance", (("pct", round(expected * 100)),)))
@@ -134,3 +146,27 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
     if profile.calibrating:
         reasons.append(Reason("reason.calibration", (("n", profile.games + 1),)))
     return Selection(puzzle, round(target), expected, mode, weak_theme, reasons)
+
+
+def select_review(puzzles: Sequence[Puzzle], profile: PlayerProfile) -> Selection | None:
+    """The oldest puzzle from the review queue (failed puzzles); None when the queue is empty."""
+    by_id = {p.id: p for p in puzzles}
+    profile.review[:] = [pid for pid in profile.review if pid in by_id]  # puzzles that left the set
+    if not profile.review:
+        return None
+    puzzle = by_id[profile.review[0]]
+    reasons = [Reason("reason.review", count=len(profile.review))]
+    return Selection(puzzle, puzzle.rating, expected_score(profile.rating, puzzle.rating), "review", None, reasons)
+
+
+def select_rush(puzzles: Sequence[Puzzle], index: int, used: set[str], rng: random.Random | None = None) -> Selection:
+    """Puzzle Rush: the ``index``-th puzzle of a run - each one a little harder, none repeated within the run."""
+    if not puzzles:
+        raise ValueError("No puzzles to choose from")
+    rng = rng or random.Random()
+    target = RUSH_START + RUSH_STEP * index
+    pool = [p for p in puzzles if p.id not in used] or list(puzzles)
+    candidates = sorted(pool, key=lambda p: abs(p.rating - target))[:6]
+    puzzle = rng.choice(candidates)
+    reasons = [Reason("reason.rush", (("n", index + 1), ("target", target)))]
+    return Selection(puzzle, target, 0.0, "rush", None, reasons)

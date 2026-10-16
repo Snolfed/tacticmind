@@ -113,6 +113,42 @@ export interface PlaySnapshot {
   confirm: Confirm | null;
   brain: BrainSnapshot;
   explainSeq: number;
+  training: Training;
+  notice: string | null;
+}
+
+export interface ThemeOption {
+  id: string;
+  name: string;
+  count: string;
+  stats: string;
+  weak: boolean;
+}
+
+export interface RushState {
+  minutes: number;
+  /** Seconds left; null in Survival (no clock). */
+  left: number | null;
+  solved: number;
+  strikes: number;
+  maxStrikes: number;
+  best: number;
+  over: "time" | "strikes" | "stopped" | null;
+  overTitle: string;
+  result: string;
+  record: boolean;
+  results: { rating: number; solved: boolean }[];
+}
+
+export interface Training {
+  kind: "rated" | "theme" | "review" | "rush";
+  theme: string | null;
+  label: string;
+  rush: RushState | null;
+  review: number;
+  reviewLabel: string;
+  rushBest: Record<string, number>;
+  themes: ThemeOption[];
 }
 
 export interface Strip {
