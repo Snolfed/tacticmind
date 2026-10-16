@@ -118,8 +118,8 @@ export function CoachAvatar({ expression = "neutral", size = 64 }: { expression?
     <svg className={`coach-avatar expr-${expression}`} width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Coach">
       <defs>
         <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="rgb(40,196,180)" />
-          <stop offset="1" stopColor="rgb(124,92,236)" />
+          <stop offset="0" stopColor="rgb(255,138,61)" />
+          <stop offset="1" stopColor="rgb(255,106,168)" />
         </linearGradient>
         <clipPath id={`${id}-clip`}>
           <circle cx="50" cy="50" r="50" />

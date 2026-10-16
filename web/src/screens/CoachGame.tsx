@@ -20,13 +20,13 @@ function PlayerIcon(): ReactElement {
     <svg className="player-icon" viewBox="0 0 40 40" aria-hidden="true">
       <defs>
         <linearGradient id="player-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="rgb(45,212,191)" />
-          <stop offset="1" stopColor="rgb(15,118,110)" />
+          <stop offset="0" stopColor="rgb(198,241,53)" />
+          <stop offset="1" stopColor="rgb(146,190,20)" />
         </linearGradient>
       </defs>
       <circle cx="20" cy="20" r="20" fill="url(#player-bg)" />
-      <circle cx="20" cy="15.5" r="6.5" fill="rgba(255,255,255,0.92)" />
-      <path d="M8 34c1.8-6.5 6.6-10 12-10s10.2 3.5 12 10" fill="rgba(255,255,255,0.92)" />
+      <circle cx="20" cy="15.5" r="6.5" fill="rgba(18,16,13,0.88)" />
+      <path d="M8 34c1.8-6.5 6.6-10 12-10s10.2 3.5 12 10" fill="rgba(18,16,13,0.88)" />
     </svg>
   );
 }

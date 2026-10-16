@@ -69,7 +69,14 @@ python scripts/build_engine.py     # library for the game + the tmengine UCI pro
 
 `python main.py` starts a local game server and shows the game in its own window
 ([pywebview](https://pywebview.flowrl.com/) with the system's web engine: WebKitGTK on Linux, WebView2 on Windows,
-WKWebView on macOS), so no browser opens and nothing has to be built. Closing the window ends the game. On Linux the
+WKWebView on macOS), so nothing has to be built. Closing the window ends the game.
+
+On Linux, when a Chromium-based browser is installed (Chromium, Chrome, Brave, Edge or Vivaldi), the game opens in that
+browser's app window instead: a bare window without tabs or an address bar, with its own profile in
+`~/.tacticmind/window`. WebKitGTK paces animations with a 60 Hz timer when it cannot read the display's refresh rate
+(common with the NVIDIA driver), and Qt WebEngine is fixed at 60 FPS too, while Chromium follows the monitor (170 FPS
+on a 170 Hz screen). `TACTICMIND_BROWSER=brave` picks a browser, and `TACTICMIND_WINDOW=webview` keeps the pywebview
+window. Without such a browser the game uses pywebview as described here. On Linux the
 `.venv` uses the system PyGObject by itself, as long as it was created with the system Python; if anything is missing,
 `python main.py` prints what to install. Under Wayland with the proprietary NVIDIA driver the game turns off the driver's
 explicit sync by itself (`__NV_DISABLE_EXPLICIT_SYNC=1`): with it the window closes at once with "Error 71 (Protocol error)
@@ -84,8 +91,8 @@ cd web && npm install && npm test    # interface tests (vitest)
 ```
 
 Progress (rating, history, statistics, coach games and opening lessons) is saved to `~/.tacticmind/profile.json`
-(a different directory can be set with the `TACTICMIND_HOME` variable), and interface settings (FPS counter, frame limit)
-to `~/.tacticmind/ui_settings.json`.
+(a different directory can be set with the `TACTICMIND_HOME` variable), and interface settings (FPS counter, frame limit,
+theme and board) to `~/.tacticmind/ui_settings.json`.
 
 ### Working on the interface
 
@@ -107,7 +114,7 @@ npm run build                      # new build into tacticmind/web/static
 - **Puzzle**: the opponent makes the first move (animated), then you look for the best move. The board is
   flipped to your side. You move by dragging or click-click; dots show legal squares, and on promotion
   a piece picker appears. The opponent's replies are played automatically after about 400 ms.
-- **Feedback**: a teal ✓ or a red ✗ on the target square and the messages "Best move!" /
+- **Feedback**: a lime ✓ or a red ✗ on the target square and the messages "Best move!" /
   "Sorry, that's not it". After a mistake the engine calculates the opponent's reply, e.g. "After Rd1? the opponent plays Qxh2#. Mate.",
   and you choose "Try again" or "Show solution".
 - **Brilliant move (!!)**: if the correct move is a sacrifice (you give up a piece for at least 2 pawns of material,
@@ -137,15 +144,15 @@ npm run build                      # new build into tacticmind/web/static
 - **The "AI Brain" panel** has three modes:
   - *Hidden* — while solving, only the counters and the fact that the AI is calculating are visible,
   - *Hint* — highlights the piece that has to move (the rating reward is halved),
-  - *Full* — after the puzzle (or after a mistake) everything is visible: the evaluation bar, arrows (best move in teal,
+  - *Full* — after the puzzle (or after a mistake) everything is visible: the evaluation bar, arrows (best move in lime,
     second and third semi-transparent), 3 candidate lines in SAN, the stream of thoughts, the mini tree, and the AI explains the puzzle.
     Clicking a candidate line replays it on the board in preview mode.
-- **Rating**: a big number at the top (e.g. "1450 ± 80") with an animated change (+12 in teal, −9 in red),
+- **Rating**: a big number at the top (e.g. "1450 ± 80") with an animated change (+12 in lime, −9 in red),
   a streak with a fire icon, the puzzle rating shown once the puzzle is over, and a "Why this puzzle?" pop-up.
 - After a puzzle ends, ◀ ▶ (or ← →) step through the positions, and the engine analyses each of them.
 - **Arrows and highlights (like on chess.com)**: drag with the right mouse button from square to square to
   draw an arrow (a knight move is drawn as an L), and click to highlight a square. Shift = red,
-  Ctrl = blue, Alt = teal, no modifier = amber. Drawing the same arrow again removes it; a left click
+  Ctrl = blue, Alt = lime, no modifier = amber. Drawing the same arrow again removes it; a left click
   on the board or making a move clears the drawings.
 - **Language**: the interface is in English by default, and Polish is available as a second language. The EN / PL switch in
   the top bar changes the whole interface, including the AI's "thoughts", explanations, theme names and the piece letters in
@@ -154,23 +161,26 @@ npm run build                      # new build into tacticmind/web/static
   fit their boxes (they shrink the font or get truncated with "…" instead of overflowing).
   In a wide window the board has the panel beside it and a vertical evaluation bar; in a narrow one (like a phone) there is a
   two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
-- **Icon**: the window has its own icon (a white pawn on a teal-and-purple tile): `web/public/icon.png`
+- **Icon**: the window has its own icon (a white pawn on a tile): `web/public/icon.png`
   (on Linux the window uses its built copy, `tacticmind/web/static/icon.png`).
-- **Sounds (chess.com style)**: a wooden "knock" on a move, a double "clack" on a capture, a little bell
-  on check, two knocks on castling, a rising tone on promotion, a chime arpeggio after solving a puzzle
-  (brighter for a brilliant move) and a soft "bonk" after a mistake. All of them are synthesized in code
-  on Web Audio (`web/src/sound.ts`), so there are no
-  files under someone else's license. They sound soft: low, "warm" wooden tones, a low-pass
-  filter and a light echo, with no harsh high frequencies.
+- **Sounds (chess.com style)**: a short, dry wooden "tock" on a move (a piece set down on a board: a click and
+  a few wooden resonances that fade in about 50 ms), a heavier double tock on a capture, a tock with a bell on check,
+  two quick tocks on castling, a rising tone on promotion, a chime after solving a puzzle (brighter for a brilliant move)
+  and a soft "bonk" after a mistake. All of them are synthesized in code on Web Audio (`web/src/sound.ts`), so there are
+  no recordings under someone else's license.
 - **Volume**: the top bar has a volume slider (drag it, click it or scroll the mouse wheel over it);
   the speaker icon mutes/unmutes the sound. The volume is remembered in the profile.
 - **Full screen**: F11 or the ⛶ button in the top-right corner toggles full-screen mode of the window.
-- **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it) and an animation
-  frame limit: 60, 120, 144, 170, 240 or unlimited (as fast as the monitor refreshes).
+- **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it), an animation
+  frame limit (60, 120, 144, 170, 240 or unlimited, as fast as the monitor refreshes), a dark or light theme and the
+  board colours (green, terracotta or slate).
 - **Dragging with a "dead zone"**: a piece starts being dragged only once the mouse moves away from the click point
   by about 1/5 of a square — a small twitch while clicking does not "grab" the piece, it just selects it (click-click).
-- **Look and animations**: a custom dark theme (navy + teal for the player + purple for the AI) and a board in steel
-  blues. All shapes are anti-aliased (supersampling), cards have soft shadows. Animations: smooth piece movement
+- **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
+  light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
+  for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
+  and moves. The board is cream and green, with chunky pieces of our own (`scripts/make_pieces.py`). A grabbed piece
+  follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
   (a captured piece disappears), a popping ✓/✗ with a ripple, a board shake after a mistake, confetti after solving,
   a pulsing hint and check, a springy evaluation bar, screen cross-fades, sliding toggle indicators.
 
@@ -254,14 +264,15 @@ tacticmind/
                             #   server.py (HTTP + SSE on 127.0.0.1), app.py (launch), window.py (game window),
                             #   static/ (built interface — produced by `npm run build`, do not edit by hand)
   data/                     # starter_puzzles.json (50 puzzles), puzzles.json (3000 puzzles)
-  assets/fonts/             # Noto fonts (WOFF2 subsets, about 60 KB each)
+  assets/fonts/             # Space Grotesk, Bricolage Grotesque, Space Mono and Noto fallbacks (WOFF2 subsets)
   assets/coach.png          # coach portrait for this README
 web/                        # TYPESCRIPT INTERFACE
   src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — SVG board, BrainPanel,
                             #   EvalBar, TopBar with settings, CoachAvatar…), chess.ts (FEN, animations, arrows),
                             #   ticker.ts (a single requestAnimationFrame loop with an FPS limit), effects.ts, sound.ts
-  public/pieces/            #   "cburnett" pieces (SVG)
+  public/pieces/            #   our own pieces (SVG, drawn by scripts/make_pieces.py)
 scripts/build_puzzles.py    # builds the puzzle set from the Lichess database
+scripts/make_pieces.py      # draws the piece set (web/public/pieces/*.svg)
 scripts/benchmark.py        # measurements for the table in the README
 scripts/build_engine.py     # compiles the C engine
 scripts/match.py            # engine-vs-engine matches (Elo measurement)
@@ -279,8 +290,9 @@ against the coach, statistics…) without drawing, and after every change sends 
 and charts — all in a single `requestAnimationFrame` loop with the frame limit from the settings. The player's move appears
 immediately (optimistically), and Python confirms or reverts it. The server listens only on `127.0.0.1`, rejects a foreign
 `Host` header (DNS rebinding) and actions without the `X-TacticMind` header. `python main.py` starts
-the server on a free port and opens the game window on its address (`tacticmind/web/window.py`, pywebview); full screen (F11) goes
-through a small Python API the window gives the page, and closing the window shuts the server down. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
+the server on a free port and opens the game window on its address (`tacticmind/web/window.py`: a Chromium app window on
+Linux when one is installed, otherwise pywebview); in pywebview full screen (F11) goes through a small Python API the
+window gives the page, and closing the window shuts the server down. The engine runs in a separate process behind `EngineClient` (`engine/process.py`).
 
 ```mermaid
 flowchart LR
@@ -712,7 +724,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 175 tests, including:
+`python -m pytest` — 179 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -725,12 +737,13 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_puzzles.py` | Lichess data (every move legal in our generator and in python-chess), puzzle flow, alternative mate, "good move, but there is a better one", Polish-locale notation, stream of thoughts |
 | `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
-| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing), the message when the window cannot open and the NVIDIA + Wayland explicit sync switch |
+| `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), the game window with a stand-in for pywebview (address, icon, full screen, closing) and for a Chromium browser (app window, own profile, a second game gets a spare profile), the message when the window cannot open and the NVIDIA + Wayland explicit sync switch |
 | `test_training.py` | puzzle modes: theme training draws only that theme, the review queue (order, clean solve removes, limit, missing puzzles, rebuilt from an old profile), Puzzle Rush gets harder without repeats and keeps the best score; on the puzzle screen: switching asks first, review is unrated, a whole Rush run (solve, 3 strikes, summary, again, back) and the clock running out |
 | `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
 The TypeScript interface has its own tests (`cd web && npm test`, vitest): FEN, trial moves (castling, en passant,
-promotion), transition animations between positions, arrows, the evaluation bar, translations and plurals.
+promotion), transition animations between positions, arrows, the evaluation bar, translations and plurals, and the
+synthesized sounds (all finite and audible, the move sound short and dry).
 
 The code is also checked with `ruff` and `mypy` (types on all functions, no `type: ignore`
 in the game code):
@@ -802,8 +815,9 @@ and the player plays the side to move after it (the board flips to that side).
     rating ("about 1380"), and the exact one is shown once the puzzle is over.
 13. **Time penalty** computed from the average time of the last 20 solved puzzles (at least 3), linearly from
     3× to 6× the average (max. −0.2).
-14. **"cburnett" SVG pieces and sounds synthesized in code** — no sound files with unclear licensing (`web/src/sound.ts`,
-    Web Audio). The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
+14. **Our own SVG pieces and sounds synthesized in code** — in the chess.com style, but drawn and tuned here rather than
+    copied: the pieces come from a script (`scripts/make_pieces.py`: silhouettes, gradients, a bevel and a thick
+    outline), and the sounds from Web Audio (`web/src/sound.ts`), so there are no files under someone else's license. The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
     logarithmically — so half the slider is noticeably quieter, not almost as loud.
 15. **Notation in the interface language** (in English K, Q, R, B, N; in the Polish locale K, H, W, G, S) in the panel and messages;
     the engine and the protocol use UCI.
@@ -812,9 +826,10 @@ and the player plays the side to move after it (the board flips to that side).
     so it stays sharp at any resolution and display scaling.
 17. **Two puzzle sets in the repository**: the starter set required by the specification and the full set of
     3000 puzzles generated by the script, so puzzle selection has plenty to choose from without downloading the database.
-18. **A custom look instead of a chess.com copy**: a navy background, teal as the player's colour, purple as the AI's colour,
-    a steel-blue board. Fonts are WOFF2 subsets of Noto Sans (Latin with Polish letters, Greek, arrows and symbols),
-    about 60 KB each instead of 600 KB.
+18. **A look of its own instead of a generic dark app**: neo-brutalist "club poster" cards (ink outlines, hard shadows,
+    stickers), lime for the player and pink for the AI, a dark and a light theme and three boards, switched with CSS
+    variables (`data-theme` / `data-board` on the page). Fonts are WOFF2 subsets (Latin with Polish letters) of Space
+    Grotesk, Bricolage Grotesque and Space Mono, with Noto Sans as a fallback for Greek, arrows and symbols.
 19. **Translations as dictionaries** (`tacticmind/i18n/`): each language is one file of keys; a missing key falls
     back to English (the default language). On-screen game messages are stored as functions returning text, and the stream of thoughts is
     rebuilt from the stored engine results — so switching the language takes effect immediately, even mid-puzzle.
@@ -862,6 +877,9 @@ and the player plays the side to move after it (the board flips to that side).
     on GitHub Actions for every pull request.
 14. **One game window** — `python main.py` opens the game in a native window (pywebview, the system's web engine) instead
     of a Chrome window or the separate Tauri app; Rust and the Tauri build (about 1 GB of build files) are no longer needed.
+15. **A new look, pieces and sounds** — the "club poster" design with a light theme and three boards, our own
+    chess.com-style pieces and a drier move sound; on Linux the game opens in a Chromium app window, so animations
+    follow the monitor's refresh rate instead of WebKitGTK's 60 Hz timer.
 
 ## Sources and licenses
 
@@ -875,8 +893,8 @@ and the player plays the side to move after it (the board flips to that side).
 - Glicko-2: M. E. Glickman, *Example of the Glicko-2 system* (glicko.net).
 - Piece-square tables based on the "Simplified Evaluation Function" (T. Michniewski, Chess Programming Wiki),
   extended with endgame values.
-- Noto fonts (Google) — license in `tacticmind/assets/fonts/`.
-- Pieces in the TypeScript interface: the "cburnett" set (Colin M.L. Burnett, Wikimedia Commons), license
-  **CC BY-SA 3.0** (also GFDL, BSD and GPL), files from the chessground package (lichess.org) — `web/public/pieces/LICENSE.txt`.
+- Fonts: Space Grotesk, Space Mono and Bricolage Grotesque (SIL Open Font License 1.1, files from Fontsource) and Noto
+  (Google) — licenses in `tacticmind/assets/fonts/`.
+- Pieces: drawn for this project by `scripts/make_pieces.py`.
 - Libraries: [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
   [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [pywebview](https://pywebview.flowrl.com/) (BSD-3-Clause).

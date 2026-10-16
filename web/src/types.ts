@@ -48,6 +48,8 @@ export interface TopBarSnapshot {
 export interface UiSettings {
   showFps: boolean;
   fpsLimit: number; // 0 = unlimited (display refresh rate)
+  theme: "dark" | "light";
+  board: "green" | "terracotta" | "slate";
 }
 
 export interface Thought {

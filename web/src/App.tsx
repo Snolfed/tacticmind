@@ -104,6 +104,14 @@ export function App(): ReactElement {
   const showFps = state?.settings.showFps ?? false;
   useEffect(() => setFpsLimit(fpsLimit), [fpsLimit]);
 
+  // The look: styles.css switches its colours on these attributes.
+  const theme = state?.settings.theme ?? "dark";
+  const board = state?.settings.board ?? "green";
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.board = board;
+  }, [theme, board]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "F3") {
