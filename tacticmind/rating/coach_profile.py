@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from ..coach.strength import ELO_MAX, ELO_MIN
 from . import glicko2
@@ -26,6 +27,9 @@ UPDATE_EVERY = 5
 TRAINER_RD = 80.0
 MIN_RD = 50.0
 DEFAULT_ELO = 800
+#: How many of the newest games keep their moves for the review (older ones keep only the result).
+ARCHIVE_LIMIT = 100
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
 @dataclass
@@ -43,6 +47,10 @@ class CoachGameRecord:
     rating_before: float
     rating_after: float
     timestamp: float
+    #: Moves of the game for the review (``coach/archive.py``); None in old profiles and in games past ``ARCHIVE_LIMIT``.
+    plies: list[dict[str, Any]] | None = None
+    start_fen: str = STARTING_FEN
+    reason: str | None = None
 
 
 @dataclass
@@ -115,6 +123,9 @@ class CoachProfile:
         moves: int,
         opening: str | None,
         helps: int,
+        plies: list[dict[str, Any]] | None = None,
+        start_fen: str = STARTING_FEN,
+        reason: str | None = None,
     ) -> LevelChange:
         before = self.rating.rating
         level_before = self.level
@@ -135,8 +146,13 @@ class CoachProfile:
                 rating_before=round(before, 1),
                 rating_after=round(self.rating.rating, 1),
                 timestamp=time.time(),
+                plies=plies,
+                start_fen=start_fen,
+                reason=reason,
             )
         )
+        for old in self.games[:-ARCHIVE_LIMIT]:
+            old.plies = None
         n = len(self.games)
         calibrated_now = n == CALIBRATION_GAMES
         if n >= CALIBRATION_GAMES and (n - CALIBRATION_GAMES) % UPDATE_EVERY == 0:
@@ -153,6 +169,10 @@ class CoachProfile:
     def stars(self, opening_id: str) -> int:
         progress = self.openings.get(opening_id)
         return progress.stars if progress else 0
+
+    def reviewable(self, index: int) -> bool:
+        """Whether the game with this index has saved moves (can be opened in the review)."""
+        return 0 <= index < len(self.games) and bool(self.games[index].plies)
 
     def results(self) -> tuple[int, int, int]:
         """(wins, draws, losses)."""
@@ -187,9 +207,14 @@ class CoachProfile:
         if isinstance(games, list):
             for g in games:
                 try:
-                    records.append(CoachGameRecord(**g))
+                    record = CoachGameRecord(**g)
                 except TypeError:
                     continue
+                if not isinstance(record.plies, list):
+                    record.plies = None
+                if not isinstance(record.start_fen, str):
+                    record.start_fen = STARTING_FEN
+                records.append(record)
         progress = {}
         if isinstance(openings, dict):
             for key, value in openings.items():

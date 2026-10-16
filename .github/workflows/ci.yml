@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Types (mypy)
+        run: mypy tacticmind scripts main.py --disallow-untyped-defs
+      - name: Tests (pytest)
+        # The C engine is compiled with the runner's gcc on first use.
+        run: python -m pytest
+
+  web:
+    name: Interface (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Tests (vitest)
+        run: npm test
+      - name: Build (tsc + vite)
+        run: npm run build
+      - name: Built interface is committed
+        # The game serves tacticmind/web/static as committed, so it must match web/src.
+        run: |
+          git add -N ../tacticmind/web/static
+          if ! git diff --quiet -- ../tacticmind/web/static; then
+            echo "::error::tacticmind/web/static is out of date: run 'npm run build' in web/ and commit the result."
+            git status --short -- ../tacticmind/web/static
+            exit 1
+          fi

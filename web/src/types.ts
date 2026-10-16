@@ -113,6 +113,42 @@ export interface PlaySnapshot {
   confirm: Confirm | null;
   brain: BrainSnapshot;
   explainSeq: number;
+  training: Training;
+  notice: string | null;
+}
+
+export interface ThemeOption {
+  id: string;
+  name: string;
+  count: string;
+  stats: string;
+  weak: boolean;
+}
+
+export interface RushState {
+  minutes: number;
+  /** Seconds left; null in Survival (no clock). */
+  left: number | null;
+  solved: number;
+  strikes: number;
+  maxStrikes: number;
+  best: number;
+  over: "time" | "strikes" | "stopped" | null;
+  overTitle: string;
+  result: string;
+  record: boolean;
+  results: { rating: number; solved: boolean }[];
+}
+
+export interface Training {
+  kind: "rated" | "theme" | "review" | "rush";
+  theme: string | null;
+  label: string;
+  rush: RushState | null;
+  review: number;
+  reviewLabel: string;
+  rushBest: Record<string, number>;
+  themes: ThemeOption[];
 }
 
 export interface Strip {
@@ -156,7 +192,23 @@ export interface CoachGameSnapshot {
     rows: { cls: string; you: number; trainer: number }[];
     lines: { text: string; color: Tone }[];
   } | null;
+  /** After the game: White's winning chance (0–100) after every ply (index 0 = initial position) and the PGN. */
+  review: { evals: number[]; current: number; pgn: string; archived: boolean } | null;
+  notice: string | null;
   confirm: Confirm | null;
+}
+
+export interface SavedGameRow {
+  index: number;
+  result: "win" | "loss" | "draw";
+  color: Color;
+  elo: number;
+  opening: string;
+  accuracy: number | null;
+  moves: number;
+  date: string;
+  delta: number;
+  reviewable: boolean;
 }
 
 export interface OpeningRow {
@@ -181,6 +233,7 @@ export interface CoachMenuSnapshot {
   range: [number, number, number];
   inProgress: boolean;
   openings: OpeningRow[];
+  games: SavedGameRow[];
   confirm: Confirm | null;
 }
 

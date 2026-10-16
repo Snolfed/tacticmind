@@ -1,6 +1,6 @@
-"""The "AI Brain" panel — data for drawing in the browser (counterpart of ``ui/brain_panel.py``).
+"""The "AI Brain" panel — data for drawing in the browser.
 
-The visibility modes are the same as in pygame:
+Visibility modes:
  - Hidden: only the counters and a note that the AI is thinking — moves and evaluation hidden,
  - Hint: highlights the piece that has to move (reduces the reward),
  - Full: everything visible, and after the puzzle the AI explains the solution.

@@ -24,7 +24,7 @@ export function EvalBar({
   whiteBottom: boolean;
   horizontal?: boolean;
 }): ReactElement {
-  // Without a new evaluation the bar stays where it was (as in the pygame version).
+  // Without a new evaluation the bar stays where it was.
   const last = useRef<{ share: number; label: string; white: boolean }>({ share: 0.5, label: "0.0", white: true });
   if (score) last.current = { share: whiteShare(score), label: score.label.replace(/^[+-]/, ""), white: score.value >= 0 };
   const { share, label, white } = last.current;

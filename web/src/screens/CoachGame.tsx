@@ -6,6 +6,7 @@ import { go, screenAction } from "../api";
 import { BADGE_COLORS, Badge } from "../components/Badge";
 import { Board, pieceUrl } from "../components/Board";
 import { CoachAvatar } from "../components/CoachAvatar";
+import { EvalGraph } from "../components/EvalGraph";
 import { IconChevronLeft, IconChevronRight } from "../components/Icons";
 import { ConfirmDialog } from "../components/Widgets";
 import { useKeys } from "../hooks";
@@ -139,6 +140,39 @@ function MoveList({ view }: { view: CoachGameSnapshot }): ReactElement {
   );
 }
 
+function ReviewCard({ view }: { view: CoachGameSnapshot }): ReactElement | null {
+  const review = view.review;
+  if (!review) return null;
+  const copy = (): void => {
+    navigator.clipboard
+      ?.writeText(review.pgn)
+      .then(() => act("pgn_copied"))
+      .catch(() => act("pgn_save"));
+  };
+  return (
+    <section className="card review-card">
+      <header className="review-head">
+        <h3>{t("coach.review.graph")}</h3>
+        <div className="review-buttons">
+          <button type="button" className="btn btn-secondary compact" onClick={copy}>
+            {t("coach.btn.pgn_copy")}
+          </button>
+          <button type="button" className="btn btn-secondary compact" onClick={() => act("pgn_save")}>
+            {t("coach.btn.pgn_save")}
+          </button>
+        </div>
+      </header>
+      <EvalGraph
+        evals={review.evals}
+        current={review.current}
+        marks={view.moves.list.map((move) => (move.player ? move.cls : null))}
+        onJump={(index) => act("jump", { index })}
+      />
+      <p className="muted small">{t("coach.review.graph_hint")}</p>
+    </section>
+  );
+}
+
 function Summary({ summary }: { summary: NonNullable<CoachGameSnapshot["summary"]> }): ReactElement {
   const expression = summary.result === "win" ? "excited" : summary.result === "loss" ? "happy" : "neutral";
   useEffect(() => {
@@ -242,8 +276,14 @@ export function CoachGame({ view }: { view: CoachGameSnapshot }): ReactElement {
       </div>
       <div className="game-side">
         <CoachCard view={view} />
+        <ReviewCard view={view} />
         <MoveList view={view} />
       </div>
+      {view.notice && (
+        <div className="notice" role="status">
+          {view.notice}
+        </div>
+      )}
       {view.summary && <Summary summary={view.summary} />}
       {view.confirm && <ConfirmDialog text={view.confirm.text} yes={view.confirm.yes} onYes={() => act("confirm_yes")} onNo={() => act("confirm_no")} />}
     </div>

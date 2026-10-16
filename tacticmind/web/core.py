@@ -1,6 +1,6 @@
 """Core of the browser interface: app state, screens, engine and snapshot broadcasting.
 
-Counterpart of ``ui/app.py`` without pygame. Everything happens under a single lock (``lock``):
+Everything happens under a single lock (``lock``):
  - the clock thread, every ~40 ms, receives engine messages, counts down scheduled screen actions
    (e.g. the opponent's reply after 400 ms) and broadcasts a new snapshot if the state changed,
  - the HTTP server threads run actions from the browser (``dispatch``) and broadcast a snapshot right away.
@@ -117,6 +117,13 @@ class WebApp:
         assert isinstance(screen, CoachGameScreen)
         screen.start(color, elo, adaptive, lesson)
         self.go("coach_game")
+
+    def open_coach_review(self, index: int) -> None:
+        """Opens a saved game with the coach in the review."""
+        screen = self.screens["coach_game"]
+        assert isinstance(screen, CoachGameScreen)
+        if screen.open_archived(index):
+            self.go("coach_game")
 
     def on_rating_change(self, change: RatingChange) -> None:
         self.rating_delta = round(change.delta)

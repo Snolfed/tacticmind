@@ -1,6 +1,6 @@
-"""Game against the coach and opening lesson (counterpart of ``ui/screens/coach_game.py`` without drawing).
+"""Game against the coach and opening lesson.
 
-The turn flow is the same as in the pygame version:
+The turn flow:
  1. **Player's move** — the engine analyses the position in the background (MultiPV 3); a theory move is "book" right away.
  2. **Evaluation** — move class and the coach's comment; after a mistake or a blunder the game pauses.
  3. **Coach's move** — from the opening book or from a search whose strength depends on Elo.
@@ -11,25 +11,28 @@ Engine requests go one at a time (a job queue) — the engine process computes o
 from __future__ import annotations
 
 import random
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import chess
 
 from ...brain.notation import uci_san
 from ...coach.advice import Comment, Phrase, San, book_comment, phrase, player_comment, render_comment, trainer_comment
+from ...coach.archive import decode_plies, encode_plies, eval_curve, game_pgn, pgn_filename
 from ...coach.game import CoachGame, MoveRecord
 from ...coach.openings import Opening, book_moves, comment_key, is_book_move, move_comment, opening_name
 from ...coach.review import CLASSES, SERIOUS, WEAK, classify, move_accuracy, score_for, win_drop, win_percent
 from ...coach.strength import choose_move, describe_level, strength_for
 from ...engine.process import DoneEvent, EngineEvent, ErrorEvent
 from ...engine.types import MATE, SearchInfo
-from ...i18n import fmt_decimal, t, tn
+from ...i18n import fmt_decimal, get_language, t, tn
 from ...puzzles.validator import is_sacrifice
-from ...rating.coach_profile import CALIBRATION_GAMES, LevelChange
-from ...rating.profile import RatingChange
+from ...rating.coach_profile import CALIBRATION_GAMES, CoachGameRecord, LevelChange
+from ...rating.profile import RatingChange, data_dir
 from ..board import BoardModel
 from ..colors import BEST_ARROW, BEST_ARROW_REVIEW, HINT_ARROW, LESSON_ARROW
 from .base import WebScreen
@@ -50,6 +53,8 @@ LESSON_REPLY = 0.75
 BOOK_PLIES = 24
 #: The game summary appears shortly after the game ends.
 SUMMARY_DELAY = 0.9
+#: How long a notice ("PGN copied", "Saved to …") stays visible (s).
+NOTICE_TIME = 4.0
 
 Text = Callable[[], str]
 Arrow = tuple[chess.Move, frozenset[str], str]
@@ -106,6 +111,8 @@ class _Summary:
     change: LevelChange | None = None
     counted: bool = False
     notes: list[str] = field(default_factory=list)
+    #: A game opened from the list of saved games (not just played).
+    archived: CoachGameRecord | None = None
 
 
 class CoachGameScreen(WebScreen):
@@ -140,6 +147,11 @@ class CoachGameScreen(WebScreen):
         self.summary: _Summary | None = None
         self.confirm: tuple[Text, Callable[[], None], str] | None = None
         self.game_seq = 0
+        #: The saved game shown in the review (None for a game played now).
+        self.archived: CoachGameRecord | None = None
+        self.played_at: float | None = None
+        self.notice: tuple[Text, float] | None = None
+        self._pgn_cache: tuple[tuple[int, str], str] | None = None
 
     # ================================================================ start and lifecycle
     def start(self, color: chess.Color, elo: int, adaptive: bool, lesson: Opening | None) -> None:
@@ -158,6 +170,9 @@ class CoachGameScreen(WebScreen):
         self.arrow = None
         self.summary = None
         self.confirm = None
+        self.archived = None
+        self.played_at = None
+        self.notice = None
         self.side = ()
         bv = self.board_view
         bv.orientation = color
@@ -310,6 +325,7 @@ class CoachGameScreen(WebScreen):
         self.trainer_ref = None
         if game.board.is_checkmate():
             record.classification, record.accuracy = "best", 100.0
+            record.score = MATE if board_before.turn == chess.WHITE else -MATE
             record.comment = player_comment(board_before, move, "best", None, [], MATE, MATE, [])
             self._after_judgement(record, board_before, move)
             return
@@ -376,6 +392,7 @@ class CoachGameScreen(WebScreen):
         record.classification = cls
         record.accuracy = move_accuracy(drop)
         record.best_uci = None if is_best else best.move
+        record.score = played if me == chess.WHITE else -played
         record.comment = player_comment(board, move, cls, best.move, list(best.pv), best_value, played, reply)
         after = board.copy(stack=False)
         after.push(move)
@@ -544,6 +561,7 @@ class CoachGameScreen(WebScreen):
             ref = self.trainer_ref
             if game.board.is_checkmate():
                 record.classification, record.accuracy = "best", 100.0
+                record.score = MATE if board_before.turn == chess.WHITE else -MATE
             elif ref is not None and ref.fen == board_before.fen():
                 self.pending_grade = (record, ref)
         self.trainer_ref = None
@@ -567,6 +585,7 @@ class CoachGameScreen(WebScreen):
         drop = 0.0 if is_best else win_drop(ref.value, value)
         record.classification = classify(drop, is_best=is_best)
         record.accuracy = move_accuracy(drop)
+        record.score = info.score.value
 
     # ---------------------------------------------------------------- coach's help
     def hint(self) -> None:
@@ -691,6 +710,7 @@ class CoachGameScreen(WebScreen):
         self._reset_engine()
         self.board_view.interactive = False
         self.arrow = None
+        self._fill_scores(game)
         change = self._record() if game.counts_for_rating() and not game.recorded else None
         result = game.result or "draw"
         reason = Phrase(f"coach.reason.{game.reason}") if game.reason else Phrase("")
@@ -709,6 +729,8 @@ class CoachGameScreen(WebScreen):
         if game is None or game.recorded or game.result is None:
             return None
         game.recorded = True
+        self._fill_scores(game)
+        self.played_at = time.time()
         coach = self.app.profile.coach
         change = coach.record(
             trainer_elo=game.elo,
@@ -721,10 +743,106 @@ class CoachGameScreen(WebScreen):
             moves=game.player_moves(),
             opening=game.opening_id(),
             helps=game.takebacks + game.hints,
+            plies=encode_plies(game.records),
+            start_fen=game.start_fen,
+            reason=game.reason,
         )
         self.app.save()
         self.app.on_rating_change(RatingChange(change.rating_before, change.rating_after, change.rating_after - change.rating_before, game.score(), coach.rating.rd))
         return change
+
+    def _fill_scores(self, game: CoachGame) -> None:
+        """Evaluations of moves the coach did not judge (e.g. its book moves) from the analyses made during the game."""
+        board = chess.Board(game.start_fen)
+        for record in game.records:
+            board.push(record.move)
+            if record.score is None:
+                info = self.analyses.get(board.fen())
+                if info is not None and info.depth:
+                    record.score = info.score.value
+
+    # ================================================================ saved games
+    def open_archived(self, index: int) -> bool:
+        """Opens a saved game in the review: board at the start, move list with badges, comments, graph."""
+        coach = self.app.profile.coach
+        if not coach.reviewable(index):
+            return False
+        saved = coach.games[index]
+        records = decode_plies(saved.start_fen, saved.plies)
+        if records is None:
+            return False
+        color = chess.WHITE if saved.color == "white" else chess.BLACK
+        self.start_review(saved, color, records)
+        return True
+
+    def start_review(self, saved: CoachGameRecord, color: chess.Color, records: list[MoveRecord]) -> None:
+        self._reset_engine()
+        self.timers.clear()
+        self.settings = (color, saved.trainer_elo, saved.adaptive, None)
+        self.strength = strength_for(saved.trainer_elo)
+        game = CoachGame(color, saved.trainer_elo, adaptive=saved.adaptive, start_fen=saved.start_fen)
+        for record in records:
+            game.board.push(record.move)
+            game.records.append(record)
+        game.result = saved.result if saved.result in ("win", "loss", "draw") else "draw"  # type: ignore[assignment]
+        game.reason = saved.reason  # type: ignore[assignment]
+        game.recorded = True
+        self.game = game
+        self.game_seq += 1
+        self.analyses.clear()
+        self.judge = None
+        self.trainer_ref = None
+        self.pending_grade = None
+        self.hint_pending = False
+        self.arrow = None
+        self.confirm = None
+        self.notice = None
+        self.archived = saved
+        self.played_at = saved.timestamp
+        self.summary = _Summary(-1.0, archived=saved)
+        self.side = ()
+        self.phase = "over"
+        bv = self.board_view
+        bv.orientation = color
+        bv.player_color = color
+        bv.interactive = False
+        bv.feedback = None
+        bv.arrows = []
+        bv.hint_square = None
+        bv.set_position(game.board, game.board.peek() if game.board.move_stack else None, animate=False)
+        self.view_index = None
+        self._restore_live_badge()
+        self.say((Phrase(f"coach.reason.{game.reason}") if game.reason else Phrase(""), Phrase(f"coach.end.{game.result}")), None)
+        self.react("neutral", 0.0)
+        if game.records:
+            self.jump_to(0)
+
+    # ================================================================ PGN
+    def pgn(self) -> str:
+        """PGN of the finished game (cached - the snapshot is built many times per second)."""
+        assert self.game is not None
+        key = (self.game_seq, get_language())
+        if self._pgn_cache is None or self._pgn_cache[0] != key:
+            self._pgn_cache = (key, game_pgn(self.game, self.played_at))
+        return self._pgn_cache[1]
+
+    def save_pgn(self) -> None:
+        if self.game is None or not self.game.over:
+            return
+        folder = Path.home() / "Downloads"
+        if not folder.is_dir():
+            folder = data_dir() / "games"
+        path = folder / pgn_filename(self.played_at)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.pgn(), encoding="utf-8")
+        except OSError:
+            self.show_notice(tx("coach.pgn.save_failed"))
+            return
+        self.show_notice(tx("coach.pgn.saved", path=str(path)))
+
+    def show_notice(self, text: Text) -> None:
+        self.notice = (text, self.clock + NOTICE_TIME)
 
     def open_summary(self) -> None:
         if self.game is not None and self.game.over:
@@ -827,6 +945,10 @@ class CoachGameScreen(WebScreen):
                 self.rematch()
             elif name == "menu":
                 self.app.go("coach")
+            elif name == "pgn_save":
+                self.save_pgn()
+            elif name == "pgn_copied":
+                self.show_notice(tx("coach.pgn.copied"))
             return
         handlers: dict[str, Callable[[], None]] = {
             "hint": self.hint,
@@ -840,6 +962,8 @@ class CoachGameScreen(WebScreen):
             "play_on": self.continue_after_lesson,
             "repeat": self.rematch,
             "other": lambda: self.app.go("coach"),
+            "pgn_save": self.save_pgn,
+            "pgn_copied": lambda: self.show_notice(tx("coach.pgn.copied")),
         }
         if name == "move":
             self.board_view.play(str(data.get("uci", "")))
@@ -973,7 +1097,12 @@ class CoachGameScreen(WebScreen):
         coach = self.app.profile.coach
         change = summary.change
         lines: list[dict[str, str]] = []
-        if not summary.counted:
+        if summary.archived is not None:
+            saved = summary.archived
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(saved.timestamp))
+            delta = round(saved.rating_after - saved.rating_before)
+            lines.append({"text": t("coach.archive.played", date=when, delta=f"{delta:+d}"), "color": "soft"})
+        elif not summary.counted:
             lines.append({"text": t("coach.summary.not_counted"), "color": "muted"})
         elif change is not None and change.calibrated_now and coach.level is not None:
             lines.append({"text": t("coach.summary.calibrated", elo=coach.level), "color": "accent"})
@@ -984,7 +1113,7 @@ class CoachGameScreen(WebScreen):
         else:
             lines.append({"text": t("coach.summary.calibration", n=coach.calibration_progress(), total=CALIBRATION_GAMES), "color": "soft"})
         helps = game.takebacks + game.hints
-        if helps and summary.counted:
+        if helps and summary.counted and summary.archived is None:
             lines.append({"text": t("coach.summary.helps", n=helps, score=fmt_decimal(game.score(), 1)), "color": "muted"})
         counts_you, counts_trainer = game.counts(True), game.counts(False)
         result = game.result or "draw"
@@ -1001,6 +1130,18 @@ class CoachGameScreen(WebScreen):
             "rows": [{"cls": cls, "you": counts_you[cls], "trainer": counts_trainer[cls]} for cls in CLASSES if counts_you[cls] or counts_trainer[cls]],
             "lines": lines,
         }
+
+    def _review(self, game: CoachGame) -> dict[str, Any] | None:
+        """After the game: the evaluation graph (White's winning chance after every ply) and the PGN."""
+        if not game.over or not game.records:
+            return None
+        current = len(game.records) if self.view_index is None else self.view_index
+        return {"evals": eval_curve(game.records), "current": current, "pgn": self.pgn(), "archived": self.archived is not None}
+
+    def _notice(self) -> str | None:
+        if self.notice is None or self.clock > self.notice[1]:
+            return None
+        return self.notice[0]()
 
     def _comment(self) -> dict[str, Any]:
         record = self.viewed_record()
@@ -1041,5 +1182,7 @@ class CoachGameScreen(WebScreen):
             "nav": {"prev": navigable and current > 0, "next": navigable and self.view_index is not None},
             "moves": self._moves(game),
             "summary": self._summary(game),
+            "review": self._review(game),
+            "notice": self._notice(),
             "confirm": {"text": self.confirm[0](), "yes": t(self.confirm[2])} if self.confirm is not None else None,
         }

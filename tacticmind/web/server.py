@@ -34,7 +34,7 @@ _ALLOWED_HOSTS = ("127.0.0.1", "localhost", "tauri.localhost")
 MAX_BODY = 64 * 1024
 
 mimetypes.add_type("text/javascript", ".js")
-mimetypes.add_type("font/ttf", ".ttf")
+mimetypes.add_type("font/woff2", ".woff2")
 mimetypes.add_type("image/svg+xml", ".svg")
 
 _MISSING_BUILD = """<!doctype html><meta charset="utf-8"><title>TacticMind</title>

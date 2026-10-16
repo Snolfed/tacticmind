@@ -1,5 +1,5 @@
-// Full-window effects: confetti after solving a puzzle and expanding rings
-// (port of ui/effects.py). A single canvas over the interface, drawn only while something is happening.
+// Full-window effects: confetti after solving a puzzle and expanding rings.
+// A single canvas over the interface, drawn only while something is happening.
 
 import { subscribe } from "./ticker";
 

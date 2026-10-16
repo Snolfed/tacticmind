@@ -36,6 +36,8 @@ class MoveRecord:
     comment: Comment = ()
     #: Better move according to the engine (arrow when reviewing the game).
     best_uci: str | None = None
+    #: Engine evaluation after the move, from White's perspective (mate = ±(32000 − plies)); None when unknown.
+    score: int | None = None
 
     @property
     def move(self) -> chess.Move:

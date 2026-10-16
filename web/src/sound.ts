@@ -1,4 +1,4 @@
-// Sounds synthesised in code (port of ui/sounds.py to Web Audio) — no recording files.
+// Sounds synthesised in code on Web Audio — no recording files.
 //  - move: a wooden "knock", capture: a double "clap", check: a knock with a little bell,
 //  - castling: two knocks, promotion: a rising tone, success / brilliant move: a bell arpeggio,
 //  - mistake: a soft, falling "bonk".
