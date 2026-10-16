@@ -1,4 +1,4 @@
-// Główny komponent: górny pasek, bieżący ekran, licznik FPS, płótno efektów i obsługa klawiatury.
+// Main component: top bar, current screen, FPS counter, effects canvas and keyboard handling.
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { send, store, useAppState, useOnline } from "./api";
@@ -18,7 +18,7 @@ import type { AppState, CoachGameSnapshot, CoachMenuSnapshot, HomeSnapshot, HowT
 function FpsMeter({ limit }: { limit: number }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   const last = useRef(0);
-  // Pusta subskrypcja utrzymuje pętlę klatek — licznik pokazuje, ile klatek interfejs naprawdę rysuje.
+  // An empty subscription keeps the frame loop running — the counter shows how many frames the interface really draws.
   useFrame((now) => {
     if (now - last.current < 250 || !ref.current) return;
     last.current = now;
@@ -74,7 +74,7 @@ export function App(): ReactElement {
         });
     };
     load();
-    // Dźwięk działa dopiero po pierwszej interakcji z oknem (zasada przeglądarek).
+    // Sound works only after the first interaction with the window (browser policy).
     const unlock = (): void => sounds.unlock();
     window.addEventListener("pointerdown", unlock, { capture: true });
     window.addEventListener("keydown", unlock, { capture: true });

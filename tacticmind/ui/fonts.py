@@ -1,9 +1,9 @@
-"""Czcionki (dołączone fonty Noto), pamięć podręczna napisów i dopasowanie tekstu do miejsca.
+"""Fonts (bundled Noto fonts), a text-surface cache and fitting text into its space.
 
-Renderowanie tekstu w pygame jest kosztowne, a interfejs rysujemy 60 razy na
-sekundę — dlatego gotowe powierzchnie z napisami trzymamy w pamięci. Funkcje
-``fit`` i ``wrap`` pilnują, żeby żaden tekst nie wychodził poza swoje pole:
-najpierw zmniejszają czcionkę (do ``min_size``), a dopiero potem skracają tekst „…”.
+Rendering text in pygame is expensive and the UI is drawn 60 times per second,
+so rendered text surfaces are cached. The ``fit`` and ``wrap`` functions make sure
+no text spills outside its box: they first shrink the font (down to ``min_size``)
+and only then truncate the text with "…".
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ _FILES = {
 ELLIPSIS = "…"
 
 _fonts: dict[tuple[str, int], pygame.font.Font] = {}
-#: Wyniki dopasowania i dzielenia tekstu na linie — liczone raz, a nie w każdej klatce.
+#: Results of fitting and line-wrapping — computed once, not every frame.
 _fit_cache: OrderedDict[tuple[str, int, int, str, int], tuple[str, int]] = OrderedDict()
 _wrap_cache: OrderedDict[tuple[str, int, int, str], list[str]] = OrderedDict()
 _LAYOUT_LIMIT = 4000
@@ -32,7 +32,7 @@ _CACHE_LIMIT = 4000
 
 
 def reset() -> None:
-    """Czyści pamięć czcionek (po ponownej inicjalizacji pygame stare obiekty Font są nieważne)."""
+    """Clears the font cache (after pygame is re-initialised, old Font objects are invalid)."""
     _fonts.clear()
     _cache.clear()
     _fit_cache.clear()
@@ -50,7 +50,7 @@ def font(size: int, style: str = "regular") -> pygame.font.Font:
 
 
 def render(text: str, size: int, color: tuple[int, ...], style: str = "regular") -> pygame.Surface:
-    """Napis jako powierzchnia (z pamięci podręcznej)."""
+    """Text rendered as a surface (cached)."""
     key = (style, size, text, color)
     surf = _cache.get(key)
     if surf is None:
@@ -74,12 +74,12 @@ def line_height(size: int, style: str = "regular") -> int:
 
 
 def ellipsize(text: str, width: int, size: int, style: str = "regular") -> str:
-    """Skraca tekst z „…” na końcu, żeby zmieścił się w ``width`` pikselach."""
+    """Truncates text with a trailing "…" so it fits in ``width`` pixels."""
     f = font(size, style)
     if f.size(text)[0] <= width:
         return text
     lo, hi = 0, len(text)
-    while lo < hi:  # wyszukiwanie binarne najdłuższego prefiksu
+    while lo < hi:  # binary search for the longest prefix
         mid = (lo + hi + 1) // 2
         if f.size(text[:mid].rstrip() + ELLIPSIS)[0] <= width:
             lo = mid
@@ -89,7 +89,7 @@ def ellipsize(text: str, width: int, size: int, style: str = "regular") -> str:
 
 
 def fit(text: str, width: int, size: int, style: str = "regular", min_size: int | None = None) -> tuple[str, int]:
-    """Dopasowuje tekst do szerokości: zmniejsza czcionkę do ``min_size``, a potem skraca."""
+    """Fits text to a width: shrinks the font down to ``min_size``, then truncates."""
     min_size = min_size if min_size is not None else max(9, int(size * 0.78))
     key = (text, width, size, style, min_size)
     cached = _fit_cache.get(key)
@@ -106,7 +106,7 @@ def fit(text: str, width: int, size: int, style: str = "regular", min_size: int 
 
 
 def wrap(text: str, size: int, width: int, style: str = "regular") -> list[str]:
-    """Dzieli tekst na linie mieszczące się w szerokości ``width`` (zbyt długie słowa są skracane)."""
+    """Wraps text into lines that fit in ``width`` (words that are too long get truncated)."""
     key = (text, size, width, style)
     cached = _wrap_cache.get(key)
     if cached is not None:
@@ -133,7 +133,7 @@ def wrap(text: str, size: int, width: int, style: str = "regular") -> list[str]:
 
 
 def wrap_limited(text: str, size: int, width: int, max_lines: int, style: str = "regular") -> list[str]:
-    """Jak ``wrap``, ale najwyżej ``max_lines`` linii — ostatnia kończy się „…”, jeśli tekst się nie mieści."""
+    """Like ``wrap``, but at most ``max_lines`` lines — the last one ends with "…" if the text does not fit."""
     lines = wrap(text, size, width, style)
     if len(lines) <= max_lines:
         return lines
@@ -145,7 +145,7 @@ def wrap_limited(text: str, size: int, width: int, max_lines: int, style: str = 
 def fit_wrapped(
     text: str, width: int, height: int, size: int, style: str = "regular", min_size: int | None = None, gap: int = 2
 ) -> tuple[list[str], int]:
-    """Największa czcionka (od ``size`` w dół), przy której zawinięty tekst mieści się w polu ``width``×``height``."""
+    """The largest font size (from ``size`` down) at which the wrapped text fits in a ``width``×``height`` box."""
     min_size = min_size if min_size is not None else max(9, int(size * 0.75))
     current = size
     while True:

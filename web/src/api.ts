@@ -1,7 +1,7 @@
-// Połączenie z logiką gry. Interfejs rozmawia z nią przez jeden wąski kanał:
-// akcje (JSON) płyną w jedną stronę, migawki stanu i zdarzenia „fx” w drugą.
-// Dziś po drugiej stronie jest lokalny serwer Pythona (SSE + POST); w wersji na telefon
-// wystarczy podmienić transport, a reszta interfejsu zostaje bez zmian.
+// Connection to the game logic. The interface talks to it through a single narrow channel:
+// actions (JSON) flow one way, state snapshots and "fx" events flow the other.
+// Today the other side is a local Python server (SSE + POST); for a mobile version
+// it is enough to swap the transport, and the rest of the interface stays unchanged.
 
 import { useSyncExternalStore } from "react";
 import type { AppState, FxEvent } from "./types";
@@ -19,7 +19,7 @@ class SseTransport implements Transport {
     source.addEventListener("state", (event) => onState(JSON.parse((event as MessageEvent<string>).data) as AppState));
     source.addEventListener("fx", (event) => onFx(JSON.parse((event as MessageEvent<string>).data) as FxEvent[]));
     source.onopen = () => onStatus(true);
-    source.onerror = () => onStatus(false); // EventSource sam łączy się ponownie
+    source.onerror = () => onStatus(false); // EventSource reconnects by itself
   }
 
   send(action: Action): void {
@@ -92,7 +92,7 @@ export function send(action: Action): void {
   store.send(action);
 }
 
-/** Akcja ekranu, np. screenAction("play", "hint"). */
+/** A screen action, e.g. screenAction("play", "hint"). */
 export function screenAction(screen: string, name: string, data: Record<string, unknown> = {}): void {
   store.send({ type: "screen", screen, name, data });
 }

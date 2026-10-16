@@ -1,4 +1,4 @@
-"""Animacje: funkcje wygładzania (easing), płynne dążenie do celu i sprężyna."""
+"""Animations: easing functions, smooth approach to a target and a spring."""
 
 from __future__ import annotations
 
@@ -9,23 +9,23 @@ _frame_time: float | None = None
 
 
 def clock() -> float:
-    """Zegar wysokiej rozdzielczości (sekundy).
+    """High-resolution clock (seconds).
 
-    ``time.monotonic()`` na Windowsie (Python < 3.13) tyka co 15,6 ms — animacje liczone z niego
-    przeskakują co drugą klatkę. ``perf_counter`` ma rozdzielczość mikrosekund na każdym systemie.
+    On Windows (Python < 3.13) ``time.monotonic()`` ticks every 15.6 ms — animations driven by it
+    skip every other frame. ``perf_counter`` has microsecond resolution on every system.
     """
     return time.perf_counter()
 
 
 def begin_frame(t: float | None = None) -> float:
-    """Ustala czas bieżącej klatki — wszystkie animacje w tej klatce widzą ten sam moment."""
+    """Sets the current frame time — all animations in this frame see the same instant."""
     global _frame_time
     _frame_time = clock() if t is None else t
     return _frame_time
 
 
 def now() -> float:
-    """Czas bieżącej klatki (albo zegar, gdy pętla gry jeszcze nie ruszyła)."""
+    """Current frame time (or the clock if the game loop has not started yet)."""
     return _frame_time if _frame_time is not None else clock()
 
 
@@ -44,7 +44,7 @@ def ease_in_out_cubic(t: float) -> float:
 
 
 def ease_out_back(t: float, overshoot: float = 1.70158) -> float:
-    """Wygładzenie z lekkim „przestrzeleniem” (efekt sprężystego pojawienia się)."""
+    """Easing with a slight overshoot (a springy pop-in effect)."""
     t = clamp01(t)
     c3 = overshoot + 1
     return 1 + c3 * (t - 1) ** 3 + overshoot * (t - 1) ** 2
@@ -56,7 +56,7 @@ def ease_out_quint(t: float) -> float:
 
 
 def approach(current: float, target: float, dt: float, rate: float = 12.0) -> float:
-    """Wykładnicze dążenie do celu niezależne od liczby klatek na sekundę."""
+    """Exponential approach to a target, independent of the frame rate."""
     return target + (current - target) * math.exp(-rate * dt)
 
 
@@ -70,7 +70,7 @@ def lerp_color(a: tuple[int, ...], b: tuple[int, ...], t: float) -> tuple[int, .
 
 
 class Spring:
-    """Krytycznie tłumiona sprężyna (np. pasek oceny): szybko, płynnie i bez drgań."""
+    """Critically damped spring (e.g. the eval bar): fast, smooth and without oscillation."""
 
     def __init__(self, value: float = 0.0, stiffness: float = 120.0, damping: float | None = None) -> None:
         self.value = value
@@ -89,7 +89,7 @@ class Spring:
 
 
 class Fader:
-    """Wartość 0..1 płynnie podążająca za stanem włączony/wyłączony (np. podświetlenie przycisku)."""
+    """A 0..1 value smoothly following an on/off state (e.g. button highlight)."""
 
     def __init__(self, rate: float = 14.0) -> None:
         self.value = 0.0

@@ -1,5 +1,5 @@
-// Partia z trenerem: szachownica z paskami graczy, karta trenera z komentarzem, lista ruchów,
-// podsumowanie partii.
+// Game against the coach: board with player bars, coach card with a comment, move list,
+// game summary.
 
 import { useEffect, useLayoutEffect, useRef, type ReactElement } from "react";
 import { go, screenAction } from "../api";

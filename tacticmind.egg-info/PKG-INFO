@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: tacticmind
-Version: 1.0.0
-Summary: TacticMind — trener taktyki szachowej z własnym silnikiem AI, który myśli na głos
-Requires-Python: >=3.11
-Requires-Dist: pygame-ce>=2.5
-Requires-Dist: chess>=1.10

@@ -1,23 +1,23 @@
 /*
- * NNUE — „efektywnie aktualizowana sieć neuronowa” do oceny pozycji.
+ * NNUE - "efficiently updatable neural network" for position evaluation.
  *
- * Wejście: 768 cech binarnych (kolor × typ figury × pole), widzianych
- * z perspektywy białych i osobno z perspektywy czarnych (plansza odbita).
- * Pierwsza warstwa (768 → 256) jest wspólna dla obu perspektyw. Jej wynik
- * — akumulator — aktualizujemy przyrostowo przy każdym ruchu (patrz
- * position.c), bo ruch zmienia tylko 2–4 cechy.
+ * Input: 768 binary features (color x piece type x square), seen from
+ * White's perspective and separately from Black's (mirrored board).
+ * The first layer (768 -> 256) is shared by both perspectives. Its output,
+ * the accumulator, is updated incrementally on every move (see
+ * position.c), because a move changes only 2-4 features.
  *
- * Ocena: [akumulator strony na ruchu, akumulator przeciwnika] → SCReLU
- * (clamp(x, 0, 1)²) → warstwa wyjściowa 512 → 1. Warstw wyjściowych jest
- * kilka („kubełki”): wybieramy ją według liczby figur na planszy, bo
- * w końcówce te same cechy znaczą co innego niż w debiucie. Wagi są
- * skwantowane do liczb całkowitych (QA = 255, QB = 64), więc liczymy
- * wyłącznie na int16/int32.
+ * Evaluation: [side-to-move accumulator, opponent accumulator] -> SCReLU
+ * (clamp(x, 0, 1)^2) -> output layer 512 -> 1. There are several output
+ * layers ("buckets"): one is chosen by the number of pieces on the board,
+ * because in the endgame the same features mean something different than
+ * in the opening. Weights are quantised to integers (QA = 255, QB = 64), so
+ * all arithmetic is in int16/int32.
  *
- * Format pliku (little-endian):
- *   "TMNN" | uint32 wersja = 2 | uint32 HIDDEN | uint32 KUBEŁKI
- *   int16 ft_w[768 * HIDDEN] | int16 ft_b[HIDDEN] | int16 out_w[KUBEŁKI][2 * HIDDEN] | int16 out_b[KUBEŁKI]
- * Wersja 1 (bez pola KUBEŁKI, jedna warstwa wyjściowa) też jest czytana.
+ * File format (little-endian):
+ *   "TMNN" | uint32 version = 2 | uint32 HIDDEN | uint32 BUCKETS
+ *   int16 ft_w[768 * HIDDEN] | int16 ft_b[HIDDEN] | int16 out_w[BUCKETS][2 * HIDDEN] | int16 out_b[BUCKETS]
+ * Version 1 (no BUCKETS field, a single output layer) is also read.
  */
 #include "tm.h"
 
@@ -97,7 +97,7 @@ void nnue_refresh(const Position *pos, Accumulator *acc) {
     }
 }
 
-/* dst = src + Σ kolumny(add) − Σ kolumny(sub); add/sub = figura*64 + pole. */
+/* dst = src + sum of columns(add) - sum of columns(sub); add/sub = piece*64 + square. */
 void nnue_update(Accumulator *dst, const Accumulator *src, const int *add, int nadd, const int *sub, int nsub) {
     for (int persp = 0; persp < 2; persp++) {
         const int16_t *a0 = &NET.ft_w[nnue_feature(persp, add[0] >> 6, add[0] & 63) * NNUE_HIDDEN];
@@ -109,7 +109,7 @@ void nnue_update(Accumulator *dst, const Accumulator *src, const int *add, int n
         } else if (nadd == 1 && nsub == 2) {
             const int16_t *s1 = &NET.ft_w[nnue_feature(persp, sub[1] >> 6, sub[1] & 63) * NNUE_HIDDEN];
             for (int i = 0; i < NNUE_HIDDEN; i++) out[i] = (int16_t)(in[i] + a0[i] - s0[i] - s1[i]);
-        } else { /* roszada: 2 dodane, 2 usunięte */
+        } else { /* castling: 2 added, 2 removed */
             const int16_t *a1 = &NET.ft_w[nnue_feature(persp, add[1] >> 6, add[1] & 63) * NNUE_HIDDEN];
             const int16_t *s1 = &NET.ft_w[nnue_feature(persp, sub[1] >> 6, sub[1] & 63) * NNUE_HIDDEN];
             for (int i = 0; i < NNUE_HIDDEN; i++) out[i] = (int16_t)(in[i] + a0[i] + a1[i] - s0[i] - s1[i]);
@@ -121,7 +121,7 @@ static inline int32_t screlu_dot(const int16_t *v, const int16_t *w) {
     int32_t sum = 0;
     for (int i = 0; i < NNUE_HIDDEN; i++) {
         int16_t x = v[i] < 0 ? 0 : v[i] > NNUE_QA ? NNUE_QA : v[i];
-        /* x * w mieści się w int16 (|w| ≤ 127), dopiero potem mnożymy przez x w int32. */
+        /* x * w fits in int16 (|w| <= 127); only then do we multiply by x in int32. */
         sum += (int32_t)(int16_t)(x * w[i]) * x;
     }
     return sum;

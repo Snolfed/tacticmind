@@ -1,12 +1,12 @@
 /*
- * Bitboardy i ataki figur.
+ * Bitboards and piece attacks.
  *
- * Ataki gońców i wież liczymy „magicznymi bitboardami”: zbiór blokujących
- * figur na linii ataku mnożymy przez magiczną liczbę i bierzemy najwyższe
- * bity jako indeks do tablicy gotowych ataków. Magiczne liczby znaleźliśmy
- * losowaniem z ustalonym ziarnem (ten sam algorytm jest niżej) i zapisaliśmy
- * w tablicach — przy starcie tylko je sprawdzamy, co trwa ułamek milisekundy
- * zamiast ok. 0,3 s szukania.
+ * Bishop and rook attacks are computed with "magic bitboards": the set of
+ * blocking pieces on the attack lines is multiplied by a magic number and the
+ * top bits are used as an index into a table of precomputed attacks. The magic
+ * numbers were found by random search with a fixed seed (the same algorithm is
+ * below) and stored in tables; at startup we only verify them, which takes a
+ * fraction of a millisecond instead of about 0.3 s of searching.
  */
 #include "tm.h"
 
@@ -47,7 +47,7 @@ static Bitboard slide(int sq, Bitboard occ, const int dirs[4][2]) {
     return result;
 }
 
-/* Wynik wyszukiwania poniżej (init_magics) dla ziarna rng_state. */
+/* Result of the search below (init_magics) for the rng_state seed. */
 static const uint64_t BISHOP_MAGICS[64] = {
     0x10102002004A1420ULL, 0x8020040400584008ULL, 0x10510800811201C8ULL, 0x5204042080000088ULL,
     0x2204106880000002ULL, 0x1401042004000000ULL, 0x0400880410042004ULL, 0x0028208200A02020ULL,
@@ -109,7 +109,7 @@ static void init_magics(Magic *table, Bitboard *storage, const int dirs[4][2], c
         m->attacks = next;
         int size = 0;
         Bitboard b = 0;
-        do { /* wszystkie podzbiory maski (sztuczka Carry-Rippler) */
+        do { /* all subsets of the mask (Carry-Rippler trick) */
             occs[size] = b;
             atts[size] = slide(sq, b, dirs);
             size++;
@@ -119,7 +119,7 @@ static void init_magics(Magic *table, Bitboard *storage, const int dirs[4][2], c
         for (int attempt = 0;; attempt++) {
             Bitboard magic;
             if (attempt == 0) {
-                magic = known[sq]; /* zapisana liczba; gdyby nie pasowała — szukamy od nowa */
+                magic = known[sq]; /* stored number; if it doesn't fit, search again */
             } else {
                 do {
                     magic = rng() & rng() & rng();

@@ -1,15 +1,15 @@
-"""Dobór kolejnego zadania pod gracza (adaptacyjny poziom trudności).
+"""Choosing the next puzzle for the player (adaptive difficulty).
 
-Zasady:
- - „strefa flow”: celujemy w ok. 65% szans na sukces, czyli zadanie o rankingu
-   ≈ R_gracza − 100 (bo E(−100) ≈ 0.64), z losowym rozrzutem ±75,
- - ok. 30% zadań pochodzi z najsłabszych motywów gracza (model gracza),
- - ochrona przed frustracją: po 3 porażkach z rzędu zadanie wyraźnie łatwiejsze,
- - po 5 sukcesach z rzędu „zadanie bonusowe”, trudniejsze o ok. 200,
- - zadania się nie powtarzają, a motywy są zróżnicowane (kara za motywy
-   z ostatnich zadań).
-Każda decyzja ma uzasadnienie (okienko „Dlaczego to zadanie?”). Uzasadnienia są
-zapisane jako klucze tłumaczeń, więc wyświetlają się w bieżącym języku interfejsu.
+Rules:
+ - "flow zone": we aim for a ~65% chance of success, i.e. a puzzle rated
+   ≈ R_player − 100 (because E(−100) ≈ 0.64), with a random spread of ±75,
+ - ~30% of puzzles come from the player's weakest themes (player model),
+ - frustration guard: after 3 losses in a row the puzzle is clearly easier,
+ - after 5 successes in a row a "bonus puzzle", about 200 harder,
+ - puzzles do not repeat and themes are varied (a penalty for themes
+   from recent puzzles).
+Every decision has a justification (the "Why this puzzle?" box). Justifications are
+stored as translation keys, so they are shown in the current interface language.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ FLOW_SPREAD = 75
 EASIER_OFFSET = -300
 BONUS_OFFSET = 200
 WEAKNESS_SHARE = 0.30
-#: Ile punktów rankingu „kosztuje” powtórzenie motywu z ostatnich zadań.
+#: How many rating points repeating a theme from recent puzzles "costs".
 REPEAT_THEME_PENALTY = 40
 RECENT = 3
 
@@ -39,11 +39,11 @@ Mode = Literal["flow", "easier", "bonus", "weakness"]
 
 @dataclass(frozen=True)
 class Reason:
-    """Jedno zdanie uzasadnienia: klucz tłumaczenia + parametry (tekst powstaje przy wyświetlaniu)."""
+    """One justification sentence: translation key + parameters (the text is produced at display time)."""
 
     key: str
     params: tuple[tuple[str, object], ...] = ()
-    count: int | None = None  # dla zdań z liczbą mnogą („3 porażki z rzędu”)
+    count: int | None = None  # for sentences with plurals ("3 losses in a row")
 
     def text(self) -> str:
         params = {k: theme_name(str(v)) if k == "theme" else v for k, v in self.params}
@@ -66,14 +66,14 @@ class Selection:
 
 
 def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.Random | None = None) -> Selection:
-    """Wybiera następne zadanie dla gracza i zwraca je razem z uzasadnieniem."""
+    """Picks the next puzzle for the player and returns it together with the justification."""
     if not puzzles:
-        raise ValueError("Brak zadań do wyboru")
+        raise ValueError("No puzzles to choose from")
     rng = rng or random.Random()
     rating = profile.rating
     reasons: list[Reason] = []
 
-    # 1) Docelowy ranking zadania.
+    # 1) Target puzzle rating.
     mode: Mode
     if profile.fail_streak >= 3:
         mode = "easier"
@@ -87,11 +87,11 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
         mode = "flow"
         target = rating + FLOW_OFFSET + rng.uniform(-FLOW_SPREAD, FLOW_SPREAD)
 
-    # 2) Pula: bez powtórek (gdy wszystko już było — zaczynamy od nowa).
+    # 2) Pool: no repeats (when everything has been played — start over).
     seen = set(profile.seen)
     pool = [p for p in puzzles if p.id not in seen] or list(puzzles)
 
-    # 3) Ok. 30% zadań z najsłabszych motywów gracza.
+    # 3) ~30% of puzzles from the player's weakest themes.
     weak_theme: tuple[str, float] | None = None
     if mode == "flow":
         weakest = profile.model.weakest()
@@ -103,7 +103,7 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
                 weak_theme = (theme, rate)
                 mode = "weakness"
 
-    # 4) Najbliżej celu, z karą za motywy z ostatnich zadań (różnorodność).
+    # 4) Closest to the target, with a penalty for themes from recent puzzles (variety).
     recent = {t for r in profile.history[-RECENT:] for t in skill_themes(r.themes)}
 
     def cost(p: Puzzle) -> float:
@@ -121,7 +121,7 @@ def select_next(puzzles: Sequence[Puzzle], profile: PlayerProfile, rng: random.R
     puzzle = rng.choice(candidates[:5])
     expected = expected_score(rating, puzzle.rating)
 
-    # 5) Uzasadnienie.
+    # 5) Justification.
     if mode in ("flow", "weakness"):
         reasons.insert(0, Reason("reason.flow", (("target", round(target)), ("pct", round(expected * 100)))))
     else:

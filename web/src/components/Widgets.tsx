@@ -1,4 +1,4 @@
-// Wspólne kontrolki: przycisk, przełącznik segmentowy, okno potwierdzenia.
+// Shared controls: button, segmented switch, confirmation dialog.
 
 import { useEffect, useRef, type ReactElement, type ReactNode } from "react";
 import { t, useLanguage } from "../i18n";
@@ -79,7 +79,7 @@ export function Segmented<T extends string | number>({
   );
 }
 
-/** Okno potwierdzenia na środku ekranu (Enter = tak, Esc = nie). */
+/** A confirmation dialog in the middle of the screen (Enter = yes, Esc = no). */
 export function ConfirmDialog({
   title,
   text,

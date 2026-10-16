@@ -1,29 +1,29 @@
-"""Ocena ruchów jak w „Game Review” na chess.com: najlepszy, świetny, dobry, niedokładność, błąd…
+"""Move review as in chess.com's "Game Review": best, great, good, inaccuracy, mistake...
 
-Podstawą jest **szansa na wygraną** (w %) z perspektywy gracza, liczona z oceny silnika wzorem
-z Lichess: ``W(cp) = 50 + 50 · (2 / (1 + e^(−0.00368208 · cp)) − 1)``. Przy ocenie 0 to 50%,
-przy +3 pionach ok. 87%, przy macie 100%. Ruch oceniamy po tym, o ile **spadła** szansa na wygraną
-w porównaniu z najlepszym ruchem — utrata pół piona w wyrównanej pozycji boli bardziej niż przy
-przewadze +8, i ta skala to uwzględnia.
+The basis is the player's **winning chance** (in %), computed from the engine score with the
+Lichess formula: ``W(cp) = 50 + 50 · (2 / (1 + e^(−0.00368208 · cp)) − 1)``. A score of 0 gives 50%,
++3 pawns about 87%, mate 100%. A move is judged by how much it **lowered** the winning chance
+compared with the best move - losing half a pawn in a level position hurts more than with
+a +8 advantage, and this scale accounts for that.
 
-Progi spadku szansy na wygraną (punkty procentowe):
+Winning-chance drop thresholds (percentage points):
 
 ==================  ===========  =================================================
-Klasa               Spadek       Uwagi
+Class               Drop         Notes
 ==================  ===========  =================================================
-genialny (!!)       ≤ 2          poświęcenie figury, bez którego pozycja nie była wygrana
-świetny (!)         0            jedyny dobry ruch: drugi najlepszy traci ≥ 15 pkt
-najlepszy           0            ruch wskazany przez silnik
-znakomity           ≤ 2
-dobry               ≤ 5
-z teorii            —            ruch z książki otwarć
-niedokładność (?!)  ≤ 10
-błąd (?)            ≤ 20
-przeoczenie (??)    > 20
+brilliant (!!)      ≤ 2          a piece sacrifice without which the position was not winning
+great (!)           0            the only good move: the second best loses ≥ 15 pts
+best                0            the move suggested by the engine
+excellent           ≤ 2
+good                ≤ 5
+book                —            a move from the opening book
+inaccuracy (?!)     ≤ 10
+mistake (?)         ≤ 20
+blunder (??)        > 20
 ==================  ===========  =================================================
 
-Celność ruchu (%) też jak na Lichess: ``103.1668 · e^(−0.04354 · spadek) − 3.1669``,
-celność partii to średnia celności ruchów.
+Move accuracy (%) is also as on Lichess: ``103.1668 · e^(−0.04354 · drop) − 3.1669``;
+game accuracy is the mean of the move accuracies.
 """
 
 from __future__ import annotations
@@ -37,27 +37,27 @@ from ..engine.types import MATE_BOUND, EngineScore
 
 Classification = Literal["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder"]
 
-#: Kolejność do podsumowania partii (od najlepszych).
+#: Order for the game summary (best first).
 CLASSES: tuple[Classification, ...] = ("brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder")
-#: Klasy, po których trener zatrzymuje partię i proponuje cofnięcie ruchu.
+#: Classes after which the coach pauses the game and offers to take the move back.
 SERIOUS: frozenset[str] = frozenset({"mistake", "blunder"})
-#: Klasy uznawane za błąd (trener podaje lepszy ruch).
+#: Classes counted as errors (the coach shows a better move).
 WEAK: frozenset[str] = frozenset({"inaccuracy", "mistake", "blunder"})
 
 GREAT_GAP = 15.0
 BRILLIANT_MAX_DROP = 2.0
-#: Poświęcenie nie jest genialne, gdy i bez niego pozycja jest wygrana na 97% — wtedy wygrywa wszystko.
-#: Liczy się drugi najlepszy ruch: poświęcenie, które samo prowadzi do mata, może być genialne.
+#: A sacrifice is not brilliant when the position is 97% winning even without it - then everything wins.
+#: What counts is the second best move: a sacrifice that itself leads to mate can be brilliant.
 BRILLIANT_MAX_WIN = 97.0
 
 
 def score_for(score: EngineScore, color: chess.Color) -> int:
-    """Ocena (wartość liczbowa, mat = ±(32000 − półruchy)) z perspektywy ``color``."""
+    """Score (numeric value, mate = ±(32000 − plies)) from the perspective of ``color``."""
     return score.value if color == chess.WHITE else -score.value
 
 
 def win_percent(value: int) -> float:
-    """Szansa na wygraną (0–100) dla oceny z perspektywy gracza."""
+    """Winning chance (0–100) for a score from the player's perspective."""
     if value > MATE_BOUND:
         return 100.0
     if value < -MATE_BOUND:
@@ -67,12 +67,12 @@ def win_percent(value: int) -> float:
 
 
 def win_drop(best_value: int, played_value: int) -> float:
-    """O ile punktów procentowych ruch zmniejszył szansę na wygraną względem najlepszego (≥ 0)."""
+    """By how many percentage points the move lowered the winning chance compared with the best move (≥ 0)."""
     return max(0.0, win_percent(best_value) - win_percent(played_value))
 
 
 def move_accuracy(drop: float) -> float:
-    """Celność ruchu w % (100 = bez strat)."""
+    """Move accuracy in % (100 = no loss)."""
     return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * drop) - 3.1669))
 
 
@@ -90,16 +90,16 @@ def classify(
     win_before: float = 50.0,
     recapture: bool = False,
 ) -> Classification:
-    """Klasa ruchu.
+    """Class of the move.
 
-    :param drop: spadek szansy na wygraną względem najlepszego ruchu,
-    :param is_best: czy to ruch wskazany przez silnik,
-    :param book: ruch z teorii otwarć,
-    :param sacrifice: ruch oddaje materiał (patrz ``puzzles.validator.is_sacrifice``),
-    :param second_drop: o ile gorszy jest drugi najlepszy ruch (do „świetnego” ruchu),
-    :param win_before: szansa na wygraną przy najlepszej grze; bez poświęcenia (przy drugim najlepszym ruchu,
-        ``win_before − second_drop``) pozycja nie może być już wygrana, a po ruchu nie może być przegrana,
-    :param recapture: odbicie figury — oczywiste, więc nigdy nie jest „świetne”.
+    :param drop: winning-chance drop compared with the best move,
+    :param is_best: whether this is the move suggested by the engine,
+    :param book: a move from opening theory,
+    :param sacrifice: the move gives up material (see ``puzzles.validator.is_sacrifice``),
+    :param second_drop: how much worse the second best move is (for a "great" move),
+    :param win_before: winning chance with best play; without the sacrifice (with the second best move,
+        ``win_before − second_drop``) the position must not already be winning, and after the move it must not be lost,
+    :param recapture: a recapture - obvious, so never "great".
     """
     if book:
         return "book"

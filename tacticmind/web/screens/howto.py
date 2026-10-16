@@ -1,5 +1,5 @@
-"""Strona „Jak działa AI?” — porównanie minimaksu z alfa-betą na prawdziwym silniku
-i demonstracja cięć krok po kroku na małym drzewie."""
+"""The "How does the AI work?" page — a comparison of minimax with alpha-beta on the real engine
+and a step-by-step demonstration of cutoffs on a small tree."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ POSITIONS = [
     ("pos.kiwipete", "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"),
     ("pos.endgame", "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"),
 ]
-#: Powyżej tylu szacowanych węzłów czysty minimaks w Pythonie trwałby zbyt długo.
+#: Above this many estimated nodes, plain minimax in Python would take too long.
 MINIMAX_LIMIT = 350_000
 SECTIONS = ["s1", "s2", "code", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"]
 
@@ -91,7 +91,7 @@ class HowToScreen(WebScreen):
             self.error = event.message
             self.request = None
 
-    # ------------------------------------------------------------ migawka
+    # ------------------------------------------------------------ snapshot
     def _result(self, result: CompareResult) -> dict[str, Any]:
         key, depth = self.result_key
         variants: list[CompareVariant | None] = [result.minimax, result.alpha_beta, result.alpha_beta_ordered]

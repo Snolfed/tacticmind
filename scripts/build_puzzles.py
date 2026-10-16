@@ -1,22 +1,22 @@
-"""Buduje zestaw zadań z bazy Lichess (licencja CC0).
+"""Builds a puzzle set from the Lichess database (CC0 license).
 
-Użycie::
+Usage::
 
     python scripts/build_puzzles.py lichess_db_puzzle.csv.zst
     python scripts/build_puzzles.py lichess_db_puzzle.csv --count 3000 --out tacticmind/data/puzzles.json
 
-Baza: https://database.lichess.org/lichess_db_puzzle.csv.zst
-Kolumny: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
+Database: https://database.lichess.org/lichess_db_puzzle.csv.zst
+Columns: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
 
-Skrypt:
- 1. bierze tylko zadania z Popularity > 80 i NbPlays > 500 o rankingu 600–2800,
- 2. dzieli je na koszyki co 100 punktów rankingu,
- 3. z każdego koszyka losuje (reservoir sampling, stałe ziarno) tyle samo zadań,
-    preferując motywy, których jeszcze mało w wyniku (różnorodność),
- 4. sprawdza każde zadanie biblioteką python-chess (legalne ruchy) i zapisuje JSON.
+The script:
+ 1. takes only puzzles with Popularity > 80 and NbPlays > 500 rated 600–2800,
+ 2. splits them into buckets of 100 rating points,
+ 3. samples the same number of puzzles from each bucket (reservoir sampling, fixed seed),
+    preferring themes that are still rare in the result (variety),
+ 4. checks every puzzle with python-chess (legal moves) and writes JSON.
 
-Plik .zst czytamy modułem ``compression.zstd`` (Python 3.14+); w starszym Pythonie
-rozpakuj bazę poleceniem ``unzstd lichess_db_puzzle.csv.zst``.
+The .zst file is read with the ``compression.zstd`` module (Python 3.14+); on older Python
+decompress the database with ``unzstd lichess_db_puzzle.csv.zst``.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def open_csv(path: Path) -> TextIO:
         try:
             zstd = importlib.import_module("compression.zstd")  # Python 3.14+
         except ImportError:
-            sys.exit("Ten Python nie obsługuje .zst — rozpakuj plik: unzstd lichess_db_puzzle.csv.zst")
+            sys.exit("This Python does not support .zst — decompress the file: unzstd lichess_db_puzzle.csv.zst")
         return io.TextIOWrapper(zstd.open(path, "rb"), encoding="utf-8", newline="")
     return path.open(encoding="utf-8", newline="")
 
@@ -56,7 +56,7 @@ def read_rows(path: Path) -> Iterator[dict[str, str]]:
 
 
 def is_valid(fen: str, moves: list[str]) -> bool:
-    """Wszystkie ruchy zadania muszą być legalne (python-chess)."""
+    """All of the puzzle's moves must be legal (python-chess)."""
     try:
         board = chess.Board(fen)
         for uci in moves:
@@ -99,7 +99,7 @@ def build(path: Path, count: int, seed: int, pool_factor: int = 12) -> list[Puzz
     rng = random.Random(seed)
     buckets = (MAX_RATING - MIN_RATING) // BUCKET
     per_bucket = [count // buckets + (1 if i < count % buckets else 0) for i in range(buckets)]
-    # Reservoir sampling: każdy kwalifikujący się wiersz ma równe szanse trafić do puli koszyka.
+    # Reservoir sampling: every qualifying row has an equal chance of landing in the bucket's pool.
     pools: list[list[dict[str, str]]] = [[] for _ in range(buckets)]
     seen = [0] * buckets
     total = 0
@@ -123,9 +123,9 @@ def build(path: Path, count: int, seed: int, pool_factor: int = 12) -> list[Puzz
             if j < capacity:
                 pools[b][j] = row
         if total % 500_000 == 0:
-            print(f"  przeczytano {total:,} wierszy…", file=sys.stderr)
+            print(f"  read {total:,} rows…", file=sys.stderr)
 
-    # Z puli każdego koszyka wybieramy zadania, preferując rzadkie w wyniku motywy.
+    # Pick puzzles from each bucket's pool, preferring themes that are rare in the result.
     chosen: list[PuzzleJson] = []
     theme_counts: Counter[str] = Counter()
     ignored = {"short", "long", "veryLong", "oneMove", "middlegame", "endgame", "opening", "master", "masterVsMaster", "crushing", "advantage", "equality", "mate"}
@@ -134,7 +134,7 @@ def build(path: Path, count: int, seed: int, pool_factor: int = 12) -> list[Puzz
         rng.shuffle(pool)
         picked = 0
         while pool and picked < per_bucket[b]:
-            # Nagroda za każdy motyw taktyczny, tym większa, im rzadszy jest on w dotychczasowym wyniku.
+            # A reward for each tactical theme, larger the rarer it is in the result so far.
             best_index = max(
                 range(len(pool)),
                 key=lambda i: sum(1.0 / (1 + theme_counts[t]) for t in pool[i]["Themes"].split() if t not in ignored),
@@ -146,15 +146,15 @@ def build(path: Path, count: int, seed: int, pool_factor: int = 12) -> list[Puzz
             chosen.append(to_puzzle(row))
             theme_counts.update(t for t in row["Themes"].split() if t not in ignored)
             picked += 1
-    print(f"Przeczytano {total:,} wierszy, wybrano {len(chosen)} zadań.", file=sys.stderr)
+    print(f"Read {total:,} rows, selected {len(chosen)} puzzles.", file=sys.stderr)
     chosen.sort(key=lambda p: (p["rating"], p["id"]))
     return chosen
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Buduje zestaw zadań TacticMind z bazy Lichess.")
-    parser.add_argument("csv", type=Path, help="lichess_db_puzzle.csv albo .csv.zst")
-    parser.add_argument("--count", type=int, default=3000, help="liczba zadań (domyślnie 3000)")
+    parser = argparse.ArgumentParser(description="Builds the TacticMind puzzle set from the Lichess database.")
+    parser.add_argument("csv", type=Path, help="lichess_db_puzzle.csv or .csv.zst")
+    parser.add_argument("--count", type=int, default=3000, help="number of puzzles (default 3000)")
     parser.add_argument("--out", type=Path, default=Path("tacticmind/data/puzzles.json"))
     parser.add_argument("--seed", type=int, default=2024)
     args = parser.parse_args()
@@ -163,7 +163,7 @@ def main() -> None:
     with args.out.open("w", encoding="utf-8") as handle:
         json.dump(puzzles, handle, ensure_ascii=False, separators=(",", ":"))
     ratings = [p["rating"] for p in puzzles]
-    print(f"Zapisano {len(puzzles)} zadań do {args.out} (ranking {min(ratings)}–{max(ratings)}).")
+    print(f"Saved {len(puzzles)} puzzles to {args.out} (rating {min(ratings)}–{max(ratings)}).")
 
 
 if __name__ == "__main__":

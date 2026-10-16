@@ -1,11 +1,11 @@
-"""Silnik w C (bitboardy + NNUE) z tym samym interfejsem co ``search.Searcher``.
+"""C engine (bitboards + NNUE) with the same interface as ``search.Searcher``.
 
-Python steruje iterative deepening: każda głębokość to jedno wywołanie ``tm_iterate``
-w C, a po niej powstaje ``SearchInfo`` — dokładnie taki sam jak z silnika w Pythonie
-(MultiPV, statystyki, mini-drzewo). Dzięki temu panel „Mózg AI”, trener i ocena
-zadań działają bez zmian, tylko liczą ok. 50–100× szybciej.
+Python drives iterative deepening: each depth is one ``tm_iterate`` call into C,
+followed by a ``SearchInfo`` exactly like the one from the Python engine
+(MultiPV, statistics, mini tree). This way the "AI Brain" panel, the trainer and
+puzzle evaluation work unchanged, just roughly 50-100x faster.
 
-``make_searcher()`` wybiera silnik w C, a gdy biblioteka jest niedostępna — silnik w Pythonie.
+``make_searcher()`` picks the C engine, falling back to the Python engine when the library is unavailable.
 """
 
 from __future__ import annotations
@@ -35,16 +35,16 @@ _BOUNDS: tuple[Bound, Bound, Bound] = ("exact", "upper", "lower")
 
 
 class CSearcher:
-    """Wyszukiwanie w silniku C; API jak ``Searcher`` (start / iterate / result / search)."""
+    """Search in the C engine; same API as ``Searcher`` (start / iterate / result / search)."""
 
-    #: Nazwa silnika do wyświetlenia.
+    #: Engine display name.
     name = "C + NNUE"
 
     def __init__(self, lib: NativeLib, tt_mb: int = 64) -> None:
         self._lib = lib
         self._handle = lib.lib.tm_engine_new(tt_mb)
         if not self._handle:
-            raise MemoryError("nie udało się utworzyć silnika C")
+            raise MemoryError("failed to create the C engine")
         self.name = "C + NNUE" if lib.nnue else "C"
         self.should_stop: Callable[[], bool] | None = None
         self.on_progress: Callable[[SearchProgress], None] | None = None
@@ -81,7 +81,7 @@ class CSearcher:
         self.last_progress = self.start_time
         count = self._lib.lib.tm_begin(self._handle, fen.encode(), max(1, limits.multi_pv), int(limits.record_tree))
         if count < 0:
-            raise ValueError(f"Niepoprawny FEN: {fen}")
+            raise ValueError(f"Invalid FEN: {fen}")
         if count == 0:
             self.terminal = "checkmate" if self._lib.lib.tm_terminal(self._handle) == 1 else "stalemate"
             self.finished = True
@@ -97,13 +97,13 @@ class CSearcher:
             return None
         depth = self.depth_done + 1
         elapsed = time.perf_counter() - self.start_time
-        # Nie zaczynaj nowej głębokości, gdy zużyto ponad połowę czasu — i tak by się nie skończyła.
+        # Don't start a new depth once over half the time is used; it would not finish anyway.
         if depth > min(self.limits.max_depth, 100) or (depth > 1 and elapsed > self.limits.time_ms / 1000 * 0.5):
             self.finished = True
             return None
         stop_after = float(self.limits.time_ms) if depth > 1 else -1.0
-        # Funkcja zwrotna tworzona na czas jednego wywołania: trzymana w atrybucie tworzyłaby cykl referencji
-        # (silnik → funkcja → metoda → silnik) i pamięć silnika w C czekałaby na odśmiecacz cykli.
+        # The callback is created for a single call: keeping it in an attribute would create a reference cycle
+        # (engine -> callback -> method -> engine) and the C engine's memory would wait for the cycle collector.
         poll = POLL_FN(self._on_poll)
         done = self._lib.lib.tm_iterate(self._handle, depth, stop_after, poll, None)
         if not done:
@@ -112,7 +112,7 @@ class CSearcher:
         self.depth_done = depth
         info = self._read_report(depth)
         self.last_info = info
-        # Mat potwierdzony z zapasem głębokości (redukcje mogą chwilowo ukryć krótszego mata) — kończymy wcześniej.
+        # Mate confirmed with depth to spare (reductions may temporarily hide a shorter mate): stop early.
         best = info.multi_pv[0].score.value if info.multi_pv else 0
         if abs(best) > MATE_BOUND and depth >= 2 * (MATE - abs(best)) + 4:
             self.finished = True
@@ -129,10 +129,10 @@ class CSearcher:
         return self.result()
 
     def clear(self) -> None:
-        """Czyści tablicę transpozycji i historię (nowa partia)."""
+        """Clear the transposition table and history (new game)."""
         self._lib.lib.tm_engine_clear(self._handle)
 
-    # ------------------------------------------------------------------ wewnętrzne
+    # ------------------------------------------------------------------ internals
     def _on_poll(self, _user: object, depth: int, nodes: int, cutoffs: int, tt_hits: int, time_ms: int) -> int:
         try:
             if self.should_stop is not None and self.should_stop():
@@ -153,7 +153,7 @@ class CSearcher:
                     )
                 )
             return 0
-        except Exception:  # noqa: BLE001 — wyjątek nie może przejść przez kod C
+        except Exception:  # noqa: BLE001 - an exception must not propagate through C code
             self.stopped = True
             return 1
 
@@ -243,7 +243,7 @@ AnySearcher = Searcher | CSearcher
 
 
 def make_searcher() -> AnySearcher:
-    """Silnik w C, jeśli biblioteka jest dostępna; w przeciwnym razie silnik w Pythonie."""
+    """The C engine if the library is available; otherwise the Python engine."""
     lib = load()
     if lib is not None:
         try:
@@ -254,10 +254,10 @@ def make_searcher() -> AnySearcher:
 
 
 def find_best_move_c(fen: str, **limits: int | bool) -> SearchInfo:
-    """Odpowiednik ``search.find_best_move`` dla silnika w C (testy, skrypty)."""
+    """Counterpart of ``search.find_best_move`` for the C engine (tests, scripts)."""
     lib = load()
     if lib is None:
-        raise RuntimeError("silnik w C jest niedostępny")
+        raise RuntimeError("the C engine is unavailable")
     params = SearchLimits(max_depth=64, time_ms=5000, multi_pv=1)
     for key, value in limits.items():
         setattr(params, key, value)

@@ -1,8 +1,9 @@
-"""Przebieg partii z trenerem albo lekcji otwarcia (bez interfejsu — testowane jednostkowo).
+"""The flow of a game with the coach or of an opening lesson (no UI - unit tested).
 
-Lekcja otwarcia: uczeń gra ruchy głównej linii, a trener odpowiada ruchami z tej linii. Ruch spoza
-linii jest cofany (trener tłumaczy, co się tu gra). Po ostatnim ruchu linii można grać dalej
-z trenerem — wtedy lekcja zamienia się w zwykłą partię, liczoną do poziomu gracza.
+Opening lesson: the student plays the main-line moves and the coach replies with moves from that line.
+A move outside the line is taken back (the coach explains what is played here). After the last move
+of the line you can keep playing against the coach - the lesson then turns into a normal game that
+counts towards the player's level.
 """
 
 from __future__ import annotations
@@ -19,9 +20,9 @@ from .review import CLASSES, Classification, game_accuracy
 Result = Literal["win", "loss", "draw"]
 EndReason = Literal["checkmate", "stalemate", "material", "repetition", "fifty", "resign"]
 
-#: Każde cofnięcie ruchu albo podpowiedź obniża wynik partii o tyle (do poziomu gracza).
+#: Every takeback or hint lowers the game score by this much (for the player's level).
 HELP_PENALTY = 0.1
-#: Partia przerwana po tylu (i więcej) ruchach gracza liczy się jako poddana.
+#: A game abandoned after this many (or more) player moves counts as resigned.
 MIN_COUNTED_MOVES = 5
 
 
@@ -33,7 +34,7 @@ class MoveRecord:
     classification: Classification | None = None
     accuracy: float | None = None
     comment: Comment = ()
-    #: Lepszy ruch według silnika (strzałka przy przeglądaniu partii).
+    #: Better move according to the engine (arrow when reviewing the game).
     best_uci: str | None = None
 
     @property
@@ -64,11 +65,11 @@ class CoachGame:
         self.hints = 0
         self.result: Result | None = None
         self.reason: EndReason | None = None
-        #: Czy po lekcji gracz gra dalej (wtedy partia liczy się do poziomu).
+        #: Whether the player keeps playing after the lesson (then the game counts towards the level).
         self.playing = lesson is None
         self.recorded = False
 
-    # ------------------------------------------------------------ stan
+    # ------------------------------------------------------------ state
     @property
     def player_to_move(self) -> bool:
         return self.board.turn == self.player_color
@@ -83,12 +84,12 @@ class CoachGame:
     def opening_id(self) -> str | None:
         return opening_at(self.board.move_stack, chess.Board(self.start_fen))
 
-    # ------------------------------------------------------------ lekcja
+    # ------------------------------------------------------------ lesson
     def lesson_line(self) -> tuple[str, ...]:
         return line_ucis(self.lesson.id) if self.lesson is not None else ()
 
     def lesson_expected(self) -> chess.Move | None:
-        """Następny ruch linii (gracza albo trenera), dopóki lekcja trwa."""
+        """Next move of the line (the player's or the coach's) while the lesson lasts."""
         line = self.lesson_line()
         ply = len(self.board.move_stack)
         if not self.lesson_active or ply >= len(line):
@@ -106,7 +107,7 @@ class CoachGame:
         self.lesson_active = False
         self.playing = True
 
-    # ------------------------------------------------------------ ruchy
+    # ------------------------------------------------------------ moves
     def push(self, move: chess.Move, by_player: bool, **fields: object) -> MoveRecord:
         record = MoveRecord(self.board.fen(), move.uci(), by_player)
         for name, value in fields.items():
@@ -120,7 +121,7 @@ class CoachGame:
         return not self.over and any(r.by_player for r in self.records)
 
     def take_back(self) -> list[chess.Move]:
-        """Cofa ostatni ruch gracza (i odpowiedź trenera, jeśli już padła). Zwraca cofnięte ruchy (od końca)."""
+        """Take back the player's last move (and the coach's reply, if already played). Returns the undone moves (last first)."""
         undone: list[chess.Move] = []
         if not self.can_take_back():
             return undone
@@ -135,7 +136,7 @@ class CoachGame:
     def record_hint(self) -> None:
         self.hints += 1
 
-    # ------------------------------------------------------------ koniec partii
+    # ------------------------------------------------------------ end of game
     def _update_result(self) -> None:
         board = self.board
         reason: EndReason | None = None
@@ -166,19 +167,19 @@ class CoachGame:
             self.lesson_active = False
 
     def counts_for_rating(self) -> bool:
-        """Do poziomu gracza liczą się zakończone partie (nie same lekcje)."""
+        """Finished games count towards the player's level (lessons alone do not)."""
         return self.result is not None and self.playing and self.player_moves() > 0
 
     def abandon_counts(self) -> bool:
-        """Czy porzucenie partii w trakcie ma się liczyć jako poddanie."""
+        """Whether abandoning the game midway should count as resigning."""
         return self.result is None and self.playing and self.player_moves() >= MIN_COUNTED_MOVES
 
     def score(self) -> float:
-        """Wynik do rankingu: 1 / 0,5 / 0, minus 0,1 za każde cofnięcie ruchu i podpowiedź (nie mniej niż 0)."""
+        """Score for the rating: 1 / 0.5 / 0, minus 0.1 for every takeback and hint (not less than 0)."""
         base = {"win": 1.0, "draw": 0.5, "loss": 0.0}.get(self.result or "loss", 0.0)
         return round(max(0.0, base - HELP_PENALTY * (self.takebacks + self.hints)), 3)
 
-    # ------------------------------------------------------------ podsumowanie
+    # ------------------------------------------------------------ summary
     def accuracy(self, player: bool = True) -> float | None:
         values = [r.accuracy for r in self.records if r.by_player == player and r.accuracy is not None]
         return game_accuracy(values)

@@ -1,22 +1,22 @@
-"""TacticMind — szachowe zadania z AI, które myśli na głos.
+"""TacticMind — chess puzzles with an AI that thinks out loud.
 
-Uruchomienie:  python main.py            (interfejs w TypeScript w oknie aplikacji)
-               python main.py --pygame   (dawny interfejs w pygame)
-               python main.py --help     (pozostałe opcje: --browser, --no-window, --port)
+Usage:  python main.py            (TypeScript interface in an app window)
+        python main.py --pygame   (legacy pygame interface)
+        python main.py --help     (other options: --browser, --no-window, --port)
 """
 
 import os
 import sys
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-# Stała nazwa klasy okna — pozwala dopasować skrót .desktop (StartupWMClass=tacticmind) i jego ikonę na pasku zadań.
+# Fixed window class name — lets the .desktop shortcut (StartupWMClass=tacticmind) and its taskbar icon match the window.
 os.environ.setdefault("SDL_VIDEO_X11_WMCLASS", "tacticmind")
 os.environ.setdefault("SDL_VIDEO_WAYLAND_WMCLASS", "tacticmind")
 
 
 def main() -> None:
-    # Import wewnątrz funkcji: proces silnika (multiprocessing, tryb "spawn")
-    # importuje ten plik ponownie i nie powinien przy tym ładować interfejsu.
+    # Import inside the function: the engine process (multiprocessing, "spawn" mode)
+    # imports this file again and should not load the interface when it does.
     if "--pygame" in sys.argv:
         from tacticmind.ui.app import main as run_pygame
 

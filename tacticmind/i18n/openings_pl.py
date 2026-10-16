@@ -1,7 +1,7 @@
-"""Otwarcia po polsku: nazwy debiutów, krótkie opisy i objaśnienie każdego półruchu linii do nauki."""
+"""Openings in Polish: names, short descriptions and an explanation of every ply of each lesson line."""
 
 STRINGS: dict[str, str] = {
-    # --- rodziny debiutów (rozpoznawanie nazw w partii) ------------------------
+    # --- opening families (name recognition during a game) -------------------
     "opening.kings_pawn.name": "Debiut piona królewskiego",
     "opening.queens_pawn.name": "Debiut piona hetmańskiego",
     "opening.reti.name": "Otwarcie Rétiego",
@@ -21,7 +21,7 @@ STRINGS: dict[str, str] = {
     "opening.dutch.name": "Obrona holenderska",
     "opening.benoni.name": "Obrona Benoni",
     "opening.queens_indian.name": "Obrona hetmańsko-indyjska",
-    # --- partia włoska ---------------------------------------------------------
+    # --- Italian Game ----------------------------------------------------------
     "opening.italian.name": "Partia włoska",
     "opening.italian.desc": "Goniec na c4 celuje w słaby punkt f7. Spokojny, logiczny debiut: szybki rozwój, roszada i plan d4.",
     "opening.italian.1": "1. e4 — pion zajmuje centrum i otwiera drogę hetmanowi oraz gońcowi f1.",
@@ -36,7 +36,7 @@ STRINGS: dict[str, str] = {
     "opening.italian.10": "Czarne wzmacniają e5 i otwierają drogę gońcowi c8.",
     "opening.italian.11": "Roszada: król w bezpiecznym miejscu, wieża zbliża się do centrum.",
     "opening.italian.12": "Czarne też robią roszadę — obie strony są rozwinięte, zaczyna się gra środkowa.",
-    # --- partia hiszpańska -----------------------------------------------------
+    # --- Ruy Lopez -------------------------------------------------------------
     "opening.ruy_lopez.name": "Partia hiszpańska",
     "opening.ruy_lopez.desc": "Jeden z najstarszych i najważniejszych debiutów: goniec na b5 naciska na skoczka, który broni e5.",
     "opening.ruy_lopez.1": "1. e4 — pion zajmuje centrum i otwiera drogę hetmanowi oraz gońcowi.",
@@ -55,7 +55,7 @@ STRINGS: dict[str, str] = {
     "opening.ruy_lopez.14": "Wzmocnienie e5 i otwarcie drogi gońcowi c8.",
     "opening.ruy_lopez.15": "Przygotowanie d4 i miejsce dla gońca na c2.",
     "opening.ruy_lopez.16": "Czarne kończą rozwój roszadą — typowa pozycja partii hiszpańskiej.",
-    # --- partia szkocka --------------------------------------------------------
+    # --- Scotch Game -----------------------------------------------------------
     "opening.scotch.name": "Partia szkocka",
     "opening.scotch.desc": "Białe od razu otwierają centrum pionem d4. Aktywna gra figurami i mniej teorii niż w hiszpańskiej.",
     "opening.scotch.1": "1. e4 — pion zajmuje centrum.",
@@ -74,7 +74,7 @@ STRINGS: dict[str, str] = {
     "opening.scotch.14": "Skoczek skacze do centrum — z f6 i tak musiał uciekać.",
     "opening.scotch.15": "Białe przeganiają skoczka z d5 i zdobywają przestrzeń.",
     "opening.scotch.16": "Skoczek się cofa. Białe mają przestrzeń, czarne — parę gońców i aktywne figury.",
-    # --- gambit hetmański ------------------------------------------------------
+    # --- Queen's Gambit --------------------------------------------------------
     "opening.queens_gambit.name": "Gambit hetmański",
     "opening.queens_gambit.desc": "Białe oferują piona c4, żeby odciągnąć piona d5 z centrum. Klasyka szachów pozycyjnych.",
     "opening.queens_gambit.1": "1. d4 — pion zajmuje centrum i od razu jest broniony przez hetmana.",
@@ -89,7 +89,7 @@ STRINGS: dict[str, str] = {
     "opening.queens_gambit.10": "Król czarnych chowa się w bezpieczne miejsce.",
     "opening.queens_gambit.11": "Ostatnia lekka figura białych na skrzydle królewskim wchodzi do gry.",
     "opening.queens_gambit.12": "Skoczek wspiera centrum i przygotowuje ...c5 albo ...e5.",
-    # --- system londyński ------------------------------------------------------
+    # --- London System ---------------------------------------------------------
     "opening.london.name": "System londyński",
     "opening.london.desc": "Ten sam, solidny układ niemal przeciwko wszystkiemu: d4, Gf4, e3, c3. Łatwy do nauczenia, trudny do rozbicia.",
     "opening.london.1": "1. d4 — pion zajmuje centrum.",
@@ -107,7 +107,7 @@ STRINGS: dict[str, str] = {
     "opening.london.13": "Białe zachowują gońca; po wymianie na g3 otworzyłaby się linia h dla wieży.",
     "opening.london.14": "Czarne robią roszadę.",
     "opening.london.15": "Goniec celuje w h7 — klasyczne ustawienie do ataku na króla.",
-    # --- otwarcie angielskie ---------------------------------------------------
+    # --- English Opening -------------------------------------------------------
     "opening.english.name": "Otwarcie angielskie",
     "opening.english.desc": "Białe walczą o centrum z boku pionem c4 i gońcem na długiej przekątnej. Elastyczny, pozycyjny debiut.",
     "opening.english.1": "1. c4 — białe walczą o pole d5 z boku, bez stawiania piona w centrum.",
@@ -124,7 +124,7 @@ STRINGS: dict[str, str] = {
     "opening.english.12": "Skoczek schodzi z linii ataku gońca.",
     "opening.english.13": "Białe kończą rozwój roszadą.",
     "opening.english.14": "Czarne przygotowują roszadę.",
-    # --- obrona sycylijska, wariant Najdorfa -----------------------------------
+    # --- Sicilian Defence, Najdorf Variation ----------------------------------
     "opening.sicilian_najdorf.name": "Obrona sycylijska — wariant Najdorfa",
     "opening.sicilian_najdorf.desc": "Najpopularniejsza odpowiedź na 1. e4: ostra, niesymetryczna gra. Wariant Mieczysława Najdorfa, polskiego arcymistrza.",
     "opening.sicilian_najdorf.1": "1. e4 — białe zajmują centrum.",
@@ -143,7 +143,7 @@ STRINGS: dict[str, str] = {
     "opening.sicilian_najdorf.14": "Goniec kontroluje d5 — kluczowe pole w tej strukturze.",
     "opening.sicilian_najdorf.15": "Białe wzmacniają e4 i przygotowują atak pionami g4–g5.",
     "opening.sicilian_najdorf.16": "Czarne rozwijają gońca i przygotowują roszadę.",
-    # --- obrona francuska ------------------------------------------------------
+    # --- French Defence --------------------------------------------------------
     "opening.french.name": "Obrona francuska",
     "opening.french.desc": "Solidna obrona: pionek e6 przygotowuje ...d5. Czarne atakują łańcuch pionów białych od podstawy.",
     "opening.french.1": "1. e4 — białe zajmują centrum.",
@@ -162,7 +162,7 @@ STRINGS: dict[str, str] = {
     "opening.french.14": "Czarne otwierają linię c.",
     "opening.french.15": "Białe odbijają skoczkiem.",
     "opening.french.16": "Goniec atakuje skoczka d4 i staje na aktywnej przekątnej.",
-    # --- obrona Caro-Kann ------------------------------------------------------
+    # --- Caro-Kann Defence -----------------------------------------------------
     "opening.caro_kann.name": "Obrona Caro-Kann",
     "opening.caro_kann.desc": "Jak obrona francuska, ale goniec c8 nie zostaje zamknięty. Bardzo solidna, ulubiona obrona wielu mistrzów świata.",
     "opening.caro_kann.1": "1. e4 — białe zajmują centrum.",
@@ -181,7 +181,7 @@ STRINGS: dict[str, str] = {
     "opening.caro_kann.14": "Skoczek pilnuje e5 i nie blokuje piona c.",
     "opening.caro_kann.15": "Białe zdobywają przestrzeń na skrzydle królewskim.",
     "opening.caro_kann.16": "Goniec chowa się na h7, ale dalej patrzy na przekątną b1–h7.",
-    # --- obrona skandynawska ---------------------------------------------------
+    # --- Scandinavian Defence --------------------------------------------------
     "opening.scandinavian.name": "Obrona skandynawska",
     "opening.scandinavian.desc": "Czarne od razu atakują e4 pionem d5. Prosta, łatwa do nauki obrona z szybkim rozwojem.",
     "opening.scandinavian.1": "1. e4 — białe zajmują centrum.",
@@ -198,7 +198,7 @@ STRINGS: dict[str, str] = {
     "opening.scandinavian.12": "Goniec wychodzi przed ...e6 — jak w obronie Caro-Kann.",
     "opening.scandinavian.13": "Białe rozwiązują związanie skoczka c3 i grożą Sd5.",
     "opening.scandinavian.14": "Czarne przygotowują ...Gb4 i roszadę.",
-    # --- obrona dwóch skoczków -------------------------------------------------
+    # --- Two Knights Defence ---------------------------------------------------
     "opening.two_knights.name": "Obrona dwóch skoczków",
     "opening.two_knights.desc": "Odpowiedź czarnych na partię włoską: zamiast ...Gc5 od razu ...Sf6 i kontratak na e4.",
     "opening.two_knights.1": "1. e4 — białe zajmują centrum.",
@@ -213,7 +213,7 @@ STRINGS: dict[str, str] = {
     "opening.two_knights.10": "Czarne też chowają króla.",
     "opening.two_knights.11": "Wieża wspiera centrum.",
     "opening.two_knights.12": "Czarne wzmacniają e5 i otwierają drogę gońcowi c8.",
-    # --- obrona słowiańska -----------------------------------------------------
+    # --- Slav Defence ----------------------------------------------------------
     "opening.slav.name": "Obrona słowiańska",
     "opening.slav.desc": "Odpowiedź na gambit hetmański: d5 broni pion c6, a goniec c8 zostaje wolny. Bardzo solidna obrona.",
     "opening.slav.1": "1. d4 — białe zajmują centrum.",
@@ -232,7 +232,7 @@ STRINGS: dict[str, str] = {
     "opening.slav.14": "Goniec związuje skoczka c3.",
     "opening.slav.15": "Białe robią roszadę.",
     "opening.slav.16": "Czarne też — obie strony są rozwinięte.",
-    # --- obrona królewsko-indyjska ---------------------------------------------
+    # --- King's Indian Defence -------------------------------------------------
     "opening.kings_indian.name": "Obrona królewsko-indyjska",
     "opening.kings_indian.desc": "Czarne oddają centrum, żeby je potem zaatakować. Dynamiczna obrona Kasparowa i Fischera.",
     "opening.kings_indian.1": "1. d4 — białe zajmują centrum.",
@@ -251,7 +251,7 @@ STRINGS: dict[str, str] = {
     "opening.kings_indian.14": "Nacisk na d4.",
     "opening.kings_indian.15": "Białe zamykają centrum i zyskują przestrzeń; skoczek musi ustąpić.",
     "opening.kings_indian.16": "Skoczek przygotowuje ...f5 i atak na skrzydle królewskim.",
-    # --- obrona nimzoindyjska --------------------------------------------------
+    # --- Nimzo-Indian Defence --------------------------------------------------
     "opening.nimzo_indian.name": "Obrona nimzoindyjska",
     "opening.nimzo_indian.desc": "Goniec na b4 wiąże skoczka c3 i walczy o pole e4. Jedna z najlepszych obron przeciw 1. d4.",
     "opening.nimzo_indian.1": "1. d4 — białe zajmują centrum.",
@@ -268,7 +268,7 @@ STRINGS: dict[str, str] = {
     "opening.nimzo_indian.12": "Przygotowanie fianchetta gońca c8.",
     "opening.nimzo_indian.13": "Związanie skoczka f6.",
     "opening.nimzo_indian.14": "Goniec kontroluje e4 i długą przekątną.",
-    # --- obrona Grünfelda ------------------------------------------------------
+    # --- Grünfeld Defence ------------------------------------------------------
     "opening.grunfeld.name": "Obrona Grünfelda",
     "opening.grunfeld.desc": "Czarne pozwalają białym zbudować wielkie centrum, a potem je atakują figurami i pionem c5.",
     "opening.grunfeld.1": "1. d4 — białe zajmują centrum.",

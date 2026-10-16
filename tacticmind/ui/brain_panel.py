@@ -1,12 +1,12 @@
-"""Panel „Mózg AI”: co AI myśli.
+"""The "AI Brain" panel: what the AI is thinking.
 
-Zawiera liczniki na żywo, 3 najlepsze ruchy kandydujące (z wariantami SAN),
-„strumień myśli” i mini drzewo przeszukiwania. Tryby widoczności:
- - Ukryty: tylko statystyki i informacja, że AI liczy — ruchy i ocena ukryte,
- - Podpowiedź: podświetla figurę, którą trzeba ruszyć (zmniejsza nagrodę),
- - Pełny: wszystko widoczne, a po zadaniu AI tłumaczy rozwiązanie.
+It shows live counters, the top 3 candidate moves (with SAN lines), a
+"stream of thought" and a mini search tree. Visibility modes:
+ - Hidden: only stats and a note that the AI is calculating — moves and evaluation hidden,
+ - Hint: highlights the piece that has to move (reduces the reward),
+ - Full: everything visible, and after the puzzle the AI explains the solution.
 
-Wszystkie wymiary są skalowane (``px``/``fs``), a teksty dopasowują się do miejsca.
+All dimensions are scaled (``px``/``fs``) and texts fit themselves to the available space.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ TABS = ("thoughts", "tree")
 
 @dataclass
 class BrainState:
-    """To, co panel ma pokazać (ustawia ekran gry)."""
+    """What the panel should show (set by the game screen)."""
 
     mode: str = "hidden"
     running: bool = False
@@ -78,10 +78,10 @@ class BrainPanel:
         self.tree_rows: list[tuple[str, pygame.Rect]] = []
         self.hover_candidate = -1
         self._tab_x = -1.0
-        self._seen: list[float] = []  # kiedy pojawiła się każda myśl (do animacji)
+        self._seen: list[float] = []  # when each thought appeared (for animation)
         self._last = now()
 
-    # ------------------------------------------------------------ zdarzenia
+    # ------------------------------------------------------------ events
     def handle(self, event: pygame.event.Event, state: BrainState, mouse_pos: tuple[int, int] | None = None) -> bool:
         if self.segmented.handle(event):
             return True
@@ -106,7 +106,7 @@ class BrainPanel:
         return area.handle(event, mouse_pos)
 
     def wants_wheel(self, pos: tuple[int, int]) -> bool:
-        """Czy kółko myszy nad tym miejscem ma przewijać zawartość panelu (a nie całą stronę)?"""
+        """Should the mouse wheel over this point scroll the panel contents (rather than the whole page)?"""
         area = self.scroll if self.tab == "thoughts" else self.tree_scroll
         return area.rect.collidepoint(pos) and area.content_height > area.rect.height
 
@@ -116,7 +116,7 @@ class BrainPanel:
         self.expanded.clear()
         self._seen.clear()
 
-    # ------------------------------------------------------------ rysowanie
+    # ------------------------------------------------------------ drawing
     def draw(self, surface: pygame.Surface, state: BrainState) -> None:
         clock = now()
         dt = min(0.1, clock - self._last)
@@ -127,7 +127,7 @@ class BrainPanel:
         pad = px(16)
         x, y, w = r.x + pad, r.y + px(14), r.width - 2 * pad
 
-        # Nagłówek: ikona „sieci”, tytuł, status i przełącznik trybu
+        # Header: "network" icon, title, status and mode switch
         self._draw_brain_icon(surface, (x + px(11), y + px(15)), px(11), state.running, clock)
         title = draw_text(surface, t("brain.title"), (x + px(28), y + px(15)), fs(19), theme.TEXT, "bold", "midleft")
         seg_w = min(px(270), max(px(150), w - (title.right - x) - px(90)))
@@ -149,7 +149,7 @@ class BrainPanel:
         y = self._draw_counters(surface, state, x, y, w)
         y = self._draw_candidates(surface, state, x, y, w)
 
-        # Zakładki z przesuwającym się podkreśleniem
+        # Tabs with a sliding underline
         self.tab_rects = []
         tx = x
         tab_h = px(30)
@@ -176,7 +176,7 @@ class BrainPanel:
             self._draw_tree(surface, state, content)
 
     def _draw_brain_icon(self, surface: pygame.Surface, center: tuple[int, int], size: int, running: bool, clock: float) -> None:
-        """Mała „sieć neuronowa”: trzy węzły połączone liniami; pulsuje, gdy AI liczy."""
+        """A small "neural network": three nodes connected by lines; pulses while the AI is calculating."""
         cx, cy = center
         nodes = [(cx - size * 0.7, cy + size * 0.45), (cx + size * 0.7, cy + size * 0.45), (cx, cy - size * 0.7)]
         for i, a in enumerate(nodes):
@@ -322,7 +322,7 @@ class BrainPanel:
         roots = info.tree[:8]
         if roots and not self.expanded.intersection(n.move for n in roots):
             self.expanded.add(roots[0].move)
-            # Rozwiń też pierwszy ruch, w którym alfa-beta coś odcięła — żeby było widać cięcie.
+            # Also expand the first move where alpha-beta pruned something — so the cutoff is visible.
             with_cut = next((n for n in roots[1:] if any(c.pruned for c in n.children)), None)
             if with_cut is not None:
                 self.expanded.add(with_cut.move)

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { _setPayload, has, pluralForm, t, tn } from "./i18n";
 
 const payload = {
-  default: "pl",
+  default: "en",
   languages: {
     pl: {
       name: "Polski",
@@ -11,7 +11,6 @@ const payload = {
         "demo.cut.one": "pomijam {n} gałąź",
         "demo.cut.few": "pomijam {n} gałęzie",
         "demo.cut.many": "pomijam {n} gałęzi",
-        "only.pl": "tylko po polsku",
       },
     },
     en: {
@@ -20,33 +19,34 @@ const payload = {
         "home.rating": "Your rating: {rating}",
         "demo.cut.one": "skipping {n} branch",
         "demo.cut.many": "skipping {n} branches",
+        "only.en": "English only",
       },
     },
   },
 };
 
-describe("tłumaczenia", () => {
-  it("wstawia parametry jak str.format w Pythonie", () => {
+describe("translations", () => {
+  it("substitutes parameters like Python's str.format", () => {
     _setPayload(payload, "pl");
     expect(t("home.rating", { rating: 1500 })).toBe("Twój ranking: 1500");
     expect(t("home.rating")).toBe("Twój ranking: {rating}");
   });
 
-  it("brakujący klucz bierze z języka domyślnego, a nieznany zwraca sam klucz", () => {
-    _setPayload(payload, "en");
-    expect(t("only.pl")).toBe("tylko po polsku");
+  it("takes a missing key from the default language, and returns an unknown key as is", () => {
+    _setPayload(payload, "pl");
+    expect(t("only.en")).toBe("English only");
     expect(t("no.such.key")).toBe("no.such.key");
     expect(has("home.rating")).toBe(true);
   });
 
-  it("napisy samego interfejsu (ustawienia) są w obu językach", () => {
+  it("interface-only strings (settings) exist in both languages", () => {
     _setPayload(payload, "pl");
     expect(t("ui.fps_counter")).toBe("Licznik FPS");
     _setPayload(payload, "en");
     expect(t("ui.fps_counter")).toBe("FPS counter");
   });
 
-  it("liczba mnoga jak w Pythonie (1 / 2–4 / 5+, ale 12–14 → many)", () => {
+  it("plurals as in Python (1 / 2–4 / 5+, but 12–14 → many)", () => {
     expect(pluralForm(1, "pl")).toBe("one");
     expect(pluralForm(3, "pl")).toBe("few");
     expect(pluralForm(5, "pl")).toBe("many");

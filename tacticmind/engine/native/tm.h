@@ -1,8 +1,8 @@
 /*
- * TacticMind — silnik szachowy w C.
+ * TacticMind - chess engine in C.
  *
- * Wspólne deklaracje: bitboardy, pozycja, generator ruchów, ocena (NNUE
- * i ręczna), wyszukiwanie. Pola numerujemy a1 = 0, b1 = 1, …, h8 = 63.
+ * Shared declarations: bitboards, position, move generator, evaluation (NNUE
+ * and hand-crafted), search. Squares are numbered a1 = 0, b1 = 1, ..., h8 = 63.
  */
 #ifndef TM_H
 #define TM_H
@@ -21,7 +21,7 @@ typedef uint16_t Move;
 
 enum { WHITE = 0, BLACK = 1 };
 enum { PAWN = 0, KNIGHT, BISHOP, ROOK, QUEEN, KING };
-/* Figura = kolor * 6 + typ; NO_PIECE = puste pole. */
+/* Piece = color * 6 + type; NO_PIECE = empty square. */
 enum { NO_PIECE = 12 };
 
 #define PIECE(color, type) ((color) * 6 + (type))
@@ -32,7 +32,7 @@ enum { NO_PIECE = 12 };
 #define FILE_OF(sq) ((sq) & 7)
 #define RANK_OF(sq) ((sq) >> 3)
 
-/* Ruch w 16 bitach: z (6) | do (6) | flaga (4). */
+/* Move in 16 bits: from (6) | to (6) | flag (4). */
 enum {
     MF_QUIET = 0,
     MF_DOUBLE = 1,
@@ -40,8 +40,8 @@ enum {
     MF_QCASTLE = 3,
     MF_CAPTURE = 4,
     MF_EP = 5,
-    MF_PROMO = 8,      /* 8..11: promocja na N, B, R, Q */
-    MF_PROMO_CAP = 12  /* 12..15: promocja z biciem */
+    MF_PROMO = 8,      /* 8..11: promotion to N, B, R, Q */
+    MF_PROMO_CAP = 12  /* 12..15: capture with promotion */
 };
 #define MOVE(from, to, flag) ((Move)((from) | ((to) << 6) | ((flag) << 12)))
 #define M_FROM(m) ((m) & 63)
@@ -62,7 +62,7 @@ enum { CASTLE_WK = 1, CASTLE_WQ = 2, CASTLE_BK = 4, CASTLE_BQ = 8 };
 #define MATE_BOUND (MATE - 1000)
 #define INF 100000
 
-/* ------------------------------------------------------------- bitboardy */
+/* ------------------------------------------------------------- bitboards */
 extern Bitboard PAWN_ATT[2][64];
 extern Bitboard KNIGHT_ATT[64];
 extern Bitboard KING_ATT[64];
@@ -83,7 +83,7 @@ static inline int pop_lsb(Bitboard *b) {
 }
 
 /* ------------------------------------------------------------- NNUE */
-/* Architektura: (768 → HIDDEN) × 2 perspektywy → 1, aktywacja SCReLU. */
+/* Architecture: (768 -> HIDDEN) x 2 perspectives -> 1, SCReLU activation. */
 #define NNUE_INPUTS 768
 #ifndef NNUE_HIDDEN
 #define NNUE_HIDDEN 256
@@ -91,12 +91,12 @@ static inline int pop_lsb(Bitboard *b) {
 #define NNUE_QA 255
 #define NNUE_QB 64
 #define NNUE_SCALE 400
-/* Kubełki wyjścia: osobna warstwa wyjściowa zależnie od liczby figur na planszy (faza gry). */
+/* Output buckets: a separate output layer depending on the number of pieces on the board (game phase). */
 #define NNUE_MAX_BUCKETS 8
 #define NNUE_BUCKET(pieces, buckets) (((pieces) - 2) * (buckets) / 31)
 
 typedef struct {
-    int16_t v[2][NNUE_HIDDEN]; /* [perspektywa][neuron] */
+    int16_t v[2][NNUE_HIDDEN]; /* [perspective][neuron] */
 } Accumulator;
 
 typedef struct {
@@ -113,7 +113,7 @@ extern int NET_LOADED;
 int nnue_load(const char *path);
 int nnue_load_memory(const unsigned char *data, size_t size);
 
-/* ------------------------------------------------------------- pozycja */
+/* ------------------------------------------------------------- position */
 typedef struct {
     uint64_t key;
     Move move;
@@ -130,13 +130,13 @@ typedef struct {
     int8_t board[64];
     int side;
     int castling;
-    int ep;      /* pole bicia w przelocie albo -1 */
+    int ep;      /* en passant square or -1 */
     int halfmove;
     int fullmove;
     uint64_t key;
-    int ply;     /* liczba ruchów na stosie (od ustawienia FEN) */
+    int ply;     /* number of moves on the stack (since the FEN was set) */
     Undo hist[MAX_GAME];
-    /* NNUE: akumulatory dla każdego poziomu stosu. */
+    /* NNUE: accumulators for every stack level. */
     Accumulator acc[MAX_GAME + 1];
     int use_nnue;
 } Position;
@@ -160,7 +160,7 @@ void move_to_uci(Move m, char *out);
 static inline Bitboard pos_bb(const Position *pos, int color, int type) { return pos->pieces[PIECE(color, type)]; }
 static inline int king_sq(const Position *pos, int color) { return lsb(pos->pieces[PIECE(color, KING)]); }
 
-/* ------------------------------------------------------------- ruchy */
+/* ------------------------------------------------------------- moves */
 typedef struct {
     Move moves[MAX_MOVES];
     int scores[MAX_MOVES];
@@ -174,20 +174,20 @@ int is_pseudo_legal(const Position *pos, Move m);
 uint64_t perft(Position *pos, int depth);
 int see_ge(const Position *pos, Move m, int threshold);
 
-/* ------------------------------------------------------------- ocena */
-int evaluate(Position *pos);       /* perspektywa strony na ruchu, centypiony */
-int eval_hce(const Position *pos); /* ręczna ocena (perspektywa strony na ruchu) */
+/* ------------------------------------------------------------- evaluation */
+int evaluate(Position *pos);       /* side to move's perspective, centipawns */
+int eval_hce(const Position *pos); /* hand-crafted eval (side to move's perspective) */
 int nnue_evaluate(const Position *pos);
 extern const int PIECE_VALUE[6];
 
-/* ------------------------------------------------------------- wyszukiwanie */
+/* ------------------------------------------------------------- search */
 typedef struct {
     uint64_t key;
     int16_t score;
     int16_t eval;
     Move move;
     uint8_t depth;
-    uint8_t flag_age; /* 2 bity flagi | 6 bitów wieku */
+    uint8_t flag_age; /* 2 flag bits | 6 age bits */
 } TTEntry;
 
 enum { TT_NONE = 0, TT_UPPER = 1, TT_LOWER = 2, TT_EXACT = 3 };
@@ -195,7 +195,7 @@ enum { TT_NONE = 0, TT_UPPER = 1, TT_LOWER = 2, TT_EXACT = 3 };
 typedef struct {
     Move move;
     int32_t score;
-    uint8_t bound; /* 0 dokładny, 1 górne ograniczenie, 2 dolne */
+    uint8_t bound; /* 0 exact, 1 upper bound, 2 lower bound */
     uint8_t pruned;
 } TreeChild;
 
@@ -207,15 +207,15 @@ typedef struct {
     int exact;
     int pv_len;
     Move pv[MAX_PLY];
-    uint64_t nodes; /* węzły zużyte na ten ruch (do sortowania) */
-    /* mini-drzewo: odpowiedzi przeciwnika */
+    uint64_t nodes; /* nodes spent on this move (for sorting) */
+    /* mini tree: opponent replies */
     int tt_cut;
     int n_children;
     TreeChild children[TREE_MAX_CHILDREN];
 } RootMove;
 
 typedef struct Engine Engine;
-/* Zwraca 1, gdy trzeba przerwać. Wywoływane co ok. 20 ms. */
+/* Returns 1 when the search must stop. Called every ~20 ms. */
 typedef int (*PollFn)(void *user, int depth, uint64_t nodes, uint64_t cutoffs, uint64_t tt_hits, int time_ms);
 
 struct Engine {
@@ -227,7 +227,7 @@ struct Engine {
     int16_t history[2][64][64];
     Move killers[MAX_PLY + 2][2];
     Move counter[12][64];
-    int16_t cont_hist[12][64][12][64]; /* historia kontynuacji (poprzedni ruch → ruch) */
+    int16_t cont_hist[12][64][12][64]; /* continuation history (previous move -> move) */
 
     Move pv[MAX_PLY + 1][MAX_PLY + 1];
     int pv_len[MAX_PLY + 1];
@@ -241,22 +241,22 @@ struct Engine {
     int multipv;
     int record_tree;
     int root_side;
-    int terminal; /* 0, 1 = mat, 2 = pat */
+    int terminal; /* 0, 1 = checkmate, 2 = stalemate */
     int current_root;
 
-    /* statystyki */
+    /* statistics */
     uint64_t nodes, qnodes, cutoffs, tt_hits, searched, pruned;
     int seldepth;
     int depth;
 
-    /* czas i przerywanie */
+    /* time and stopping */
     double start_ms;
-    double stop_at_ms; /* < 0: bez limitu */
+    double stop_at_ms; /* < 0: no limit */
     double last_poll_ms;
     PollFn poll;
     void *poll_user;
     volatile int stop;
-    uint64_t node_limit; /* 0 = bez limitu */
+    uint64_t node_limit; /* 0 = no limit */
 };
 
 double now_ms(void);
@@ -264,11 +264,11 @@ Engine *engine_new(int tt_mb);
 void engine_free(Engine *e);
 void engine_clear(Engine *e);
 void engine_new_search(Engine *e);
-/* Przygotowanie korzenia; zwraca liczbę legalnych ruchów. */
+/* Prepare the root; returns the number of legal moves. */
 int engine_prepare(Engine *e, int multipv, int record_tree);
-/* Jedna iteracja iterative deepening. Zwraca 1 gdy ukończona, 0 gdy przerwana. */
+/* One iterative deepening iteration. Returns 1 when completed, 0 when interrupted. */
 int engine_iterate(Engine *e, int depth);
-/* Wyszukiwanie z iterative deepening do limitu czasu/głębokości/węzłów. */
+/* Iterative deepening search up to the time/depth/node limit. */
 Move engine_think(Engine *e, int max_depth, int time_ms, uint64_t node_limit, int *score_out, int verbose);
 int engine_extend_pv(Engine *e, const RootMove *rm, Move *out, int max_len);
 

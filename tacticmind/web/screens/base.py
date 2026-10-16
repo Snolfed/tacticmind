@@ -1,4 +1,4 @@
-"""Wspólna baza ekranów interfejsu w przeglądarce."""
+"""Common base for the browser interface screens."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def move_sound(board_before: chess.Board, move: chess.Move) -> str:
-    """Dźwięk ruchu (także przy cofaniu ◀): szach, promocja, roszada, bicie albo zwykły ruch."""
+    """Move sound (also when stepping back ◀): check, promotion, castling, capture or a plain move."""
     after = board_before.copy(stack=False)
     after.push(move)
     if after.is_check():
@@ -33,16 +33,16 @@ class WebScreen:
         self.timers: list[tuple[float, Callable[[], None]]] = []
 
     def enter(self) -> None:
-        """Ekran staje się aktywny."""
+        """The screen becomes active."""
 
     def leave(self) -> None:
-        """Ekran przestaje być aktywny."""
+        """The screen stops being active."""
 
     def schedule(self, delay: float, action: Callable[[], None]) -> None:
         self.timers.append((self.clock + delay, action))
 
     def update(self, dt: float) -> None:
-        """Logika co klatkę: zegar i zaplanowane akcje (np. odpowiedź przeciwnika po 400 ms)."""
+        """Per-frame logic: the clock and scheduled actions (e.g. the opponent's reply after 400 ms)."""
         self.clock += dt
         due = [timer for timer in self.timers if timer[0] <= self.clock]
         if due:
@@ -51,16 +51,16 @@ class WebScreen:
                 action()
 
     def on_engine(self, event: EngineEvent) -> None:
-        """Wiadomość od procesu silnika."""
+        """A message from the engine process."""
 
     def on_language_change(self) -> None:
-        """Zmieniono język — ekran może przebudować teksty wygenerowane wcześniej."""
+        """The language changed — the screen may rebuild texts generated earlier."""
 
     def action(self, name: str, data: dict[str, Any]) -> None:
-        """Akcja z przeglądarki (kliknięcie przycisku, ruch na szachownicy…)."""
+        """An action from the browser (button click, move on the board…)."""
 
     def snapshot(self) -> dict[str, Any]:
-        """Stan ekranu do narysowania (JSON)."""
+        """Screen state to draw (JSON)."""
         return {}
 
     def play_sound(self, board_before: chess.Board, move: chess.Move) -> None:

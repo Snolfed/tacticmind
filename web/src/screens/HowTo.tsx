@@ -1,5 +1,5 @@
-// „Jak działa AI?”: porównanie minimaksu z alfa-betą na prawdziwym silniku, demonstracja cięć
-// krok po kroku na małym drzewie i opis algorytmów.
+// "How does the AI work?": minimax vs alpha-beta on the real engine, a step-by-step demonstration
+// of cutoffs on a small tree and a description of the algorithms.
 
 import { useState, type ReactElement } from "react";
 import { screenAction } from "../api";

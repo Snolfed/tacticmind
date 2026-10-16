@@ -1,12 +1,12 @@
-"""Książka otwarć: linie do nauki, ruchy „z teorii” i rozpoznawanie nazw debiutów.
+"""Opening book: lines to study, "book" moves and opening name recognition.
 
-Każde otwarcie to jedna główna linia (w SAN, po angielsku — tak zapisuje ją python-chess) i strona,
-którą gra uczeń. Objaśnienie każdego półruchu jest w tłumaczeniach: ``opening.<id>.<półruch>``
-(półruchy liczone od 1), nazwa w ``opening.<id>.name``, krótki opis w ``opening.<id>.desc``.
+Each opening is one main line (in English SAN - the way python-chess writes it) and the side
+the student plays. The explanation of every ply lives in the translations: ``opening.<id>.<ply>``
+(plies counted from 1), the name in ``opening.<id>.name``, a short description in ``opening.<id>.desc``.
 
-Nazwy debiutów rozpoznajemy po pozycji (EPD), a nie po kolejności ruchów — dzięki temu
-przestawienie ruchów (transpozycja) też jest rozpoznane. Nazwą partii jest nazwa najgłębszej
-nazwanej pozycji, przez którą partia przeszła (tak działa to na chess.com i Lichess).
+Opening names are recognised by position (EPD), not by move order - so a different move order
+(transposition) is recognised too. The name of a game is the name of the deepest named position
+the game passed through (this is how chess.com and Lichess do it).
 """
 
 from __future__ import annotations
@@ -23,11 +23,11 @@ from ..i18n import t
 class Opening:
     id: str
     eco: str
-    #: Strona, którą gra uczeń (białe w partii włoskiej, czarne w obronie sycylijskiej…).
+    #: The side the student plays (White in the Italian Game, Black in the Sicilian Defence...).
     side: chess.Color
-    #: Główna linia w SAN.
+    #: Main line in SAN.
     moves: tuple[str, ...]
-    #: Od którego półruchu pozycja nosi nazwę tego otwarcia (np. partia włoska od 3. Gc4 = 5. półruch).
+    #: From which ply the position carries this opening's name (e.g. the Italian Game from 3. Bc4 = ply 5).
     name_from: int
 
 
@@ -37,7 +37,7 @@ def _line(text: str) -> tuple[str, ...]:
 
 W, B = chess.WHITE, chess.BLACK
 
-#: Otwarcia do nauki — po 6 dla białych, 9 dla czarnych (5 przeciw 1. e4 i 4 przeciw 1. d4).
+#: Openings to study - 6 for White, 9 for Black (5 against 1. e4 and 4 against 1. d4).
 OPENINGS: tuple[Opening, ...] = (
     Opening("italian", "C50", W, _line("e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O"), 5),
     Opening("ruy_lopez", "C84", W, _line("e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O"), 5),
@@ -56,7 +56,7 @@ OPENINGS: tuple[Opening, ...] = (
     Opening("grunfeld", "D85", B, _line("d4 Nf6 c4 g6 Nc3 d5 cxd5 Nxd5 e4 Nxc3 bxc3 Bg7 Nf3 c5 Be3 Qa5"), 6),
 )
 
-#: Ogólne nazwy pozycji, które nie są osobnymi lekcjami (np. „partia otwarta” po 1. e4 e5).
+#: General position names that are not separate lessons (e.g. "Open Game" after 1. e4 e5).
 FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("kings_pawn", _line("e4")),
     ("queens_pawn", _line("d4")),
@@ -81,13 +81,13 @@ FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 def epd(board: chess.Board) -> str:
-    """Pozycja bez liczników ruchów — ta sama pozycja osiągnięta różną drogą ma ten sam klucz."""
+    """Position without move counters - the same position reached by different routes has the same key."""
     return board.epd()
 
 
 @cache
 def line_ucis(opening_id: str) -> tuple[str, ...]:
-    """Główna linia otwarcia w UCI."""
+    """Main line of the opening in UCI."""
     board = chess.Board()
     ucis = []
     for san in opening_by_id(opening_id).moves:
@@ -106,11 +106,11 @@ def opening_by_id(opening_id: str) -> Opening:
 
 @dataclass(frozen=True)
 class _Index:
-    #: Pozycja → (priorytet, id nazwy). Wyższy priorytet = nazwa bardziej szczegółowa.
+    #: Position → (priority, name id). Higher priority = more specific name.
     names: dict[str, tuple[int, str]]
-    #: Pozycja → ruchy z teorii (UCI → ile linii go gra).
+    #: Position → book moves (UCI → how many lines play it).
     book: dict[str, dict[str, int]]
-    #: (pozycja, ruch) → (id otwarcia, numer półruchu) — skąd wziąć objaśnienie ruchu.
+    #: (position, move) → (opening id, ply number) - where to take the move's explanation from.
     comments: dict[tuple[str, str], tuple[str, int]]
 
 
@@ -124,8 +124,8 @@ def _index() -> _Index:
         if key not in names or names[key][0] < priority:
             names[key] = (priority, name_id)
 
-    # Priorytet nazwy = jak „głęboko” w teorii jest zdefiniowana: rodzina 2 × liczba półruchów,
-    # otwarcie do nauki 2 × półruch, od którego obowiązuje nazwa, + 1 (przy remisie wygrywa lekcja).
+    # Name priority = how "deep" in theory it is defined: a family 2 × number of plies,
+    # a study opening 2 × the ply from which the name applies, + 1 (on a tie the lesson wins).
     for family, moves in FAMILIES:
         board = chess.Board()
         for san in moves:
@@ -146,10 +146,10 @@ def _index() -> _Index:
 
 
 def opening_at(moves: list[chess.Move], start: chess.Board | None = None) -> str | None:
-    """Id nazwy debiutu (otwarcia albo rodziny) po zagraniu ``moves`` od pozycji początkowej.
+    """Name id of the opening (a study opening or a family) after playing ``moves`` from the starting position.
 
-    Nazwa może się tylko uszczegóławiać: po „gambicie hetmańskim odrzuconym” dalsze pozycje głównej
-    linii gambitu hetmańskiego nie cofają nazwy do ogólniejszej.
+    The name can only become more specific: after the "Queen's Gambit Declined", later positions of the
+    Queen's Gambit main line do not revert the name to a more general one.
     """
     board = start.copy(stack=False) if start is not None else chess.Board()
     names = _index().names
@@ -167,7 +167,7 @@ def opening_name(name_id: str) -> str:
 
 
 def book_moves(board: chess.Board) -> dict[str, int]:
-    """Ruchy z teorii w tej pozycji (UCI → waga = w ilu liniach występuje)."""
+    """Book moves in this position (UCI → weight = in how many lines it occurs)."""
     return dict(_index().book.get(epd(board), {}))
 
 
@@ -176,7 +176,7 @@ def is_book_move(board: chess.Board, move: chess.Move) -> bool:
 
 
 def move_comment(board: chess.Board, move: chess.Move) -> tuple[str, int] | None:
-    """(id otwarcia, półruch) z objaśnieniem tego ruchu w tej pozycji, jeśli to ruch z którejś linii."""
+    """(opening id, ply) with the explanation of this move in this position, if it is a move from one of the lines."""
     return _index().comments.get((epd(board), move.uci()))
 
 

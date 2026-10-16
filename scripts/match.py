@@ -1,19 +1,19 @@
-"""Mecz między silnikami — pomiar siły (Elo) silnika TacticMind.
+"""Engine-vs-engine match — measuring the strength (Elo) of the TacticMind engine.
 
-Gracz to polecenie silnika UCI (np. ``tacticmind/engine/native/build/tmengine``, ``stockfish``)
-albo ``python`` — stary silnik w czystym Pythonie (``engine/search.py``). Każde otwarcie
-z listy grane jest dwa razy, z zamianą kolorów.
+A player is a UCI engine command (e.g. ``tacticmind/engine/native/build/tmengine``, ``stockfish``)
+or ``python`` — the old pure-Python engine (``engine/search.py``). Each opening
+from the list is played twice, with colors swapped.
 
-Przykłady::
+Examples::
 
-    python scripts/build_engine.py                     # buduje m.in. program UCI tmengine
-    # nowy silnik (C + NNUE) przeciw staremu (Python), 1 s na ruch:
+    python scripts/build_engine.py                     # builds, among others, the tmengine UCI program
+    # new engine (C + NNUE) against the old one (Python), 1 s per move:
     python scripts/match.py --a tacticmind/engine/native/build/tmengine --b python --movetime 1000 --games 40
-    # przeciw Stockfishowi ograniczonemu do 2600 Elo, tempo 10 s + 0,1 s:
+    # against Stockfish limited to 2600 Elo, time control 10 s + 0.1 s:
     python scripts/match.py --a tacticmind/engine/native/build/tmengine --b stockfish \\
         --b-option UCI_LimitStrength=true --b-option UCI_Elo=2600 --tc 10+0.1 --games 100 --concurrency 4
 
-Wynik: punkty, różnica Elo z 95% przedziałem ufności (model logistyczny).
+Output: points, Elo difference with a 95% confidence interval (logistic model).
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import chess.engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# Krótkie, popularne otwarcia (UCI), żeby partie się różniły.
+# Short, popular openings (UCI) so the games differ.
 OPENINGS = [
     "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6",
     "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5",
@@ -90,7 +90,7 @@ def _python_move(board: chess.Board, ms: int) -> chess.Move:
 
 
 def _engine_command(spec: str) -> list[str]:
-    """Polecenie silnika. Na Windowsie shlex w trybie POSIX zjadłby ukośniki wsteczne w ścieżce."""
+    """Engine command. On Windows, shlex in POSIX mode would eat the backslashes in the path."""
     if Path(spec).exists():
         return [spec]
     if sys.platform == "win32":
@@ -99,27 +99,27 @@ def _engine_command(spec: str) -> list[str]:
 
 
 def _finished(board: chess.Board) -> tuple[bool | None, str] | None:
-    """Koniec partii, który naprawdę nastąpił: (zwycięzca albo None przy remisie, powód) lub None.
+    """A game end that actually happened: (winner, or None for a draw, reason) or None.
 
-    Nie używamy ``claim_draw=True`` — to uznaje remis, gdy strona na ruchu *mogłaby* go zażądać,
-    nawet jeśli ma wygraną (np. mata w setnym półruchu)."""
+    We do not use ``claim_draw=True`` — it declares a draw when the side to move *could* claim one,
+    even if it has a win (e.g. mate on the hundredth half-move)."""
     if board.is_checkmate():
-        return (not board.turn), "mat"
+        return (not board.turn), "checkmate"
     if board.is_stalemate():
-        return None, "pat"
+        return None, "stalemate"
     if board.is_insufficient_material():
-        return None, "brak materiału"
+        return None, "insufficient material"
     if board.is_repetition(3):
-        return None, "powtórzenie"
+        return None, "repetition"
     if board.halfmove_clock >= 100:
-        return None, "50 ruchów"
+        return None, "50-move rule"
     if board.fullmove_number > 300:
-        return None, "limit ruchów"
+        return None, "move limit"
     return None
 
 
 def play_game(a: Player, b: Player, opening: str, a_white: bool, control: Control) -> tuple[float, str]:
-    """Jedna partia. Zwraca (wynik gracza A: 1 / 0.5 / 0, opis zakończenia)."""
+    """One game. Returns (player A's score: 1 / 0.5 / 0, description of the ending)."""
     board = chess.Board()
     for uci in opening.split():
         board.push_uci(uci)
@@ -160,18 +160,18 @@ def play_game(a: Player, b: Player, opening: str, a_white: bool, control: Contro
                         )
                     move = eng.play(board, limit).move
             except (chess.engine.EngineError, chess.engine.EngineTerminatedError, ValueError):
-                # python-chess zgłasza nielegalny bestmove jako EngineError — to porażka, nie koniec meczu.
-                return loss_of(board.turn, "nielegalny ruch / awaria silnika")
+                # python-chess reports an illegal bestmove as EngineError — that is a loss, not the end of the match.
+                return loss_of(board.turn, "illegal move / engine crash")
             if not control.movetime_ms:
                 clocks[board.turn] -= time.perf_counter() - t0
                 if clocks[board.turn] < 0:
-                    # Przekroczenie czasu to remis, jeśli przeciwnik nie ma czym dać mata (FIDE 6.9).
+                    # Running out of time is a draw if the opponent cannot possibly mate (FIDE 6.9).
                     if board.has_insufficient_material(not board.turn):
-                        return 0.5, "czas / brak materiału"
-                    return loss_of(board.turn, "czas")
+                        return 0.5, "time / insufficient material"
+                    return loss_of(board.turn, "time")
                 clocks[board.turn] += control.inc_s
             if move is None or move not in board.legal_moves:
-                return loss_of(board.turn, "nielegalny ruch")
+                return loss_of(board.turn, "illegal move")
             board.push(move)
         winner, reason = end
         if winner is None:
@@ -185,10 +185,10 @@ def play_game(a: Player, b: Player, opening: str, a_white: bool, control: Contro
 
 
 def elo_estimate(wins: int, draws: int, losses: int) -> tuple[float, float]:
-    """Różnica Elo i połowa 95% przedziału ufności."""
+    """Elo difference and half of the 95% confidence interval."""
     games = wins + draws + losses
     p = (wins + 0.5 * draws) / games
-    var = max((wins + 0.25 * draws) / games - p * p, 1e-4)  # wariancja wyniku jednej partii
+    var = max((wins + 0.25 * draws) / games - p * p, 1e-4)  # variance of a single game's score
     se = math.sqrt(var / games)
 
     def to_elo(x: float) -> float:
@@ -204,13 +204,13 @@ def parse_options(values: list[str]) -> tuple[tuple[str, str], ...]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--a", required=True, help="gracz A: polecenie UCI albo 'python'")
-    parser.add_argument("--b", required=True, help="gracz B: polecenie UCI albo 'python'")
-    parser.add_argument("--a-option", action="append", default=[], help="opcja UCI gracza A, np. Hash=64")
-    parser.add_argument("--b-option", action="append", default=[], help="opcja UCI gracza B, np. UCI_Elo=2600")
+    parser.add_argument("--a", required=True, help="player A: UCI command or 'python'")
+    parser.add_argument("--b", required=True, help="player B: UCI command or 'python'")
+    parser.add_argument("--a-option", action="append", default=[], help="UCI option for player A, e.g. Hash=64")
+    parser.add_argument("--b-option", action="append", default=[], help="UCI option for player B, e.g. UCI_Elo=2600")
     parser.add_argument("--games", type=int, default=20)
-    parser.add_argument("--movetime", type=int, default=0, help="stały czas na ruch (ms)")
-    parser.add_argument("--tc", default="10+0.1", help="tempo: sekundy+przyrost (gdy brak --movetime)")
+    parser.add_argument("--movetime", type=int, default=0, help="fixed time per move (ms)")
+    parser.add_argument("--tc", default="10+0.1", help="time control: seconds+increment (when --movetime is not given)")
     parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
 
@@ -236,8 +236,8 @@ def main() -> None:
             losses += result == 0.0
             reasons[reason] = reasons.get(reason, 0) + 1
             elo, margin = elo_estimate(wins, draws, losses)
-            print(f"[{n}/{args.games}] A {wins}W {draws}R {losses}P  wynik {score}/{n}  Elo A−B: {elo:+.0f} ± {margin:.0f}", flush=True)
-    print("zakończenia:", reasons)
+            print(f"[{n}/{args.games}] A {wins}W {draws}D {losses}L  score {score}/{n}  Elo A−B: {elo:+.0f} ± {margin:.0f}", flush=True)
+    print("endings:", reasons)
 
 
 if __name__ == "__main__":

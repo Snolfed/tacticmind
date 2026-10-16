@@ -1,8 +1,8 @@
-"""Ekran zadania (odpowiednik ``ui/screens/play.py`` bez rysowania).
+"""Puzzle screen (counterpart of ``ui/screens/play.py`` without drawing).
 
-Przebieg zadania, sprawdzanie ruchów spoza rozwiązania silnikiem, ranking, podgląd wariantów
-i przeglądanie ruchów (◀ ▶) działają tak samo jak w wersji pygame. Komunikaty są funkcjami
-zwracającymi tekst (``Text``), więc po zmianie języka migawka od razu mówi w nowym języku.
+The puzzle flow, engine checking of moves outside the solution, rating, line preview
+and move browsing (◀ ▶) work the same as in the pygame version. Messages are functions
+returning text (``Text``), so after a language change the snapshot speaks the new language immediately.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ from .base import WebScreen
 if TYPE_CHECKING:
     from ..core import WebApp
 
-OPPONENT_DELAY = 0.4  # odpowiedź przeciwnika po ok. 400 ms
+OPPONENT_DELAY = 0.4  # opponent's reply after ~400 ms
 INTRO_DELAY = 0.7
 REVEAL_STEP = 0.75
 PREVIEW_STEP = 0.8
-#: Limity czasu analizy (ms). Silnik liczy w osobnym procesie, więc UI się nie przycina.
+#: Analysis time limits (ms). The engine runs in a separate process, so the UI does not stutter.
 ANALYSIS_TIME = 9000
 CHECK_TIME = 1600
 
@@ -44,7 +44,7 @@ Text = Callable[[], str]
 
 
 def tx(key: str, **params: object) -> Text:
-    """Tekst tłumaczony leniwie — przy każdej migawce w aktualnym języku."""
+    """Lazily translated text — in the current language at every snapshot."""
     return partial(t, key, **params)
 
 
@@ -54,7 +54,7 @@ def _empty() -> str:
 
 @dataclass
 class _Check:
-    """Sprawdzanie ruchu spoza rozwiązania: najpierw (jeśli trzeba) ocena pozycji przed ruchem, potem po ruchu."""
+    """Checking a move outside the solution: first (if needed) the evaluation before the move, then after it."""
 
     fen_before: str
     move: chess.Move
@@ -79,7 +79,7 @@ class PlayScreen(WebScreen):
         self.board_view.on_move = self.on_player_move
         self.state = brain.BrainState()
         self.stream = ThoughtStream()
-        #: Zapis zdarzeń analizy — po zmianie języka strumień myśli jest z nich odtwarzany.
+        #: Log of analysis events — after a language change the thought stream is rebuilt from it.
         self.thought_log: list[tuple[str, object]] = []
         self.session: PuzzleSession | None = None
         self.selection: Selection | None = None
@@ -92,17 +92,17 @@ class PlayScreen(WebScreen):
         self.detail: Text = _empty
         self.change: RatingChange | None = None
         self.preview: _Preview | None = None
-        #: Przeglądana pozycja (liczba ruchów od początku zadania); None = bieżąca pozycja „na żywo”.
+        #: Browsed position (number of moves from the start of the puzzle); None = the current "live" position.
         self.view_index: int | None = None
         self.hint_square: chess.Square | None = None
         self.confirm: tuple[Text, Callable[[], None]] | None = None
         self.eval_score: EngineScore | None = None
         self.eval_hidden = True
-        #: Numer zadania — interfejs zeruje przy nim przewinięcie panelu i animacje myśli.
+        #: Puzzle number — when it changes, the interface resets the panel scroll and thought animations.
         self.puzzle_seq = 0
         self.explain_seq = 0
 
-    # ================================================================ cykl życia
+    # ================================================================ lifecycle
     def enter(self) -> None:
         if self.session is None:
             self.new_puzzle()
@@ -119,7 +119,7 @@ class PlayScreen(WebScreen):
         self.detail = detail
 
     def on_language_change(self) -> None:
-        """Odtwarza strumień myśli i wyjaśnienie w nowym języku (pozostałe teksty są leniwe)."""
+        """Rebuilds the thought stream and the explanation in the new language (other texts are lazy)."""
         stream = ThoughtStream(self.session.puzzle.fen if self.session else chess.STARTING_FEN)
         thoughts: list[Thought] = []
         for kind, data in self.thought_log:
@@ -136,11 +136,11 @@ class PlayScreen(WebScreen):
         if self.session is not None and self.state.explanation:
             self.state.explanation = explain_puzzle(self.session.puzzle, self.key_info)
 
-    # ================================================================ zadanie
+    # ================================================================ puzzle
     def new_puzzle(self) -> None:
         session = self.session
         if session is not None and session.outcome is None and session.status not in (Status.INTRO,):
-            # Pominięcie zadania w trakcie = porażka (żeby nie dało się „przeskakiwać” trudnych zadań).
+            # Skipping a puzzle midway = a loss (so hard puzzles cannot be "skipped over").
             session.forfeit()
             self.apply_outcome()
         self.timers.clear()
@@ -182,13 +182,13 @@ class PlayScreen(WebScreen):
         self.analyze_current()
 
     def _show_move(self, board_before: chess.Board, move: chess.Move, animate: bool = True) -> None:
-        """Pokazuje ruch na szachownicy i odtwarza odpowiedni dźwięk."""
+        """Shows the move on the board and plays the matching sound."""
         board_after = board_before.copy()
         board_after.push(move)
         self.board_view.set_position(board_after, move, animate)
         self.play_sound(board_before, move)
 
-    # ================================================================ ruch gracza
+    # ================================================================ player move
     def on_player_move(self, move: chess.Move) -> None:
         session = self.session
         if session is None or session.status != Status.PLAYER or self.view_index is not None or self.preview is not None:
@@ -197,7 +197,7 @@ class PlayScreen(WebScreen):
         self.hint_square = None
         verdict = session.submit(move)
         if verdict in (Verdict.CORRECT, Verdict.SOLVED, Verdict.SOLVED_ALT_MATE):
-            # Poprawny ruch, który oddaje materiał, to „genialny ruch” (!!), jak na chess.com.
+            # A correct move that gives up material is a "brilliant move" (!!), as on chess.com.
             brilliant = is_sacrifice(board_before, move)
             self._show_move(board_before, move)
             self.board_view.show_feedback(move.to_square, True, brilliant)
@@ -209,7 +209,7 @@ class PlayScreen(WebScreen):
                 else:
                     self.say(tx("play.best_move"), "accent")
                 self.board_view.interactive = False
-                # Po genialnym ruchu przeciwnik „zastanawia się” dłużej, żeby było widać „!!”.
+                # After a brilliant move the opponent "thinks" longer so the "!!" stays visible.
                 delay = OPPONENT_DELAY + (0.9 if brilliant else 0.2)
                 self.schedule(delay, partial(self._opponent_reply, brilliant))
             else:
@@ -235,11 +235,11 @@ class PlayScreen(WebScreen):
         self.say(tx(key), color, lambda: t("play.opponent_replied", move=_san_now(board_before, move, san)))
         self.analyze_current()
 
-    # ---------------------------------------------------------------- ruch spoza rozwiązania
+    # ---------------------------------------------------------------- move outside the solution
     def start_check(self, fen_before: str, move: chess.Move) -> None:
         best = self.infos.get(fen_before)
         if best is not None and best.depth >= 3:
-            # Jeśli ruch jest wśród 3 linii MultiPV, mamy jego dokładną ocenę z tej samej głębokości.
+            # If the move is among the 3 MultiPV lines, we have its exact evaluation from the same depth.
             for line in best.multi_pv:
                 if line.move == move.uci():
                     reply = line.pv[1] if len(line.pv) > 1 else None
@@ -295,7 +295,7 @@ class PlayScreen(WebScreen):
             self.say(tx("play.good_but_better"), "amber", tx("play.not_a_mistake"))
             self.analyze_current()
             return
-        # Błąd: ✗ na polu docelowym, potrząśnięcie szachownicą, odpowiedź przeciwnika wyliczona przez silnik.
+        # Mistake: ✗ on the target square, a board shake, the opponent's reply computed by the engine.
         self.board_view.show_feedback(move.to_square, False)
         self.board_view.shake()
         self.app.sound("error")
@@ -317,7 +317,7 @@ class PlayScreen(WebScreen):
         self._show_move(board_before, move)
         self.analyze_current()
 
-    # ---------------------------------------------------------------- koniec zadania
+    # ---------------------------------------------------------------- end of puzzle
     def on_solved(self, alternative_mate: bool, square: chess.Square, brilliant: bool = False) -> None:
         assert self.session is not None
         if not brilliant:
@@ -338,7 +338,7 @@ class PlayScreen(WebScreen):
         assert self.session is not None
         self.state.mode = "full"
         self.state.explanation = explain_puzzle(self.session.puzzle, self.key_info)
-        self.explain_seq += 1  # interfejs pokazuje wyjaśnienie od początku
+        self.explain_seq += 1  # the interface shows the explanation from the start
         self._go_live()
         self.analyze_current()
 
@@ -408,7 +408,7 @@ class PlayScreen(WebScreen):
         self.session.push_revealed(move)
         self._show_move(board_before, move)
 
-    # ================================================================ tryby panelu
+    # ================================================================ panel modes
     def set_mode(self, mode: str) -> None:
         session = self.session
         if session is None or mode not in ("hidden", "hint", "full"):
@@ -431,9 +431,9 @@ class PlayScreen(WebScreen):
         self.state.mode = "full"
         self.say(tx("play.full_on"), "muted", tx("play.full_on_detail"))
 
-    # ================================================================ analiza silnika
+    # ================================================================ engine analysis
     def current_board(self) -> chess.Board:
-        """Pozycja widoczna na szachownicy (na żywo albo przeglądana)."""
+        """The position visible on the board (live or browsed)."""
         assert self.session is not None
         board = self.session.board
         if self.view_index is None or self.view_index >= len(board.move_stack):
@@ -503,7 +503,7 @@ class PlayScreen(WebScreen):
             self.state.running = False
             self.state.status_note = t("play.engine_error", msg=event.message)
 
-    # ================================================================ podgląd wariantu
+    # ================================================================ line preview
     def start_preview(self, index: int) -> None:
         info = self.state.info
         if info is None or not self.state.reveal or not 0 <= index < len(info.multi_pv):
@@ -548,16 +548,16 @@ class PlayScreen(WebScreen):
         self.board_view.set_position(board, board.peek() if board.move_stack else None, animate=False)
         self.board_view.interactive = self.view_index is None and self.session.status == Status.PLAYER
 
-    # ================================================================ cofanie się po ruchach (◀ ▶)
+    # ================================================================ stepping through moves (◀ ▶)
     def can_navigate(self) -> bool:
-        """Ruchy można przeglądać w trakcie zadania i po nim — ale nie, gdy silnik sprawdza ruch albo trwa podgląd."""
+        """Moves can be browsed during the puzzle and after it — but not while the engine checks a move or a preview runs."""
         session = self.session
         if session is None or self.preview is not None or not session.board.move_stack:
             return False
         return session.status not in (Status.INTRO, Status.CHECKING)
 
     def _go_live(self, board: chess.Board | None = None) -> None:
-        """Powrót z przeglądanej pozycji do bieżącej (przed każdym nowym ruchem na szachownicy)."""
+        """Return from the browsed position to the current one (before every new move on the board)."""
         if self.view_index is None or self.session is None:
             return
         self.view_index = None
@@ -565,8 +565,8 @@ class PlayScreen(WebScreen):
         self.board_view.set_position(live, live.peek() if live.move_stack else None, animate=False)
 
     def step_view(self, delta: int) -> None:
-        """◀ / ▶: cofa albo przewija o jeden ruch. Na starszej pozycji nie da się ruszyć;
-        ▶ do końca wraca do bieżącej pozycji i znów można grać."""
+        """◀ / ▶: steps back or forward one move. You cannot move in an older position;
+        ▶ to the end returns to the current position and play can continue."""
         session = self.session
         if session is None or not self.can_navigate():
             return
@@ -589,11 +589,11 @@ class PlayScreen(WebScreen):
         self.board_view.feedback = None
         live = self.view_index is None
         self.board_view.interactive = live and session.status == Status.PLAYER
-        # Po zadaniu silnik analizuje oglądaną pozycję; w trakcie zadania liczy dalej bieżącą.
+        # After the puzzle the engine analyses the viewed position; during the puzzle it keeps analysing the current one.
         if session.finished:
             self.analyze_current()
 
-    # ================================================================ akcje z przeglądarki
+    # ================================================================ actions from the browser
     def action(self, name: str, data: dict[str, Any]) -> None:
         if self.confirm is not None:
             if name == "confirm_yes":
@@ -632,10 +632,10 @@ class PlayScreen(WebScreen):
         elif name == "preview_close":
             self.stop_preview()
 
-    # ================================================================ aktualizacja
+    # ================================================================ update
     def update(self, dt: float) -> None:
         super().update(dt)
-        # Automatyczne odtwarzanie wariantu w podglądzie.
+        # Automatic playback of the line in preview.
         preview = self.preview
         if preview is not None and preview.auto and self.clock >= preview.next_step:
             if preview.index < len(preview.moves):
@@ -664,10 +664,10 @@ class PlayScreen(WebScreen):
             if reveal and info is not None and info.terminal and info.fen == visible_fen:
                 self.eval_score = info.score
             self.board_view.arrows = []
-        # Podpowiedź widać tylko na bieżącej pozycji.
+        # The hint is visible only in the current position.
         self.board_view.hint_square = self.hint_square if self.view_index is None and self.preview is None else None
 
-    # ================================================================ migawka
+    # ================================================================ snapshot
     def _buttons(self) -> dict[str, Any]:
         session = self.session
         finished = session is not None and session.finished
@@ -739,7 +739,7 @@ class PlayScreen(WebScreen):
 
 
 def _san_now(board_before: chess.Board, move: chess.Move, fallback: str) -> str:
-    """SAN ruchu w bieżącym języku (po zmianie języka zmieniają się litery figur)."""
+    """SAN of the move in the current language (piece letters change after a language change)."""
     try:
         return move_san(board_before, move)
     except (ValueError, AssertionError):

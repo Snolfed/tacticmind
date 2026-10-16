@@ -1,10 +1,11 @@
 /*
- * Ocena pozycji.
+ * Position evaluation.
  *
- * Domyślnie liczy ją sieć NNUE (nnue.c). Ręczna ocena poniżej (materiał,
- * tablice pozycyjne, mobilność, struktura pionków, para gońców, osłona króla)
- * to ta sama idea co w silniku w Pythonie. Służy jako zapas, gdy nie ma
- * pliku sieci, i jako „nauczyciel” pierwszej generacji danych treningowych.
+ * By default it is computed by the NNUE network (nnue.c). The hand-crafted
+ * evaluation below (material, piece-square tables, mobility, pawn structure,
+ * bishop pair, king shield) follows the same idea as the Python engine. It is
+ * a fallback when there is no network file, and the "teacher" for the first
+ * generation of training data.
  */
 #include "tm.h"
 
@@ -14,7 +15,7 @@ static const int MAT_MG[6] = {100, 320, 330, 500, 950, 0};
 static const int MAT_EG[6] = {120, 300, 320, 540, 980, 0};
 static const int PHASE_W[6] = {0, 1, 1, 2, 4, 0};
 
-/* Tablice z perspektywy białych, wiersz 0 = 8. rząd (jak w pst.py). */
+/* Tables from White's perspective, row 0 = 8th rank (as in pst.py). */
 static const int PST_MG[6][64] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5, 5, 10, 25, 25, 10, 5, 5,
      0, 0, 0, 20, 20, 0, 0, 0, 5, -5, -10, 0, 0, -10, -5, 5, 5, 10, 10, -20, -20, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -102,7 +103,7 @@ int eval_hce(const Position *pos) {
                 }
             }
         }
-        /* Piony: zdwojone, izolowane, przechodnie. */
+        /* Pawns: doubled, isolated, passed. */
         Bitboard pawns = pos_bb(pos, c, PAWN), theirs = pos_bb(pos, c ^ 1, PAWN);
         for (int f = 0; f < 8; f++) {
             Bitboard on_file = pawns & (FILE_A << f);
@@ -141,7 +142,7 @@ int eval_hce(const Position *pos) {
 int evaluate(Position *pos) {
     if (pos_insufficient(pos)) return 0;
     int v = (pos->use_nnue && NET_LOADED) ? nnue_evaluate(pos) : eval_hce(pos);
-    /* Zbliżanie się do reguły 50 ruchów ściąga ocenę do remisu. */
+    /* Approaching the 50-move rule pulls the score towards a draw. */
     v = v * (200 - (pos->halfmove < 100 ? pos->halfmove : 100)) / 200;
     if (v > MATE_BOUND - 1) v = MATE_BOUND - 1;
     if (v < -MATE_BOUND + 1) v = -MATE_BOUND + 1;

@@ -1,7 +1,7 @@
 [package]
 name = "tacticmind"
 version = "1.0.0"
-description = "TacticMind — okno aplikacji (Tauri 2) dla interfejsu w TypeScript"
+description = "TacticMind — application window (Tauri 2) for the TypeScript interface"
 edition = "2021"
 rust-version = "1.77.2"
 

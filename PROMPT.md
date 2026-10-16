@@ -1,168 +1,168 @@
-# TaktykAI — szachowe zadania z AI, które myśli na głos
+# TaktykAI: chess puzzles with an AI that thinks out loud
 
-## Kontekst
+## Context
 
-Tworzysz projekt zaliczeniowy z programowania: grę, która wykorzystuje algorytm sztucznej inteligencji. Gra to trener taktyki szachowej w stylu „Puzzles” z chess.com. Wyróżniają ją dwie rzeczy:
+You are building a university programming project: a game that uses an artificial intelligence algorithm. The game is a chess tactics trainer in the style of chess.com "Puzzles". Two things set it apart:
 
-1. **Własny silnik szachowy (AI)**, którego „myśli” widać na żywo w panelu obok szachownicy.
-2. **Adaptacyjny poziom trudności**: gra liczy ranking ELO gracza na podstawie jego rozwiązań i dobiera kolejne zadania pod jego aktualny poziom.
+1. **Its own chess engine (AI)**, whose "thoughts" are visible live in a panel next to the board.
+2. **Adaptive difficulty**: the game computes the player's Elo rating from their solutions and picks the next puzzles to match their current level.
 
-**Najważniejsze kryterium oceny:** algorytm AI ma być **napisany od zera w tym projekcie**. Stockfish ani żaden inny gotowy silnik nie może być „mózgiem” gry. Algorytm ma być dobrze widoczny w działaniu i łatwy do wytłumaczenia na obronie projektu. Kod ma być czytelny, z komentarzami w kluczowych miejscach, a algorytmy mają być opisane w README.
+**The most important grading criterion:** the AI algorithm must be **written from scratch in this project**. Neither Stockfish nor any other ready-made engine may be the "brain" of the game. The algorithm must be clearly visible in action and easy to explain at the project defense. The code must be readable, with comments in key places, and the algorithms must be described in the README.
 
-## Stack technologiczny
+## Tech stack
 
-- Vite + React + TypeScript (tryb strict) + Tailwind CSS
-- Szachownica: `react-chessboard` (przeciąganie oraz klik-klik)
-- `chess.js` **tylko w warstwie UI** (walidacja ruchów gracza, notacja SAN, FEN). Silnik AI ma własną reprezentację planszy i własny generator ruchów.
-- Silnik działa w **Web Workerze**, żeby interfejs nigdy się nie przycinał
-- Wykresy: Recharts
-- Testy: Vitest
-- Zapis postępów: localStorage. Bez backendu, wszystko działa offline po `npm run dev`.
-- Cały interfejs po polsku
+- Vite + React + TypeScript (strict mode) + Tailwind CSS
+- Board: `react-chessboard` (drag-and-drop and click-click)
+- `chess.js` **only in the UI layer** (validating the player's moves, SAN notation, FEN). The AI engine has its own board representation and its own move generator.
+- The engine runs in a **Web Worker**, so the interface never stutters
+- Charts: Recharts
+- Tests: Vitest
+- Saving progress: localStorage. No backend; everything works offline after `npm run dev`.
+- The entire interface in Polish
 
-## 1. Silnik AI (serce projektu): `src/engine/`
+## 1. AI engine (the heart of the project): `src/engine/`
 
-Zaimplementuj od zera:
+Implement from scratch:
 
-- **Reprezentacja planszy** 0x88 (albo mailbox 10x12). Stan: strona na ruchu, prawa do roszady, pole en passant, licznik półruchów. Parsowanie i generowanie FEN.
-- **Generator ruchów** z pełnymi zasadami: roszady, bicie w przelocie, promocje na wszystkie 4 figury, wykrywanie szacha, mata i pata, make/unmake move.
-- **Perft** do weryfikacji generatora (testy poniżej muszą przechodzić).
-- **Wyszukiwanie:**
-  - negamax z cięciami alfa-beta,
-  - iterative deepening z limitem czasu i głębokości,
-  - quiescence search (bicia), żeby uniknąć efektu horyzontu,
-  - porządkowanie ruchów: najpierw ruch z PV, potem bicia wg MVV-LVA, killer moves, history heuristic,
-  - tablica transpozycji z haszowaniem Zobrista,
-  - wyniki matowe z odległością do mata (szybszy mat jest lepszy).
-- **Funkcja oceny:** materiał + tablice pozycyjne (piece-square tables) w wersji tapered (osobne wartości dla gry środkowej i końcówki), bonus za bezpieczeństwo króla i mobilność. Ocena w UI zawsze pokazywana z perspektywy białych, w pionach (np. +1.5) albo jako mat (M3).
-- **MultiPV:** liczenie 3 najlepszych ruchów kandydujących razem z ich wariantami.
-- **Statystyki wyszukiwania** zbierane na bieżąco: głębokość, liczba węzłów, węzły/s, liczba cięć alfa-beta, trafienia w TT, czas, główny wariant (PV).
-- **Protokół workera:** po każdej ukończonej głębokości worker wysyła do UI wiadomość `{ depth, scoreCp | mateIn, pv, multiPv, nodes, nps, cutoffs, ttHits, timeMs }`. Obsługuje komendę `stop` i nowe zapytania bez restartu workera.
-- **Tryb porównawczy** (na obronę): ta sama pozycja policzona czystym minimaksem i alfa-betą na tej samej głębokości, z wynikiem, ile węzłów zaoszczędzono.
+- **Board representation** 0x88 (or 10x12 mailbox). State: side to move, castling rights, en passant square, halfmove clock. FEN parsing and generation.
+- **Move generator** with the full rules: castling, en passant, promotion to all 4 pieces, detection of check, checkmate and stalemate, make/unmake move.
+- **Perft** to verify the generator (the tests below must pass).
+- **Search:**
+  - negamax with alpha-beta pruning,
+  - iterative deepening with time and depth limits,
+  - quiescence search (captures) to avoid the horizon effect,
+  - move ordering: PV move first, then captures by MVV-LVA, killer moves, history heuristic,
+  - transposition table with Zobrist hashing,
+  - mate scores with distance to mate (a faster mate is better).
+- **Evaluation function:** material + piece-square tables in a tapered version (separate middlegame and endgame values), bonuses for king safety and mobility. In the UI the evaluation is always shown from White's perspective, in pawns (e.g. +1.5) or as a mate (M3).
+- **MultiPV:** computing the 3 best candidate moves together with their lines.
+- **Search statistics** collected live: depth, node count, nodes/s, number of alpha-beta cutoffs, TT hits, time, principal variation (PV).
+- **Worker protocol:** after each completed depth the worker sends the UI a message `{ depth, scoreCp | mateIn, pv, multiPv, nodes, nps, cutoffs, ttHits, timeMs }`. It handles a `stop` command and new requests without restarting the worker.
+- **Comparison mode** (for the defense): the same position computed with plain minimax and with alpha-beta at the same depth, showing how many nodes were saved.
 
-## 2. Panel „Mózg AI”: co AI myśli
+## 2. The "AI Brain" panel: what the AI is thinking
 
-Panel jest po prawej stronie szachownicy, a na telefonie pod nią. Zawiera:
+The panel sits to the right of the board, and below it on a phone. It contains:
 
-- **Pasek oceny** (eval bar) przy szachownicy, jak na chess.com. Animowany, z wartością typu +1.5 albo M3.
-- **3 najlepsze ruchy kandydujące** z oceną i wariantem w SAN, np. `1. Hxf7+ Kxf7 2. Sg5+ Kg8 3. Sxe6`. Kliknięcie wariantu odtwarza go na szachownicy w trybie podglądu.
-- **Strzałki** na szachownicy: najlepszy ruch na zielono, drugi i trzeci półprzezroczyste.
-- **Liczniki na żywo:** głębokość, węzły, węzły/s, odcięte gałęzie, czas.
-- **„Strumień myśli”:** log zdań po polsku generowanych z danych wyszukiwania przez szablony, bez zewnętrznego LLM. Przykłady:
-  - „Głębokość 4: najlepsze wydaje się Hxf7+ (+3.2). Po Kxf7 Sg5+ wygrywam hetmana.”
-  - „Zmieniam zdanie! Na głębokości 6 widzę mata w 3 po Wd8+.”
-  - „Dzięki alfa-beta pomijam 84% gałęzi.”
+- **Eval bar** next to the board, as on chess.com. Animated, with a value such as +1.5 or M3.
+- **3 best candidate moves** with an evaluation and a line in SAN, e.g. `1. Hxf7+ Kxf7 2. Sg5+ Kg8 3. Sxe6`. Clicking a line replays it on the board in preview mode.
+- **Arrows** on the board: the best move in green, the second and third semi-transparent.
+- **Live counters:** depth, nodes, nodes/s, pruned branches, time.
+- **"Stream of thought":** a log of Polish sentences generated from search data using templates, with no external LLM. Examples:
+  - "Depth 4: Hxf7+ looks best (+3.2). After Kxf7 Sg5+ I win the queen."
+  - "I'm changing my mind! At depth 6 I see mate in 3 after Wd8+."
+  - "Thanks to alpha-beta I skip 84% of the branches."
 
-  Każdą zmianę najlepszego ruchu między głębokościami wyraźnie zaznacz. To pokazuje, że AI naprawdę „myśli”.
-- **Mini drzewo przeszukiwania** (bonus): pierwsze 2 poziomy drzewa z ocenami. Gałęzie odcięte przez alfa-betę są wyszarzone albo przekreślone.
-- **Tryby widoczności**, żeby panel nie zdradzał rozwiązania:
-  - *Ukryty*: w trakcie rozwiązywania widać tylko statystyki i to, że AI liczy. Ruchy i ocena są ukryte.
-  - *Podpowiedź*: przycisk podświetla figurę, którą trzeba ruszyć. Zmniejsza nagrodę rankingową.
-  - *Pełny*: po rozwiązaniu albo porażce widać wszystko, a AI tłumaczy zadanie.
+  Clearly mark every change of the best move between depths. This shows that the AI really "thinks".
+- **Mini search tree** (bonus): the first 2 levels of the tree with evaluations. Branches pruned by alpha-beta are greyed out or struck through.
+- **Visibility modes**, so the panel does not give away the solution:
+  - *Hidden*: while solving, only the statistics and the fact that the AI is computing are visible. Moves and evaluation are hidden.
+  - *Hint*: a button highlights the piece that has to move. It reduces the rating reward.
+  - *Full*: after solving or failing everything is visible, and the AI explains the puzzle.
 
-## 3. Zadania szachowe
+## 3. Chess puzzles
 
-- Źródło: **baza zadań Lichess** (licencja CC0): https://database.lichess.org/lichess_db_puzzle.csv.zst
-  Kolumny: `PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags`.
-- Skrypt `scripts/build-puzzles.ts` wybiera z pobranego CSV około 3000 zadań, równomiernie rozłożonych w przedziale 600–2800 (koszyki co 100 punktów). Bierze tylko zadania z `Popularity > 80` i `NbPlays > 500` i zapisuje je do `src/data/puzzles.json`.
-- Do repozytorium dołącz mały zestaw startowy (około 50 prawdziwych zadań z bazy Lichess, z różnymi rankingami i motywami), żeby aplikacja działała bez pobierania całej bazy.
-- **Uwaga na format Lichess:** `FEN` to pozycja **przed** ruchem przeciwnika. Pierwszy ruch z `Moves` wykonuje przeciwnik (z animacją), dopiero potem gracz zaczyna rozwiązywać. Ruchy są zapisane w UCI. Gracz gra stroną, która jest na ruchu po tym pierwszym ruchu, więc obróć szachownicę na jego stronę.
-- Odpowiedzi przeciwnika w trakcie zadania wykonuj automatycznie, z opóźnieniem około 400 ms.
-- **Alternatywne rozwiązania:**
-  - jeśli ruch gracza różni się od wzorcowego, ale daje mata, zadanie jest rozwiązane,
-  - jeśli według silnika ruch nadal wyraźnie wygrywa (np. ocena > +3 i najwyżej 50 cp gorsza od najlepszej), pokaż „Dobry ruch, ale jest lepszy. Spróbuj jeszcze raz” i nie licz tego jako błędu.
-- **Motywy** przetłumacz na polski i pokazuj po rozwiązaniu: fork → widełki, pin → związanie, skewer → przeszycie, discoveredAttack → odsłona, sacrifice → poświęcenie, deflection → odciągnięcie, attraction → przyciąganie, backRankMate → mat na ostatniej linii, hangingPiece → wisząca figura, mateIn1/2/3 → mat w 1/2/3, endgame → końcówka itd.
-- **Po błędnym ruchu** AI pokazuje odpowiedź przeciwnika wyliczoną przez silnik, np. „Po Wd1? przeciwnik gra Hxh2#. Mat.” Potem gracz może wybrać „Spróbuj ponownie” albo „Pokaż rozwiązanie”.
+- Source: **the Lichess puzzle database** (CC0 license): https://database.lichess.org/lichess_db_puzzle.csv.zst
+  Columns: `PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags`.
+- The script `scripts/build-puzzles.ts` selects about 3000 puzzles from the downloaded CSV, evenly distributed over the 600–2800 range (buckets of 100 points). It takes only puzzles with `Popularity > 80` and `NbPlays > 500` and writes them to `src/data/puzzles.json`.
+- Include a small starter set in the repository (about 50 real puzzles from the Lichess database, with varied ratings and themes), so the app works without downloading the whole database.
+- **Beware of the Lichess format:** `FEN` is the position **before** the opponent's move. The first move in `Moves` is played by the opponent (with an animation); only then does the player start solving. Moves are written in UCI. The player plays the side to move after that first move, so flip the board to their side.
+- Play the opponent's replies during the puzzle automatically, with a delay of about 400 ms.
+- **Alternative solutions:**
+  - if the player's move differs from the reference move but delivers mate, the puzzle is solved,
+  - if according to the engine the move still clearly wins (e.g. evaluation > +3 and at most 50 cp worse than the best), show "Good move, but there is a better one. Try again" and do not count it as a mistake.
+- **Themes**: translate them into Polish and show them after solving: fork → widełki, pin → związanie, skewer → przeszycie, discoveredAttack → odsłona, sacrifice → poświęcenie, deflection → odciągnięcie, attraction → przyciąganie, backRankMate → mat na ostatniej linii, hangingPiece → wisząca figura, mateIn1/2/3 → mat w 1/2/3, endgame → końcówka, etc.
+- **After a wrong move** the AI shows the opponent's reply computed by the engine, e.g. "After Wd1? the opponent plays Hxh2#. Mate." Then the player can choose "Try again" or "Show solution".
 
-## 4. Adaptacyjny ranking ELO i dobór zadań
+## 4. Adaptive Elo rating and puzzle selection
 
-### Ranking gracza
+### Player rating
 
-- Start: 1200. Przez pierwsze 10 zadań trwa kalibracja z wysokim współczynnikiem K (np. 60). Potem K spada do 32, a po 50 zadaniach do 20.
-- Oczekiwany wynik: `E = 1 / (1 + 10^((R_zadania − R_gracza) / 400))`
-- Zmiana rankingu: `ΔR = K · (S − E)`
-- Wynik `S` nie jest zero-jedynkowy:
-  - 1.0: rozwiązane bez błędu i bez podpowiedzi,
-  - 0.5: rozwiązane z podpowiedzią,
-  - 0.0: błędny ruch (nawet jeśli gracz potem dokończy zadanie),
-  - lekka kara za bardzo długi czas (powyżej 3× przeciętnego czasu gracza), maksymalnie −0.2.
-- Bonus: zamiast Elo zaimplementuj Glicko-2 z odchyleniem rankingu (RD) i pokazuj przedział niepewności, np. „1450 ± 80”.
+- Start: 1200. The first 10 puzzles are a calibration with a high K factor (e.g. 60). Then K drops to 32, and after 50 puzzles to 20.
+- Expected score: `E = 1 / (1 + 10^((R_puzzle − R_player) / 400))`
+- Rating change: `ΔR = K · (S − E)`
+- The score `S` is not binary:
+  - 1.0: solved without a mistake and without a hint,
+  - 0.5: solved with a hint,
+  - 0.0: a wrong move (even if the player finishes the puzzle afterwards),
+  - a slight penalty for a very long time (over 3× the player's average time), at most −0.2.
+- Bonus: instead of Elo, implement Glicko-2 with rating deviation (RD) and show the uncertainty interval, e.g. "1450 ± 80".
 
-### Dobór kolejnego zadania (drugi element AI: model gracza)
+### Choosing the next puzzle (the second AI element: the player model)
 
-- Celuj w około 65% szans na sukces („strefa flow”): docelowy ranking zadania ≈ `R_gracza − 100`, z losowym rozrzutem ±75.
-- **Model gracza** śledzi skuteczność w każdym motywie (widełki, związania, maty…). Około 30% zadań pochodzi z najsłabszych motywów gracza.
-- **Ochrona przed frustracją:** po 3 porażkach z rzędu kolejne zadanie jest wyraźnie łatwiejsze. Po 5 sukcesach z rzędu pojawia się „zadanie bonusowe” trudniejsze o około 200.
-- Zadania się nie powtarzają, a motywy są zróżnicowane.
-- Każdą decyzję o doborze zadania pokaż w okienku „Dlaczego to zadanie?”, np. „Ranking zadania 1380, celuję w 65% szans. Twoja słaba strona: związania (41%)”.
+- Aim for about a 65% chance of success (the "flow zone"): target puzzle rating ≈ `R_player − 100`, with a random spread of ±75.
+- The **player model** tracks success in each theme (forks, pins, mates…). About 30% of puzzles come from the player's weakest themes.
+- **Frustration protection:** after 3 failures in a row the next puzzle is noticeably easier. After 5 successes in a row a "bonus puzzle" about 200 harder appears.
+- Puzzles do not repeat, and themes are varied.
+- Show every puzzle-selection decision in a "Why this puzzle?" popup, e.g. "Puzzle rating 1380, aiming for a 65% chance. Your weak spot: pins (41%)".
 
-### Prezentacja rankingu
+### Rating presentation
 
-- Duży ranking na górze ekranu z animowaną zmianą po każdym zadaniu (+12 na zielono, −9 na czerwono).
-- Ranking zadania widoczny po jego zakończeniu (jak na chess.com).
-- Seria (streak) z ikoną ognia.
+- A large rating at the top of the screen with an animated change after each puzzle (+12 in green, −9 in red).
+- The puzzle's rating is visible after it is finished (as on chess.com).
+- A streak with a fire icon.
 
-## 5. UI/UX w stylu chess.com
+## 5. UI/UX in the style of chess.com
 
-- Ciemny motyw (tło `#312e2b`), klasyczna zielona szachownica (`#769656` / `#eeeed2`), podświetlenie ostatniego ruchu, kropki na polach legalnych ruchów, okno wyboru figury przy promocji.
-- Animacje ruchów i dźwięki (ruch, bicie, szach, sukces, błąd). Dźwięki generowane przez Web Audio API albo pliki z licencją, która pozwala ich użyć.
-- Informacja zwrotna: zielony ✓ albo czerwony ✗ na polu docelowym ruchu oraz komunikaty „Najlepszy ruch!” i „Niestety, to nie to”.
-- Przyciski: Podpowiedź, Pokaż rozwiązanie, Spróbuj ponownie, Następne zadanie oraz przełącznik trybu panelu AI.
-- Ekran statystyk: wykres rankingu w czasie, skuteczność w każdym motywie (wykres radarowy albo słupkowy), liczba zadań, najlepsza seria, średni czas.
-- Responsywność: na desktopie szachownica z panelem obok; na telefonie panel pod szachownicą, a poziomy pasek oceny nad nią.
-- Ekran startowy z nazwą gry i przyciskami „Graj”, „Statystyki” oraz „Jak działa AI?”. Ta ostatnia strona tłumaczy algorytmy dla prowadzącego i zawiera interaktywne porównanie minimaksu z alfa-betą.
+- Dark theme (background `#312e2b`), classic green board (`#769656` / `#eeeed2`), last-move highlight, dots on legal-move squares, a piece picker on promotion.
+- Move animations and sounds (move, capture, check, success, mistake). Sounds generated with the Web Audio API or files with a license that permits their use.
+- Feedback: a green ✓ or red ✗ on the move's target square, plus the messages "Best move!" and "Sorry, that's not it".
+- Buttons: Hint, Show solution, Try again, Next puzzle, and an AI-panel mode toggle.
+- Statistics screen: rating chart over time, success rate per theme (radar or bar chart), number of puzzles, best streak, average time.
+- Responsiveness: on desktop the board with the panel beside it; on a phone the panel below the board and a horizontal eval bar above it.
+- A start screen with the game's name and the buttons "Play", "Statistics" and "How does the AI work?". The last page explains the algorithms for the instructor and includes an interactive comparison of minimax and alpha-beta.
 
-## Architektura
+## Architecture
 
 ```
 src/
-  engine/    # własny silnik: board.ts, movegen.ts, eval.ts, search.ts, zobrist.ts, tt.ts, worker.ts
-  rating/    # elo.ts (albo glicko2.ts), selector.ts, playerModel.ts
-  puzzles/   # loader.ts, themes.ts (tłumaczenia), validator.ts
+  engine/    # own engine: board.ts, movegen.ts, eval.ts, search.ts, zobrist.ts, tt.ts, worker.ts
+  rating/    # elo.ts (or glicko2.ts), selector.ts, playerModel.ts
+  puzzles/   # loader.ts, themes.ts (translations), validator.ts
   ui/        # Board, EvalBar, AIBrainPanel, ThoughtStream, SearchTree, RatingBadge, StatsPage…
-  hooks/     # useEngine.ts (komunikacja z workerem), usePuzzleSession.ts
+  hooks/     # useEngine.ts (communication with the worker), usePuzzleSession.ts
   data/      # puzzles.json
 scripts/build-puzzles.ts
 tests/
 ```
 
-Logika gry i silnik są oddzielone od komponentów React: czyste funkcje, łatwe do testowania.
+Game logic and the engine are separated from the React components: pure functions, easy to test.
 
-## Testy (Vitest): muszą przechodzić
+## Tests (Vitest): must pass
 
-- Perft z pozycji startowej, głębokości 1–4: 20, 400, 8 902, 197 281.
-- Perft „Kiwipete” `r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1`, głębokości 1–3: 48, 2 039, 97 862.
-- Perft „pozycja 3” `8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1`, głębokości 1–4: 14, 191, 2 812, 43 238.
-- Silnik znajduje mata w 1, 2 i 3 w kilku znanych pozycjach.
-- Na małej głębokości alfa-beta zwraca ten sam wynik co czysty minimaks, ale odwiedza mniej węzłów.
-- Elo: poprawne E i ΔR dla przykładowych wartości. Selektor zadań trafia w docelowy przedział rankingu.
+- Perft from the starting position, depths 1–4: 20, 400, 8,902, 197,281.
+- Perft "Kiwipete" `r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1`, depths 1–3: 48, 2,039, 97,862.
+- Perft "position 3" `8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1`, depths 1–4: 14, 191, 2,812, 43,238.
+- The engine finds mate in 1, 2 and 3 in several known positions.
+- At a small depth, alpha-beta returns the same result as plain minimax but visits fewer nodes.
+- Elo: correct E and ΔR for sample values. The puzzle selector hits the target rating range.
 
-## Etapy pracy
+## Work stages
 
-Pracuj etapami. Po każdym etapie aplikacja musi się uruchamiać (`npm run dev`), a testy przechodzić. Na koniec każdego etapu krótko podsumuj, co zrobiłeś.
+Work in stages. After each stage the app must start (`npm run dev`) and the tests must pass. At the end of each stage, briefly summarize what you did.
 
-1. Szkielet projektu, szachownica, wczytanie zestawu startowego, rozwiązywanie zadań (jeszcze bez AI i rankingu).
-2. Silnik: plansza, generator ruchów, testy perft.
-3. Wyszukiwanie, funkcja oceny, worker, testy matów.
-4. Panel „Mózg AI”: eval bar, strzałki, strumień myśli, tryby widoczności.
-5. Ranking Elo, model gracza, dobór zadań, okienko „Dlaczego to zadanie?”.
-6. Statystyki, ekran startowy, strona „Jak działa AI?”, dźwięki, animacje, responsywność.
-7. Skrypt `build-puzzles.ts` i README.
+1. Project skeleton, board, loading the starter set, solving puzzles (no AI or rating yet).
+2. Engine: board, move generator, perft tests.
+3. Search, evaluation function, worker, mate tests.
+4. "AI Brain" panel: eval bar, arrows, stream of thought, visibility modes.
+5. Elo rating, player model, puzzle selection, "Why this puzzle?" popup.
+6. Statistics, start screen, "How does the AI work?" page, sounds, animations, responsiveness.
+7. The `build-puzzles.ts` script and the README.
 
-## README: dokumentacja na obronę
+## README: documentation for the defense
 
-README po polsku zawiera:
+The README, in Polish, contains:
 
-- opis gry i instrukcję uruchomienia,
-- opis algorytmów: minimaks, alfa-beta (z pseudokodem), iterative deepening, quiescence search, tablica transpozycji, funkcja oceny, Elo/Glicko, dobór zadań,
-- diagram architektury (Mermaid),
-- tabelę z pomiarami: liczba węzłów dla minimaksu, alfa-bety i alfa-bety z porządkowaniem ruchów na głębokościach 1–5,
-- sekcję „Decyzje projektowe”,
-- źródła (baza zadań Lichess, CC0).
+- a description of the game and instructions for running it,
+- a description of the algorithms: minimax, alpha-beta (with pseudocode), iterative deepening, quiescence search, transposition table, evaluation function, Elo/Glicko, puzzle selection,
+- an architecture diagram (Mermaid),
+- a table of measurements: node counts for minimax, alpha-beta and alpha-beta with move ordering at depths 1–5,
+- a "Design decisions" section,
+- sources (Lichess puzzle database, CC0).
 
-## Zasady
+## Rules
 
-- Żadnych placeholderów ani „TODO: zaimplementuj”. Każda funkcja ma działać.
-- TypeScript strict, bez `any`.
-- Nie używaj Stockfisha ani żadnego innego gotowego silnika do liczenia ruchów AI.
-- Jeśli coś jest niejasne albo musisz wybrać jedno z dwóch podejść, wybierz rozsądniejsze, zapisz decyzję w README w sekcji „Decyzje projektowe” i pracuj dalej.
+- No placeholders or "TODO: implement". Every function must work.
+- TypeScript strict, no `any`.
+- Do not use Stockfish or any other ready-made engine to compute the AI's moves.
+- If something is unclear or you have to choose between two approaches, pick the more sensible one, record the decision in the README under "Design decisions", and keep going.

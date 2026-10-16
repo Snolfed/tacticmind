@@ -1,4 +1,4 @@
-// Ekran startowy: nazwa gry, opis, przyciski i ozdobna szachownica, na której AI pokazuje mata.
+// Home screen: game title, description, buttons and a decorative board on which the AI shows a mate.
 
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { go } from "../api";

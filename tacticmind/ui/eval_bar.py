@@ -1,4 +1,4 @@
-"""Pasek oceny (eval bar): sprężyście animowany, z wartością typu +1.5 albo M3."""
+"""Evaluation bar: spring-animated, showing a value such as +1.5 or M3."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .widgets import draw_text
 
 
 def white_share(score: EngineScore) -> float:
-    """Jaka część paska należy do białych (0..1). Ocena w pionach przechodzi przez funkcję logistyczną."""
+    """Fraction of the bar belonging to White (0..1). The pawn evaluation is passed through a logistic function."""
     if score.mate is not None:
         if score.mate == 0:
             return 1.0 if score.value > 0 else 0.0
@@ -72,7 +72,7 @@ class EvalBar:
             h = round(rect.height * share)
             white = pygame.Rect(0, rect.height - h, rect.width, h) if self.white_bottom else pygame.Rect(0, 0, rect.width, h)
         pygame.draw.rect(canvas, light, white)
-        # Delikatna linia środka (ocena 0.0)
+        # Subtle centre line (evaluation 0.0)
         if self.horizontal:
             pygame.draw.line(canvas, (*theme.ACCENT[:3], 160), (rect.width // 2, 0), (rect.width // 2, rect.height))
         else:
@@ -80,7 +80,7 @@ class EvalBar:
         canvas.blit(gfx.rounded_mask(rect.size, radius), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         surface.blit(canvas, rect.topleft)
         gfx.rrect(surface, (255, 255, 255, 25), rect, radius, max(1, px(1)))
-        # Wartość po stronie, która wygrywa.
+        # Value shown on the winning side.
         color = (30, 33, 44) if self.white_winning else (236, 239, 246)
         size = fs(11) if not self.horizontal else fs(12)
         if self.horizontal:

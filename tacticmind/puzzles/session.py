@@ -1,18 +1,18 @@
-"""Przebieg rozwiązywania jednego zadania (czysta logika, bez interfejsu).
+"""The flow of solving a single puzzle (pure logic, no interface).
 
-Stany::
+States::
 
-    INTRO ──(ruch przeciwnika)──▶ PLAYER ──(dobry ruch)──▶ OPPONENT ──(odpowiedź)──▶ PLAYER …
-                                     │                                         ▲
-                                     ├──(ruch spoza wzorca)──▶ CHECKING ──(„dobry, ale jest lepszy”)
-                                     │                             │
-                                     │                             └──(błąd)──▶ MISTAKE ──(spróbuj ponownie)──▶ PLAYER
-                                     └──(ostatni dobry ruch albo mat)──▶ SOLVED
-    MISTAKE/PLAYER ──(pokaż rozwiązanie)──▶ REVEALED
+    INTRO ──(opponent's move)──▶ PLAYER ──(good move)──▶ OPPONENT ──(reply)──▶ PLAYER …
+                                   │                                     ▲
+                                   ├──(move off the solution)──▶ CHECKING ──("good, but there is better")
+                                   │                                │
+                                   │                                └──(mistake)──▶ MISTAKE ──(try again)──▶ PLAYER
+                                   └──(last good move or mate)──▶ SOLVED
+    MISTAKE/PLAYER ──(show solution)──▶ REVEALED
 
-Wynik rankingowy (``outcome``) ustalamy tylko raz: przy pierwszym błędzie,
-przy rozwiązaniu albo przy pokazaniu rozwiązania. Późniejsze dokończenie
-zadania po błędzie nie zmienia już rankingu (jak na chess.com).
+The rating outcome (``outcome``) is decided only once: at the first mistake,
+on solving, or when the solution is shown. Finishing the puzzle later
+after a mistake no longer changes the rating (as on chess.com).
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class Verdict(Enum):
 
 @dataclass(frozen=True)
 class PuzzleOutcome:
-    """Wynik zadania potrzebny do aktualizacji rankingu."""
+    """Puzzle result needed for the rating update."""
 
     solved: bool
     mistake: bool
@@ -66,7 +66,7 @@ class PuzzleSession:
         self.board = chess.Board(puzzle.fen)
         self.solution = [chess.Move.from_uci(m) for m in puzzle.moves]
         self.player_color = puzzle.player_color
-        self.ply = 0  # indeks następnego ruchu z rozwiązania
+        self.ply = 0  # index of the next move of the solution
         self.status = Status.INTRO
         self.mistake = False
         self.hint_used = False
@@ -80,9 +80,9 @@ class PuzzleSession:
         self.started_at: float | None = None
         self.finished_at: float | None = None
 
-    # ------------------------------------------------------------ przebieg
+    # ------------------------------------------------------------ flow
     def play_intro(self) -> chess.Move:
-        """Pierwszy ruch przeciwnika (z bazy Lichess). Potem zaczyna się zadanie gracza."""
+        """The opponent's first move (from the Lichess database). Then the player's task begins."""
         assert self.status == Status.INTRO
         move = self.solution[0]
         self.board.push(move)
@@ -102,7 +102,7 @@ class PuzzleSession:
         return self.status in (Status.SOLVED, Status.REVEALED)
 
     def submit(self, move: chess.Move) -> Verdict:
-        """Ruch gracza."""
+        """The player's move."""
         if self.status != Status.PLAYER:
             return Verdict.NOT_YOUR_TURN
         if move not in self.board.legal_moves:
@@ -117,15 +117,15 @@ class PuzzleSession:
                 return Verdict.SOLVED if move == expected else Verdict.SOLVED_ALT_MATE
             self.status = Status.OPPONENT
             return Verdict.CORRECT
-        # Ruch spoza rozwiązania: decyzję podejmie silnik (może to „dobry ruch, ale jest lepszy”).
+        # A move outside the solution: the engine decides (it may be "a good move, but there is a better one").
         self.pending = move
         self.status = Status.CHECKING
         return Verdict.NEEDS_ENGINE
 
     def resolve(self, alternative: Alternative, refutation: chess.Move | None) -> Verdict:
-        """Werdykt silnika dla ruchu spoza rozwiązania.
+        """The engine's verdict for a move outside the solution.
 
-        :param refutation: najlepsza odpowiedź przeciwnika wyliczona przez silnik (dla błędu).
+        :param refutation: the opponent's best reply computed by the engine (for a mistake).
         """
         assert self.status == Status.CHECKING and self.pending is not None
         move = self.pending
@@ -146,7 +146,7 @@ class PuzzleSession:
         return Verdict.MISTAKE
 
     def opponent_reply(self) -> chess.Move:
-        """Odpowiedź przeciwnika z rozwiązania (interfejs wywołuje ją z opóźnieniem ok. 400 ms)."""
+        """The opponent's reply from the solution (the interface calls it with a ~400 ms delay)."""
         assert self.status == Status.OPPONENT
         move = self.solution[self.ply]
         self.board.push(move)
@@ -155,13 +155,13 @@ class PuzzleSession:
         return move
 
     def retry(self) -> None:
-        """„Spróbuj ponownie”: cofnij błędny ruch (i odpowiedź przeciwnika)."""
+        """"Try again": take back the wrong move (and the opponent's reply)."""
         assert self.status == Status.MISTAKE
         self._undo_mistake()
         self.status = Status.PLAYER
 
     def reveal(self) -> list[chess.Move]:
-        """„Pokaż rozwiązanie”: zwraca pozostałe ruchy rozwiązania do odegrania na planszy."""
+        """"Show solution": returns the remaining solution moves to be played on the board."""
         if self.status == Status.MISTAKE:
             self._undo_mistake()
         if self.status == Status.CHECKING:
@@ -175,22 +175,22 @@ class PuzzleSession:
         return remaining
 
     def forfeit(self) -> None:
-        """Gracz włączył pełny podgląd analizy przed końcem zadania: wynik jak przy pokazaniu rozwiązania.
+        """The player turned on the full analysis view before the puzzle ended: same outcome as showing the solution.
 
-        Zadanie można potem dokończyć dla treningu, ale ranking już się nie zmieni.
+        The puzzle can then be finished for practice, but the rating will no longer change.
         """
         if self.outcome is None:
             self.revealed = True
             self._set_outcome(solved=False)
 
     def push_revealed(self, move: chess.Move) -> None:
-        """Odgrywa kolejny ruch pokazywanego rozwiązania."""
+        """Plays the next move of the solution being shown."""
         assert self.status == Status.REVEALED
         self.board.push(move)
         self.ply += 1
 
     def hint(self) -> chess.Square | None:
-        """Podpowiedź: pole figury, którą trzeba ruszyć. Zmniejsza nagrodę rankingową."""
+        """Hint: the square of the piece that has to move. Reduces the rating reward."""
         expected = self.expected_move
         if expected is None:
             return None
@@ -199,7 +199,7 @@ class PuzzleSession:
         return expected.from_square
 
     def take_outcome(self) -> PuzzleOutcome | None:
-        """Wynik do zaksięgowania w rankingu — zwracany tylko raz."""
+        """The result to record in the rating — returned only once."""
         if self.outcome is None or self._outcome_taken:
             return None
         self._outcome_taken = True
@@ -211,7 +211,7 @@ class PuzzleSession:
         end = self.finished_at if self.finished_at is not None else self._clock()
         return max(0.0, end - self.started_at)
 
-    # ------------------------------------------------------------ pomocnicze
+    # ------------------------------------------------------------ helpers
     def _undo_mistake(self) -> None:
         if self.refutation is not None:
             self.board.pop()

@@ -1,4 +1,4 @@
-"""Okienko ustawień pod kołem zębatym w górnym pasku: licznik FPS i limit klatek na sekundę."""
+"""Settings popup under the gear in the top bar: FPS counter and frame-rate limit."""
 
 from __future__ import annotations
 
@@ -45,13 +45,13 @@ class SettingsPanel:
         self.app.save()
 
     def layout(self, anchor: pygame.Rect, screen_w: int) -> None:
-        """Okienko pod przyciskiem ustawień, w całości w oknie."""
+        """Popup below the settings button, kept fully inside the window."""
         w, h = px(330), px(196)
         x = min(max(px(12), anchor.centerx - w // 2), screen_w - px(12) - w)
         self.rect = pygame.Rect(x, anchor.bottom + px(8), w, h)
 
     def handle(self, event: pygame.event.Event) -> bool:
-        """Zdarzenia dla otwartego okienka; ``True`` = zdarzenie obsłużone (nie idzie dalej)."""
+        """Events for the open popup; ``True`` = event handled (not propagated further)."""
         if not self.open:
             return False
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -66,14 +66,14 @@ class SettingsPanel:
                 if event.button == 1 and not self.show_fps.handle(event):
                     self.fps_limit.handle(event)
                 return True
-            # Klik obok zamyka okienko (klik w koło zębate obsłuży pasek — on też je zamknie).
+            # A click outside closes the popup (a click on the gear is handled by the bar, which closes it too).
             if not self.app.topbar.settings.rect.collidepoint(event.pos):
                 self.open = False
             return False
         return event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos())
 
     def draw(self, surface: pygame.Surface) -> None:
-        # Profil mógł się zmienić z innego miejsca (np. F3).
+        # The profile may have changed elsewhere (e.g. F3).
         self.show_fps.value = "on" if self.app.profile.show_fps else "off"
         self.fps_limit.value = str(self.app.profile.fps_limit)
         if not self.open:

@@ -1,4 +1,4 @@
-"""Wspólna baza ekranów."""
+"""Common base class for screens."""
 
 from __future__ import annotations
 
@@ -18,25 +18,25 @@ class Screen:
         self.rect = pygame.Rect(0, 0, 0, 0)
 
     def enter(self) -> None:
-        """Ekran staje się aktywny."""
+        """The screen becomes active."""
 
     def leave(self) -> None:
-        """Ekran przestaje być aktywny."""
+        """The screen stops being active."""
 
     def layout(self, rect: pygame.Rect) -> None:
         self.rect = rect
 
     def handle(self, event: pygame.event.Event) -> None:
-        """Obsługa zdarzeń myszy i klawiatury."""
+        """Handles mouse and keyboard events."""
 
     def update(self, dt: float) -> None:
-        """Logika co klatkę."""
+        """Per-frame logic."""
 
     def draw(self, surface: pygame.Surface) -> None:
-        """Rysowanie."""
+        """Drawing."""
 
     def on_engine(self, event: EngineEvent) -> None:
-        """Wiadomość od procesu silnika."""
+        """A message from the engine process."""
 
     def on_language_change(self) -> None:
-        """Zmieniono język interfejsu — ekran może przebudować teksty wygenerowane wcześniej."""
+        """The UI language changed — the screen may rebuild previously generated texts."""

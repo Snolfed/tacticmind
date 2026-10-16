@@ -1,9 +1,9 @@
-"""Generator ruchów dla planszy 0x88, wykrywanie szacha/mata/pata i perft.
+"""Move generator for the 0x88 board, check/checkmate/stalemate detection and perft.
 
-Generujemy ruchy pseudolegalne (zgodne z ruchem figur, ale mogące zostawić
-własnego króla w szachu), a legalność sprawdzamy po wykonaniu ruchu: jeśli
-nasz król jest atakowany, ruch cofamy. To prostsze i mniej podatne na błędy
-niż wykrywanie związań przed wykonaniem ruchu.
+We generate pseudo-legal moves (following piece movement, but possibly leaving
+our own king in check) and check legality after making the move: if our king
+is attacked, the move is undone. This is simpler and less error-prone than
+detecting pins before making the move.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from .constants import (
 
 
 def is_square_attacked(board: Board, s: int, by: int) -> bool:
-    """Czy pole ``s`` jest atakowane przez stronę ``by``?"""
+    """Is square ``s`` attacked by side ``by``?"""
     sq = board.sq
     pawn = (by << 3) | PAWN
     for f in PAWN_ATTACKERS[by][s]:
@@ -54,7 +54,7 @@ def is_square_attacked(board: Board, s: int, by: int) -> bool:
     for f in KING_TARGETS[s]:
         if sq[f] == king:
             return True
-    # Figury dalekosiężne: idziemy promieniem aż do pierwszej przeszkody.
+    # Sliding pieces: walk along the ray up to the first obstacle.
     bishop = (by << 3) | BISHOP
     queen = (by << 3) | QUEEN
     for ray in BISHOP_RAYS[s]:
@@ -76,14 +76,14 @@ def is_square_attacked(board: Board, s: int, by: int) -> bool:
 
 
 def in_check(board: Board) -> bool:
-    """Czy strona na ruchu jest w szachu?"""
+    """Is the side to move in check?"""
     return is_square_attacked(board, board.kings[board.side], board.side ^ 1)
 
 
 def generate_moves(board: Board, captures_only: bool = False) -> list[int]:
-    """Ruchy pseudolegalne strony na ruchu.
+    """Pseudo-legal moves of the side to move.
 
-    :param captures_only: tylko bicia i promocje (dla quiescence search).
+    :param captures_only: only captures and promotions (for quiescence search).
     """
     moves: list[int] = []
     add = moves.append
@@ -104,7 +104,7 @@ def generate_moves(board: Board, captures_only: bool = False) -> list[int]:
             one = frm + forward
             if not (one & 0x88) and sq[one] == EMPTY:
                 if (one >> 4) == promo_rank:
-                    # Promocja na wszystkie 4 figury (hetman pierwszy).
+                    # Promotion to all 4 pieces (queen first).
                     for promo in (QUEEN, ROOK, BISHOP, KNIGHT):
                         add(frm | (one << 7) | (promo << 14))
                 elif not captures_only:
@@ -136,7 +136,7 @@ def generate_moves(board: Board, captures_only: bool = False) -> list[int]:
                     add(frm | (to << 7) | FLAG_CAPTURE)
             continue
 
-        # Goniec, wieża, hetman: przesuwamy się promieniem do pierwszej przeszkody.
+        # Bishop, rook, queen: slide along the ray up to the first obstacle.
         rays = BISHOP_RAYS[frm] if kind == BISHOP else ROOK_RAYS[frm] if kind == ROOK else QUEEN_RAYS[frm]
         for ray in rays:
             for to in ray:
@@ -155,7 +155,7 @@ def generate_moves(board: Board, captures_only: bool = False) -> list[int]:
 
 
 def _generate_castling(board: Board, add: Callable[[int], None]) -> None:
-    """Roszady: pola między królem a wieżą puste, król nie przechodzi przez atakowane pole."""
+    """Castling: squares between king and rook empty, the king doesn't pass through an attacked square."""
     sq = board.sq
     us = board.side
     them = us ^ 1
@@ -190,7 +190,7 @@ def _generate_castling(board: Board, add: Callable[[int], None]) -> None:
 
 
 def make_legal_move(board: Board, move: int) -> bool:
-    """Wykonuje ruch; jeśli zostawia własnego króla w szachu — cofa go i zwraca False."""
+    """Make the move; if it leaves our own king in check, undo it and return False."""
     us = board.side
     board.make_move(move)
     if is_square_attacked(board, board.kings[us], us ^ 1):
@@ -220,12 +220,12 @@ _PROMO_CHARS = ("", "", "n", "b", "r", "q")
 
 
 def move_to_uci(move: int) -> str:
-    """Ruch w notacji UCI, np. ``e2e4``, ``e7e8q``."""
+    """Move in UCI notation, e.g. ``e2e4``, ``e7e8q``."""
     return square_name(move & 0x7F) + square_name((move >> 7) & 0x7F) + _PROMO_CHARS[(move >> 14) & 7]
 
 
 def parse_uci_move(board: Board, uci: str) -> int:
-    """Zamienia napis UCI na legalny ruch silnika (albo 0, jeśli ruch nielegalny)."""
+    """Convert a UCI string to a legal engine move (or 0 if the move is illegal)."""
     for move in legal_moves(board):
         if move_to_uci(move) == uci:
             return move
@@ -233,9 +233,9 @@ def parse_uci_move(board: Board, uci: str) -> int:
 
 
 def perft(board: Board, depth: int) -> int:
-    """Liczba liści drzewa legalnych ruchów na danej głębokości.
+    """Number of leaves of the legal move tree at the given depth.
 
-    Porównanie ze znanymi wartościami to standardowy test poprawności generatora.
+    Comparing against known values is the standard move generator correctness test.
     """
     if depth == 0:
         return 1
@@ -249,7 +249,7 @@ def perft(board: Board, depth: int) -> int:
 
 
 def divide(board: Board, depth: int) -> dict[str, int]:
-    """Perft z podziałem na ruchy z korzenia (narzędzie do szukania błędów generatora)."""
+    """Perft split by root move (a tool for hunting move generator bugs)."""
     result = {}
     for move in legal_moves(board):
         board.make_move(move)

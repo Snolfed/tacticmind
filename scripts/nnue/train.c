@@ -1,16 +1,16 @@
 /*
- * Trener sieci NNUE dla TacticMind (CPU, OpenMP).
+ * NNUE network trainer for TacticMind (CPU, OpenMP).
  *
- * Uczy sieć (768 → 256) × 2 → 1 (osobne wyjście dla 8 faz gry) z aktywacją SCReLU na pozycjach z gier
- * silnika z samym sobą (tmengine datagen). Cel uczenia to mieszanka:
- *   λ · sigmoid(ocena_silnika / 400) + (1 − λ) · wynik_partii
- * a funkcja straty to błąd kwadratowy między tym celem a sigmoid(wyjście sieci).
- * Optymalizator: Adam. Na koniec wagi są kwantowane do int16 i zapisywane
- * w formacie, który czyta tacticmind/engine/native/nnue.c.
+ * Trains a (768 → 256) × 2 → 1 network (a separate output for each of 8 game phases) with SCReLU activation
+ * on positions from the engine's self-play games (tmengine datagen). The training target is a mix:
+ *   λ · sigmoid(engine_eval / 400) + (1 − λ) · game_result
+ * and the loss is the squared error between that target and sigmoid(network output).
+ * Optimizer: Adam. At the end the weights are quantized to int16 and saved
+ * in the format read by tacticmind/engine/native/nnue.c.
  *
- * Kompilacja i użycie (patrz scripts/nnue/README.md):
+ * Build and usage (see scripts/nnue/README.md):
  *   gcc -O3 -march=native -fopenmp scripts/nnue/train.c -o train -lm
- *   ./train -o tacticmind.nnue -e 30 -l 1.0 dane1.bin dane2.bin …
+ *   ./train -o tacticmind.nnue -e 30 -l 1.0 data1.bin data2.bin …
  */
 #include <math.h>
 #include <stdint.h>
@@ -31,7 +31,7 @@
 #define SCALE 400.0f
 #define BATCH 16384
 #define CLIP 1.98f
-/* Kubełki wyjścia: osobna warstwa wyjściowa dla każdej fazy gry (liczby figur na planszy). */
+/* Output buckets: a separate output layer for each game phase (number of pieces on the board). */
 #ifndef BUCKETS
 #define BUCKETS 8
 #endif
@@ -84,7 +84,7 @@ static int features(const PackedPos *p, int *fw, int *fb) {
 
 static inline float sigmoidf(float x) { return 1.0f / (1.0f + expf(-x)); }
 
-/* Przejście w przód (i opcjonalnie wstecz) dla jednej pozycji. Zwraca stratę. */
+/* Forward (and optionally backward) pass for one position. Returns the loss. */
 static float run(const PackedPos *p, Params *grad) {
     int fw[32], fb[32];
     int n = features(p, fw, fb);
@@ -156,7 +156,7 @@ static void save(const char *path) {
         float ob = P.out_b[b] * QA * QB;
         q[k++] = (int16_t)(ob > 32767 ? 32767 : ob < -32768 ? -32768 : lrintf(ob));
     }
-    fwrite(q, sizeof(int16_t), k, f); /* zakładamy little-endian (x86, ARM) */
+    fwrite(q, sizeof(int16_t), k, f); /* assumes little-endian (x86, ARM) */
     free(q);
     fclose(f);
 }
@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "-i") && i + 1 < argc) init = argv[++i];
         else files[nfiles++] = argv[i];
     }
-    /* Wczytanie danych */
+    /* Load the data */
     size_t total = 0, cap = 1 << 20;
     PackedPos *data = malloc(sizeof(PackedPos) * cap);
     for (int i = 0; i < nfiles; i++) {
@@ -197,10 +197,10 @@ int main(int argc, char **argv) {
         fclose(f);
     }
     if (total < 1000) {
-        fprintf(stderr, "za malo danych (%zu)\n", total);
+        fprintf(stderr, "not enough data (%zu)\n", total);
         return 1;
     }
-    for (size_t i = total - 1; i > 0; i--) { /* tasowanie */
+    for (size_t i = total - 1; i > 0; i--) { /* shuffle */
         size_t j = rnd() % (i + 1);
         PackedPos t = data[i];
         data[i] = data[j];
@@ -210,15 +210,15 @@ int main(int argc, char **argv) {
     size_t ntrain = total - nval;
     PackedPos *val = data + ntrain;
     if (ntrain < BATCH) {
-        fprintf(stderr, "za malo danych: %zu pozycji treningowych, potrzeba co najmniej %d\n", ntrain, BATCH);
+        fprintf(stderr, "not enough data: %zu training positions, need at least %d\n", ntrain, BATCH);
         return 1;
     }
-    fprintf(stderr, "pozycje: %zu (trening %zu, walidacja %zu), lambda %.2f, %d neuronow, %d kubelkow\n", total, ntrain, nval,
+    fprintf(stderr, "positions: %zu (training %zu, validation %zu), lambda %.2f, %d neurons, %d buckets\n", total, ntrain, nval,
             lambda_eval, HIDDEN, BUCKETS);
 
-    /* Inicjalizacja wag */
+    /* Weight initialization */
     if (init) {
-        fprintf(stderr, "start z %s nieobslugiwany — losowa inicjalizacja\n", init);
+        fprintf(stderr, "starting from %s is not supported — random initialization\n", init);
     }
     for (int i = 0; i < INPUTS * HIDDEN; i++) P.ft_w[i] = (frand() * 2 - 1) * 0.1f;
     for (int b = 0; b < BUCKETS; b++)
@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
     size_t batches = ntrain / BATCH;
     time_t t0 = time(NULL);
     for (int epoch = 1; epoch <= epochs; epoch++) {
-        /* Spadek kroku uczenia: ×0.3 po 60% i po 85% epok */
+        /* Learning-rate decay: ×0.3 after 60% and after 85% of the epochs */
         float cur_lr = lr * (epoch > epochs * 0.6 ? 0.3f : 1.0f) * (epoch > epochs * 0.85 ? 0.3f : 1.0f);
         double train_loss = 0;
         for (size_t b = 0; b < batches; b++) {
@@ -266,10 +266,10 @@ int main(int argc, char **argv) {
         double vloss = 0;
 #pragma omp parallel for reduction(+ : vloss)
         for (long i = 0; i < (long)nval; i++) vloss += run(&val[i], NULL);
-        fprintf(stderr, "epoka %2d  lr %.5f  strata trening %.6f  walidacja %.6f  (%lds)\n", epoch, cur_lr, train_loss / batches,
+        fprintf(stderr, "epoch %2d  lr %.5f  train loss %.6f  validation %.6f  (%lds)\n", epoch, cur_lr, train_loss / batches,
                 vloss / nval, (long)(time(NULL) - t0));
         save(out_path);
-        /* tasowanie części treningowej między epokami */
+        /* shuffle the training part between epochs */
         for (size_t i = ntrain - 1; i > 0; i--) {
             size_t j = rnd() % (i + 1);
             PackedPos t = data[i];
@@ -277,6 +277,6 @@ int main(int argc, char **argv) {
             data[j] = t;
         }
     }
-    fprintf(stderr, "zapisano %s\n", out_path);
+    fprintf(stderr, "saved %s\n", out_path);
     return 0;
 }

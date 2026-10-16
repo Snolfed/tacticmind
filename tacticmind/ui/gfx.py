@@ -1,8 +1,8 @@
-"""Grafika wysokiej jakości: wygładzone (antyaliasowane) kształty, miękkie cienie, gradienty.
+"""High-quality graphics: smooth (anti-aliased) shapes, soft shadows, gradients.
 
-pygame rysuje zaokrąglone prostokąty i wielokąty bez wygładzania krawędzi. Tutaj
-rysujemy je w potrójnej rozdzielczości i zmniejszamy filtrem (supersampling),
-a gotowe kształty trzymamy w pamięci podręcznej — więc kosztują tyle co zwykłe blit.
+pygame draws rounded rectangles and polygons without edge anti-aliasing. Here we
+draw them at triple resolution and filter them down (supersampling), and cache the
+finished shapes — so they cost about as much as a plain blit.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ import pygame
 
 from . import theme
 
-SS = 3  # współczynnik supersamplingu
+SS = 3  # supersampling factor
 _CACHE_LIMIT = 700
 _cache: OrderedDict[tuple[object, ...], pygame.Surface] = OrderedDict()
-#: Wielokąty mają osobną pamięć: ruchome kształty tworzą wiele jednorazowych wpisów i nie mogą
-#: wypychać z głównej pamięci drogich powierzchni (tło, karty), których odbudowa to dziesiątki ms.
+#: Polygons have a separate cache: moving shapes create many one-off entries and must not evict
+#: expensive surfaces (background, cards) from the main cache, which take tens of ms to rebuild.
 _POLY_LIMIT = 600
 _poly_cache: OrderedDict[tuple[object, ...], pygame.Surface] = OrderedDict()
 
@@ -37,7 +37,7 @@ def _cached(key: tuple[object, ...]) -> pygame.Surface | None:
 def _store(
     key: tuple[object, ...], surf: pygame.Surface, cache: OrderedDict[tuple[object, ...], pygame.Surface] = _cache, limit: int = _CACHE_LIMIT
 ) -> pygame.Surface:
-    # Format piksela zgodny z ekranem = dużo szybsze rysowanie (blit) półprzezroczystych powierzchni.
+    # A pixel format matching the screen = much faster blitting of semi-transparent surfaces.
     if pygame.display.get_surface() is not None:
         alpha = surf.get_alpha()
         surf = surf.convert_alpha()
@@ -50,10 +50,10 @@ def _store(
 
 
 def _blit(surface: pygame.Surface, surf: pygame.Surface, pos: tuple[int, int], alpha: int = 255) -> None:
-    """Blit z przezroczystością całej powierzchni.
+    """Blit with whole-surface transparency.
 
-    Kształty są w pamięci w pełnym kryciu, a alfę koloru nakładamy dopiero tutaj — dzięki temu
-    animowana przezroczystość (pulsowanie, podświetlenie) nie tworzy w każdej klatce nowego kształtu.
+    Shapes are cached fully opaque and the colour's alpha is applied only here — so animated
+    transparency (pulsing, highlighting) does not create a new shape every frame.
     """
     if alpha >= 255:
         surface.blit(surf, pos)
@@ -71,10 +71,10 @@ def rgba(color: Color, alpha: int | None = None) -> tuple[int, int, int, int]:
 
 
 # ---------------------------------------------------------------------------
-# Zaokrąglone prostokąty
+# Rounded rectangles
 # ---------------------------------------------------------------------------
 def _rrect_surface(size: tuple[int, int], color: Color, radius: int, width: int) -> pygame.Surface:
-    """Kształt w pełnym kryciu (alfa koloru jest pomijana — nakłada ją ``rrect`` przy rysowaniu)."""
+    """Fully opaque shape (the colour's alpha is ignored — ``rrect`` applies it when drawing)."""
     key = ("rr", size, tuple(color[:3]), radius, width)
     surf = _cached(key)
     if surf is None:
@@ -93,12 +93,12 @@ def _rrect_surface(size: tuple[int, int], color: Color, radius: int, width: int)
 
 
 def _solid_interior(surf: pygame.Surface, color: tuple[int, int, int, int], radius: int) -> None:
-    """Pełne krycie wszędzie, gdzie piksel leży całkowicie wewnątrz zaokrąglonego prostokąta.
+    """Full opacity wherever a pixel lies entirely inside the rounded rectangle.
 
-    Zmniejszanie (smoothscale) gubi odrobinę krycia (253 zamiast 255). Taka powierzchnia narysowana
-    na cieniu wychodzi o kilka odcieni ciemniejsza — a skoro środek karty rysujemy zwykłym fill
-    (patrz ``rrect`` i ``card``), w rogach byłyby widać ciemniejsze kwadraty. Brzegi (częściowe
-    pokrycie) zostają wygładzone, reszta dostaje dokładny kolor.
+    Downscaling (smoothscale) loses a little opacity (253 instead of 255). Such a surface drawn
+    over a shadow comes out a few shades darker — and since the middle of a card is drawn with a
+    plain fill (see ``rrect`` and ``card``), darker squares would show in the corners. Edges (partial
+    coverage) stay anti-aliased, the rest gets the exact colour.
     """
     w, h = surf.get_size()
     inset = radius + 1
@@ -107,8 +107,8 @@ def _solid_interior(surf: pygame.Surface, color: tuple[int, int, int, int], radi
     if radius <= 0 or w < 2 * inset or h < 2 * inset:
         return
     for y in range(inset):
-        # Piksel (x, y) leży cały w kole rogu, gdy jego najdalszy narożnik (x, y) mieści się w promieniu;
-        # +1 piksel zapasu na wygładzoną krawędź.
+        # Pixel (x, y) lies fully inside the corner circle when its farthest corner (x, y) is within the radius;
+        # +1 pixel of margin for the anti-aliased edge.
         dy = radius - y
         if dy >= radius:
             continue
@@ -122,7 +122,7 @@ def _solid_interior(surf: pygame.Surface, color: tuple[int, int, int, int], radi
 
 
 def rrect(surface: pygame.Surface, color: Color, rect: pygame.Rect, radius: int, width: int = 0) -> None:
-    """Wygładzony zaokrąglony prostokąt (wypełniony albo obrys o grubości ``width``)."""
+    """Anti-aliased rounded rectangle (filled, or an outline of thickness ``width``)."""
     if rect.width <= 0 or rect.height <= 0:
         return
     alpha = rgba(color)[3]
@@ -131,11 +131,11 @@ def rrect(surface: pygame.Surface, color: Color, rect: pygame.Rect, radius: int,
     surf = _rrect_surface(rect.size, color, radius, width)
     radius = max(0, min(radius, min(rect.size) // 2))
     if width > 0:
-        # Wnętrze obrysu jest przezroczyste — kopiujemy tylko pasy przy krawędziach.
+        # The inside of an outline is transparent — copy only the strips along the edges.
         inner = pygame.Rect(width + 1, radius + 1, rect.width - 2 * (width + 1), rect.height - 2 * (radius + 1))
         blit_frame(surface, surf, rect.topleft, inner, alpha)
     elif alpha == 255 and rect.height > 2 * (radius + 1):
-        # Nieprzezroczyste wypełnienie: między zaokrąglonymi rogami same pełne wiersze — wystarczy fill.
+        # Opaque fill: between the rounded corners there are only full rows — a fill is enough.
         middle = pygame.Rect(0, radius + 1, rect.width, rect.height - 2 * (radius + 1))
         blit_frame(surface, surf, rect.topleft, middle)
         surface.fill(color[:3], middle.move(rect.topleft))
@@ -144,10 +144,10 @@ def rrect(surface: pygame.Surface, color: Color, rect: pygame.Rect, radius: int,
 
 
 def blit_frame(surface: pygame.Surface, surf: pygame.Surface, pos: tuple[int, int], inner: pygame.Rect, alpha: int = 255) -> None:
-    """Rysuje ``surf`` bez prostokąta ``inner`` (we współrzędnych ``surf``), czyli tylko ramkę wokół niego.
+    """Draws ``surf`` without the ``inner`` rectangle (in ``surf`` coordinates), i.e. only the frame around it.
 
-    W wysokiej rozdzielczości koszt klatki to głównie liczba kopiowanych pikseli, więc nie kopiujemy
-    wnętrza, które jest przezroczyste albo i tak zostanie zaraz zakryte.
+    At high resolution the frame cost is mostly the number of copied pixels, so we skip copying an
+    interior that is transparent or about to be covered anyway.
     """
     if alpha <= 0:
         return
@@ -172,7 +172,7 @@ def blit_frame(surface: pygame.Surface, surf: pygame.Surface, pos: tuple[int, in
 
 
 def round_corners(canvas: pygame.Surface, radius: int) -> None:
-    """Zaokrągla rogi nieprzezroczystego płótna (mnoży kanał alfa przez maskę tylko w czterech rogach)."""
+    """Rounds the corners of an opaque canvas (multiplies the alpha channel by the mask only in the four corners)."""
     size = canvas.get_size()
     mask = rounded_mask(size, radius)
     for area in corner_areas(size, radius):
@@ -180,14 +180,14 @@ def round_corners(canvas: pygame.Surface, radius: int) -> None:
 
 
 def corner_areas(size: tuple[int, int], radius: int) -> list[pygame.Rect]:
-    """Kwadraty w czterech rogach prostokąta, w których maska zaokrąglenia nie jest pełna."""
+    """Squares in the four corners of the rectangle where the rounding mask is not fully opaque."""
     w, h = size
     c = max(0, min(radius, min(w, h) // 2)) + 1
     return [pygame.Rect(x, y, c, c) for x, y in ((0, 0), (w - c, 0), (0, h - c), (w - c, h - c))]
 
 
 def rrect_gradient(surface: pygame.Surface, top: Color, bottom: Color, rect: pygame.Rect, radius: int) -> None:
-    """Zaokrąglony prostokąt z pionowym gradientem."""
+    """Rounded rectangle with a vertical gradient."""
     if rect.width <= 0 or rect.height <= 0:
         return
     key = ("rg", rect.size, rgba(top), rgba(bottom), radius)
@@ -200,26 +200,26 @@ def rrect_gradient(surface: pygame.Surface, top: Color, bottom: Color, rect: pyg
 
 
 def rounded_mask(size: tuple[int, int], radius: int) -> pygame.Surface:
-    """Biała maska z zaokrąglonymi rogami — mnożona przez kanał alfa zaokrągla dowolny obraz."""
+    """White mask with rounded corners — multiplied into the alpha channel it rounds any image."""
     return _rrect_surface(size, (255, 255, 255, 255), radius, 0)
 
 
 # ---------------------------------------------------------------------------
-# Cienie, gradienty, tło
+# Shadows, gradients, background
 # ---------------------------------------------------------------------------
 def shadow(
     surface: pygame.Surface, rect: pygame.Rect, radius: int, blur: int, alpha: int = 120, offset: tuple[int, int] = (0, 0), covered: bool = False
 ) -> None:
-    """Miękki cień pod kartą (rozmycie przez zmniejszenie i powiększenie obrazu).
+    """Soft shadow under a card (blurred by downscaling and upscaling the image).
 
-    ``covered=True``: na ``rect`` zaraz zostanie narysowane coś nieprzezroczystego (z rogami o promieniu
-    ``radius``), więc pomijamy niewidoczny środek cienia.
+    ``covered=True``: something opaque (with corners of radius ``radius``) will be drawn over ``rect``
+    right away, so the invisible middle of the shadow is skipped.
     """
     if rect.width <= 0 or rect.height <= 0:
         return
     blur = max(2, blur)
     alpha = max(0, min(255, alpha))
-    key = ("sh", rect.size, radius, blur)  # bez alfy — nakładana przy rysowaniu (płynne podświetlenia)
+    key = ("sh", rect.size, radius, blur)  # no alpha — applied when drawing (smooth highlights)
     surf = _cached(key)
     if surf is None:
         pad = blur * 2
@@ -241,7 +241,7 @@ def shadow(
 
 
 def card_surface(size: tuple[int, int], radius: int, fill: Color, border: Color, border_w: int, blur: int, alpha: int, dy: int) -> tuple[pygame.Surface, int]:
-    """Cała karta (cień + wypełnienie + ramka) jako jedna gotowa powierzchnia; zwraca też margines cienia."""
+    """A whole card (shadow + fill + border) as one ready surface; also returns the shadow margin."""
     key = ("card", size, radius, rgba(fill), rgba(border), border_w, blur, alpha, dy)
     pad = blur * 2 + abs(dy)
     surf = _cached(key)
@@ -280,7 +280,7 @@ def horizontal_gradient(size: tuple[int, int], left: Color, right: Color) -> pyg
 
 
 def background(size: tuple[int, int]) -> pygame.Surface:
-    """Tło aplikacji: granatowy gradient z dwiema miękkimi poświatami (fiolet i turkus)."""
+    """App background: a navy gradient with two soft glows (violet and teal)."""
     key = ("bg", size)
     surf = _cached(key)
     if surf is None:
@@ -295,16 +295,16 @@ def background(size: tuple[int, int]) -> pygame.Surface:
                 pygame.draw.circle(glow, (*color, a), (int(gw * cx), int(gh * cy)), i)
         surf.blit(pygame.transform.smoothscale(glow, size), (0, 0))
         if pygame.display.get_surface() is not None:
-            surf = surf.convert()  # tło jest nieprzezroczyste — najszybszy możliwy blit
+            surf = surf.convert()  # the background is opaque — the fastest possible blit
         _cache[key] = surf
     return surf
 
 
 # ---------------------------------------------------------------------------
-# Koła i kształty
+# Circles and shapes
 # ---------------------------------------------------------------------------
 def circle(surface: pygame.Surface, color: Color, center: Point, radius: float, width: int = 0) -> None:
-    """Wygładzone koło (także półprzezroczyste)."""
+    """Anti-aliased circle (semi-transparent too)."""
     r = max(1, int(round(radius)))
     cr, cg, cb, ca = rgba(color)
     key = ("c", r, (cr, cg, cb), width)
@@ -319,7 +319,7 @@ def circle(surface: pygame.Surface, color: Color, center: Point, radius: float, 
 
 
 def ring_glow(surface: pygame.Surface, color: Color, center: Point, radius: float, alpha: int) -> None:
-    """Miękka radialna poświata (np. szach, podpowiedź)."""
+    """Soft radial glow (e.g. check, hint)."""
     r = max(2, int(radius))
     key = ("glow", r, tuple(color[:3]))
     surf = _cached(key)
@@ -334,10 +334,10 @@ def ring_glow(surface: pygame.Surface, color: Color, center: Point, radius: floa
 
 
 def polygon(surface: pygame.Surface, color: Color, points: Sequence[Point]) -> None:
-    """Wygładzony wielokąt (supersampling na małej warstwie obejmującej kształt).
+    """Anti-aliased polygon (supersampled on a small layer enclosing the shape).
 
-    Gotowy kształt trafia do pamięci podręcznej (klucz: punkty względem rogu warstwy z dokładnością
-    do 1/32 piksela), więc ikony i krawędzie rysowane co klatkę w tym samym miejscu kosztują jedno blit.
+    The finished shape is cached (key: points relative to the layer corner, to 1/32 pixel precision),
+    so icons and edges drawn every frame in the same place cost a single blit.
     """
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
@@ -358,7 +358,7 @@ def polygon(surface: pygame.Surface, color: Color, points: Sequence[Point]) -> N
 
 
 def thick_line(surface: pygame.Surface, color: Color, a: Point, b: Point, width: float) -> None:
-    """Gruba wygładzona linia z zaokrąglonymi końcami."""
+    """Thick anti-aliased line with rounded caps."""
     angle = math.atan2(b[1] - a[1], b[0] - a[0])
     nx, ny = -math.sin(angle) * width / 2, math.cos(angle) * width / 2
     polygon(surface, color, [(a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny), (b[0] - nx, b[1] - ny), (a[0] - nx, a[1] - ny)])
@@ -367,13 +367,13 @@ def thick_line(surface: pygame.Surface, color: Color, a: Point, b: Point, width:
 
 
 # ---------------------------------------------------------------------------
-# Strzałki (silnika i rysowane przez gracza)
+# Arrows (engine and player-drawn)
 # ---------------------------------------------------------------------------
 def _arrow_surface(points: tuple[Point, ...], color: Color, width: float) -> tuple[pygame.Surface, tuple[int, int]]:
-    """Jedna wygładzona strzałka wzdłuż łamanej (dla skoczka: kształt litery L), z grotem na końcu.
+    """A single anti-aliased arrow along a polyline (an L shape for a knight), with a head at the end.
 
-    Kształt jest buforowany w pełnym kryciu (klucz bez alfy), a przezroczystość ustawia ``draw_arrows``
-    przy rysowaniu — dzięki temu pulsująca strzałka nie jest co klatkę rysowana od nowa.
+    The shape is cached fully opaque (key without alpha) and ``draw_arrows`` sets the transparency
+    when drawing — so a pulsing arrow is not redrawn from scratch every frame.
     """
     key = ("arrow", points, color[:3], round(width, 1))
     head_len = width * 2.2
@@ -403,7 +403,7 @@ def _arrow_surface(points: tuple[Point, ...], color: Color, width: float) -> tup
             nx, ny = -math.sin(seg) * width / 2, math.cos(seg) * width / 2
             quad = [(x1 + nx, y1 + ny), (x2 + nx, y2 + ny), (x2 - nx, y2 - ny), (x1 - nx, y1 - ny)]
             pygame.draw.polygon(big, solid, [local(q) for q in quad])
-        for joint in pts[1:-1]:  # zaokrąglone zgięcie strzałki skoczka
+        for joint in pts[1:-1]:  # rounded bend of the knight arrow
             pygame.draw.circle(big, solid, local(joint), width / 2 * SS)
         hx, hy = -math.sin(angle) * head_half, math.cos(angle) * head_half
         pygame.draw.polygon(big, solid, [local((ex, ey)), local((bx + hx, by + hy)), local((bx - hx, by - hy))])
@@ -412,16 +412,16 @@ def _arrow_surface(points: tuple[Point, ...], color: Color, width: float) -> tup
 
 
 def draw_arrows(surface: pygame.Surface, arrows: Sequence[tuple[Sequence[Point], Color, float]], alpha: float = 1.0) -> None:
-    """Rysuje strzałki; ``alpha`` (0..1) pozwala je płynnie pokazać albo wygasić."""
+    """Draws arrows; ``alpha`` (0..1) lets them fade in or out smoothly."""
     for points, color, width in arrows:
         surf, pos = _arrow_surface(tuple((float(x), float(y)) for x, y in points), color, width)
-        # Przezroczystość całej strzałki naraz (bez ciemniejszych zakładek w miejscu zgięcia).
+        # Transparency for the whole arrow at once (no darker overlap at the bend).
         surf.set_alpha(int(rgba(color)[3] * max(0.0, min(1.0, alpha))))
         surface.blit(surf, pos)
 
 
 def gradient_text(text_surface: pygame.Surface, left: Color, right: Color) -> pygame.Surface:
-    """Nakłada poziomy gradient na wyrenderowany (biały) napis."""
+    """Applies a horizontal gradient to rendered (white) text."""
     grad = horizontal_gradient(text_surface.get_size(), left, right).copy()
     grad.blit(text_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     return grad

@@ -1,4 +1,4 @@
-// Pasek oceny: biała część rośnie sprężyście, wartość (+1.5, M3) po stronie, która wygrywa.
+// Evaluation bar: the white part grows with a spring, the value (+1.5, M3) on the winning side.
 
 import { useRef, type ReactElement } from "react";
 import type { Score } from "../types";
@@ -24,11 +24,11 @@ export function EvalBar({
   whiteBottom: boolean;
   horizontal?: boolean;
 }): ReactElement {
-  // Bez nowej oceny pasek zostaje tam, gdzie był (jak w wersji pygame).
+  // Without a new evaluation the bar stays where it was (as in the pygame version).
   const last = useRef<{ share: number; label: string; white: boolean }>({ share: 0.5, label: "0.0", white: true });
   if (score) last.current = { share: whiteShare(score), label: score.label.replace(/^[+-]/, ""), white: score.value >= 0 };
   const { share, label, white } = last.current;
-  const atStart = white === whiteBottom; // wartość przy dolnej (lewej) krawędzi
+  const atStart = white === whiteBottom; // value at the bottom (left) edge
   return (
     <div className={`eval-bar${horizontal ? " horizontal" : ""}${hidden ? " hidden" : ""}`} aria-label={hidden ? "?" : label}>
       {hidden ? (

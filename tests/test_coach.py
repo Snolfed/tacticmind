@@ -1,4 +1,4 @@
-"""Gra z trenerem: książka otwarć, siła gry wg Elo, ocena ruchów, wyjaśnienia, przebieg partii i „Twój poziom”."""
+"""Playing with the coach: opening book, Elo-based strength, move review, explanations, game flow and "Your level"."""
 
 import random
 import re
@@ -24,7 +24,7 @@ def _moves(sans: str) -> list[chess.Move]:
     return moves
 
 
-# ---------------------------------------------------------------- książka otwarć
+# ---------------------------------------------------------------- opening book
 @pytest.mark.parametrize("opening", openings.OPENINGS, ids=lambda o: o.id)
 def test_every_lesson_line_is_legal_and_explained(opening: openings.Opening) -> None:
     ucis = openings.line_ucis(opening.id)
@@ -37,7 +37,7 @@ def test_every_lesson_line_is_legal_and_explained(opening: openings.Opening) -> 
     for strings in (pl.STRINGS, en.STRINGS):
         for key in ("name", "desc", *(str(ply) for ply in range(1, len(ucis) + 1))):
             assert f"opening.{opening.id}.{key}" in strings
-    # Po całej linii partia nosi nazwę tego otwarcia (gambit hetmański z ...e6 to dokładniej „odrzucony”).
+    # After the whole line the game carries this opening's name (the Queen's Gambit with ...e6 is more precisely "Declined").
     assert openings.opening_at(board.move_stack) == {"queens_gambit": "qgd"}.get(opening.id, opening.id)
 
 
@@ -45,9 +45,9 @@ def test_opening_names_and_transpositions() -> None:
     assert openings.opening_at(_moves("e4 c5")) == "sicilian"
     assert openings.opening_at(_moves("e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6")) == "sicilian_najdorf"
     assert openings.opening_at(_moves("e4 e5 Nf3 Nc6 Bc4 Nf6")) == "two_knights"
-    # Gambit hetmański odrzucony nie wraca do ogólnej nazwy w dalszych ruchach linii.
+    # The Queen's Gambit Declined does not revert to the general name in later moves of the line.
     assert openings.opening_at(_moves("d4 d5 c4 e6 Nc3 Nf6 Bg5")) == "qgd"
-    # Transpozycja: 1. Sf3 Sc6 2. e4 e5 to ta sama pozycja co 1. e4 e5 2. Sf3 Sc6 — partia otwarta, nie Réti.
+    # Transposition: 1. Nf3 Nc6 2. e4 e5 is the same position as 1. e4 e5 2. Nf3 Nc6 - an Open Game, not the Réti.
     assert openings.opening_at(_moves("Nf3 Nc6 e4 e5 Bb5")) == "ruy_lopez"
     assert openings.opening_at(_moves("a3")) is None
 
@@ -64,7 +64,7 @@ def test_book_moves() -> None:
     assert (opening_id, ply) == ("ruy_lopez", 5)
 
 
-# ---------------------------------------------------------------- siła gry
+# ---------------------------------------------------------------- playing strength
 def test_strength_grows_with_elo() -> None:
     levels = [strength.strength_for(elo) for elo in range(strength.ELO_MIN, strength.ELO_MAX + 1, 100)]
     for weaker, stronger in zip(levels, levels[1:]):
@@ -86,13 +86,13 @@ def test_strong_trainer_plays_best_weak_trainer_varies() -> None:
     assert all(p in ("e2e4", "d2d4") for p in picks)
     weak = strength.strength_for(400)
     picks = [strength.choose_move(lines, legal, weak, rng) for _ in range(400)]
-    assert len(set(picks)) >= 5  # losuje spośród wielu ruchów, także słabych
-    # Ruch prowadzący do mata nigdy nie przegrywa z gorszym ruchem u silnego trenera.
+    assert len(set(picks)) >= 5  # picks among many moves, weak ones included
+    # A strong coach never prefers a worse move over one leading to mate.
     mate_lines = [("d1h5", MATE - 1), ("e2e4", 30)]
     assert all(strength.choose_move(mate_lines, legal, strong, rng) == "d1h5" for _ in range(50))
 
 
-# ---------------------------------------------------------------- ocena ruchów
+# ---------------------------------------------------------------- move review
 def test_win_percent_and_accuracy() -> None:
     assert review.win_percent(0) == pytest.approx(50)
     assert review.win_percent(300) == pytest.approx(75.1, abs=0.5)
@@ -116,16 +116,16 @@ def test_special_classes() -> None:
     assert review.classify(0, is_best=True, second_drop=20) == "great"
     assert review.classify(0, is_best=True, second_drop=20, recapture=True) == "best"
     assert review.classify(0, is_best=True, sacrifice=True, win_before=70) == "brilliant"
-    assert review.classify(0, is_best=True, sacrifice=True, win_before=99) == "best"  # już i tak wygrane
-    # Poświęcenie prowadzące do mata jest genialne, jeśli bez niego pozycja nie była wygrana…
+    assert review.classify(0, is_best=True, sacrifice=True, win_before=99) == "best"  # already winning anyway
+    # A sacrifice leading to mate is brilliant if the position was not winning without it...
     assert review.classify(0, is_best=True, sacrifice=True, win_before=100, second_drop=40) == "brilliant"
-    # …ale nie, gdy inne ruchy też wygrywają.
+    # ...but not when other moves win too.
     assert review.classify(0, is_best=True, sacrifice=True, win_before=100, second_drop=1) == "best"
     assert review.classify(0, is_best=True, sacrifice=True, win_before=55, second_drop=30) == "brilliant"
     assert review.classify(30, is_best=False, book=True) == "book"
 
 
-# ---------------------------------------------------------------- wyjaśnienia
+# ---------------------------------------------------------------- explanations (asserted in the Polish locale)
 @pytest.fixture(autouse=True)
 def _polish() -> object:
     set_language("pl")
@@ -147,7 +147,7 @@ def test_features_of_moves() -> None:
 
 
 def test_comment_for_blunder_names_the_better_move_and_the_loss() -> None:
-    # Po 3. Sg5? białe tracą skoczka po Hxg5; lepszy był rozwój (Sc3).
+    # After 3. Ng5? White loses the knight to Qxg5; developing (Nc3) was better.
     board = chess.Board("r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3")
     comment = advice.player_comment(
         board, chess.Move.from_uci("f3g5"), "blunder", "b1c3", ["b1c3", "g8f6"], 20, -320, ["d8g5", "d2d4", "g5h4"]
@@ -165,7 +165,7 @@ def test_comment_for_missed_and_allowed_mate() -> None:
     board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4")
     comment = advice.player_comment(board, chess.Move.from_uci("d2d3"), "blunder", "h5f7", ["h5f7"], MATE - 1, -900, ["f6h5"])
     assert "Był mat w jednym ruchu: Hxf7#!" in advice.render_comment(comment)
-    # Mat szewski: po 3... Sf6?? białe grają Hxf7#.
+    # Scholar's mate: after 3... Nf6?? White plays Qxf7#.
     allowed = chess.Board("r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3")
     comment = advice.player_comment(allowed, chess.Move.from_uci("g8f6"), "blunder", "g7g6", ["g7g6"], 20, -(MATE - 1), ["h5f7"])
     assert "przeciwnik daje mata: 1. Hxf7#" in advice.render_comment(comment)
@@ -191,14 +191,14 @@ def test_every_comment_key_exists_in_both_languages() -> None:
                 assert f"feat.{kind}.{person}" in strings
         for cls in review.CLASSES:
             assert f"cls.{cls}" in strings
-    # Polskie i angielskie szablony mają te same pola {…} (sprawdza też test_i18n — tu dla pewności dla nowych kluczy).
+    # Polish and English templates have the same {...} fields (test_i18n checks this too - repeated here for the new keys).
     for key, text in pl.STRINGS.items():
         if key.startswith(("feat.", "coach.")):
             english = en.STRINGS.get(key) or en.STRINGS[re.sub(r"\.(one|few)$", ".many", key)]
             assert set(re.findall(r"{(\w+)}", text)) == set(re.findall(r"{(\w+)}", english)), key
 
 
-# ---------------------------------------------------------------- przebieg partii
+# ---------------------------------------------------------------- game flow
 def test_lesson_flow_and_take_back() -> None:
     game = CoachGame(chess.WHITE, 1200, lesson=openings.opening_by_id("italian"))
     assert game.lesson_expected() == chess.Move.from_uci("e2e4")
@@ -232,7 +232,7 @@ def test_game_result_and_score() -> None:
     assert resign.result == "loss" and resign.score() == 0
 
 
-# ---------------------------------------------------------------- „Twój poziom”
+# ---------------------------------------------------------------- "Your level"
 def test_calibration_and_level_updates_every_five_games() -> None:
     coach = CoachProfile()
     levels = []
@@ -244,10 +244,10 @@ def test_calibration_and_level_updates_every_five_games() -> None:
             assert coach.games_to_update() == CALIBRATION_GAMES - i
         if i == CALIBRATION_GAMES:
             assert change.calibrated_now and coach.level is not None
-    # Poziom zmienia się tylko po 10., 15. i 20. partii.
+    # The level changes only after the 10th, 15th and 20th game.
     changes = [i + 1 for i in range(1, 20) if levels[i] != levels[i - 1]]
     assert set(changes) <= {CALIBRATION_GAMES, CALIBRATION_GAMES + UPDATE_EVERY, CALIBRATION_GAMES + 2 * UPDATE_EVERY}
-    assert levels[-1] is not None and levels[-1] > 1000  # same wygrane z trenerem 1000 → wyżej niż 1000
+    assert levels[-1] is not None and levels[-1] > 1000  # only wins against a 1000 coach → above 1000
     assert coach.games_to_update() == UPDATE_EVERY
 
 
@@ -274,5 +274,5 @@ def test_opening_stars_and_profile_round_trip() -> None:
     assert len(loaded.coach.games) == 1 and loaded.coach.games[0].opening == "italian"
     assert loaded.coach.elo == 1300
     assert loaded.coach.rating == coach.rating
-    # Stary profil bez danych trenera też się wczytuje.
+    # An old profile without coach data loads too.
     assert PlayerProfile.from_json({}).coach.games == []

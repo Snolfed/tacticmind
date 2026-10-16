@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TacticMind</title>
-    <!-- Ekran ładowania okna Tauri: widać go, dopóki Python nie poda adresu gry (albo gdy coś pójdzie nie tak). -->
+    <!-- Loading screen of the Tauri window: visible until Python reports the game address (or when something goes wrong). -->
     <style>
       :root {
         color-scheme: dark;
@@ -116,19 +116,19 @@
       <img src="icon.png" alt="" />
       <h1>TacticMind</h1>
       <div class="spinner" aria-hidden="true"></div>
-      <p class="status">Uruchamiam grę…</p>
+      <p class="status">Starting the game…</p>
       <div class="error" role="alert">
-        <strong>Gra w Pythonie nie działa.</strong>
+        <strong>The Python game is not running.</strong>
         <pre id="details"></pre>
         <p class="hint">
-          Okno uruchamia Pythona z katalogu <code>.venv</code> w folderze gry. Utwórz go i zainstaluj biblioteki:
-          <code>python3 -m venv .venv</code>, potem <code>.venv/bin/pip install -r requirements.txt</code>
-          (Windows: <code>.venv\Scripts\pip install -r requirements.txt</code>). Potem uruchom okno ponownie.
+          The window starts Python from the <code>.venv</code> directory in the game folder. Create it and install the libraries:
+          <code>python3 -m venv .venv</code>, then <code>.venv/bin/pip install -r requirements.txt</code>
+          (Windows: <code>.venv\Scripts\pip install -r requirements.txt</code>). Then start the window again.
         </p>
       </div>
     </main>
     <script>
-      // Błąd przychodzi we fragmencie adresu (#error=…) — ustawia go okno Tauri, gdy Python się nie uruchomi.
+      // The error arrives in the URL fragment (#error=…) — the Tauri window sets it when Python fails to start.
       function update() {
         const match = /^#error=(.*)$/s.exec(location.hash);
         if (!match) return;
@@ -136,7 +136,7 @@
         try {
           text = decodeURIComponent(text);
         } catch {
-          // zostawiamy surowy tekst
+          // keep the raw text
         }
         document.getElementById("details").textContent = text;
         document.body.classList.add("failed");

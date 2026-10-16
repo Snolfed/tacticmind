@@ -1,6 +1,6 @@
-// Szachownica: pola i strzałki w SVG (ostre przy każdym powiększeniu), figury jako obrazki SVG.
-// Pozycję i to, co jest legalne, podaje Python; tutaj są animacje, przeciąganie, wybór promocji
-// i rysowanie strzałek prawym przyciskiem myszy.
+// Chessboard: squares and arrows in SVG (sharp at any zoom), pieces as SVG images.
+// Python provides the position and what is legal; here we handle animations, dragging, promotion choice
+// and drawing arrows with the right mouse button.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactElement } from "react";
 import { store } from "../api";
@@ -25,7 +25,7 @@ import { useFrame } from "../ticker";
 import type { BoardSnapshot, Color } from "../types";
 import { BADGE_COLORS, Badge } from "./Badge";
 
-/** Czas animacji ruchu (jak w wersji pygame). */
+/** Move animation duration (as in the pygame version). */
 const MOVE_TIME = 200;
 const PROMOTION_PIECES = ["q", "n", "r", "b"];
 const USER_COLORS = {
@@ -79,10 +79,10 @@ interface DragInfo {
 
 export interface BoardProps {
   board: BoardSnapshot;
-  /** Nazwa szachownicy w zdarzeniach „fx” z serwera (play / coach). */
+  /** Board name in "fx" events from the server (play / coach). */
   name?: string;
   onMove?: (uci: string) => void;
-  /** Strzałki pulsują (ozdobna szachownica na stronie startowej). */
+  /** Arrows pulse (the decorative board on the home page). */
   pulseArrows?: boolean;
   className?: string;
 }
@@ -108,7 +108,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const placement = useMemo(() => (pending ? applyMove(serverPlacement, pending.uci) : serverPlacement), [serverPlacement, pending]);
   const sig = useMemo(() => signature(placement), [placement]);
 
-  // --- animacja: porównujemy nową pozycję z tą, którą widać (obliczenia idempotentne, bez efektów ubocznych)
+  // --- animation: compare the new position with the one on screen (idempotent computation, no side effects)
   const view = useRef<View>({ sig: "", placement, orientation, seq: board.seq, anim: null });
   const v = view.current;
   if (v.sig !== sig || v.orientation !== orientation) {
@@ -134,7 +134,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const canMove = board.interactive && !pending && !!onMove;
   const playerPrefix = board.player === "white" ? "w" : "b";
 
-  // Odpowiedź serwera (nowy numer pozycji) kończy „ruch na próbę”, zaznaczenie i rysunki.
+  // The server's reply (a new position number) ends the "tentative move", the selection and the drawings.
   useEffect(() => {
     setOptimistic(null);
     setSelected(null);
@@ -143,7 +143,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     setMarks(new Map());
   }, [board.seq]);
 
-  // Ruch odrzucony (np. pozycja zmieniła się w międzyczasie) — po chwili figura wraca na miejsce.
+  // Move rejected (e.g. the position changed in the meantime) — after a moment the piece returns to its square.
   useEffect(() => {
     if (!optimistic) return;
     const timer = window.setTimeout(() => setOptimistic((current) => (current === optimistic ? null : current)), 1500);
@@ -157,7 +157,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     }
   }, [canMove]);
 
-  // --- animacja figur w pętli klatek (z limitem FPS z ustawień)
+  // --- piece animation in the frame loop (with the FPS limit from the settings)
   const progress = (now: number): number => (anim ? Math.min(1, (now - anim.start) / MOVE_TIME) : 1);
   useFrame((now) => {
     const current = view.current.anim;
@@ -190,7 +190,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     return `translate(${((fc - tc) * (1 - p) * 100).toFixed(2)}%, ${((fr - tr) * (1 - p) * 100).toFixed(2)}%)`;
   }
 
-  // --- efekty: znaczek na polu (pierścień, iskry), potrząśnięcie, konfetti
+  // --- effects: badge on a square (ring, sparks), shake, confetti
   const lastFeedback = useRef(board.feedback?.seq ?? 0);
   useEffect(() => {
     const feedback = board.feedback;
@@ -231,7 +231,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     });
   }, [name, orientation]);
 
-  // --- wskaźnik: kliknięcie, przeciąganie, strzałki prawym przyciskiem
+  // --- pointer: click, drag, right-button arrows
   function squareAt(clientX: number, clientY: number): number {
     const el = wrap.current;
     if (!el) return -1;
@@ -269,7 +269,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     ghost.style.transform = `translate(${clientX - rect.left}px, ${clientY - rect.top}px) translate(-50%, -50%)`;
   }
 
-  // Przeciągana figura pojawia się od razu pod kursorem (zanim przyjdzie kolejny ruch myszy).
+  // The dragged piece appears under the cursor immediately (before the next mouse move arrives).
   useLayoutEffect(() => {
     const info = dragInfo.current;
     if (dragFrom !== null && info) moveGhost(info.lastX, info.lastY);
@@ -358,9 +358,9 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     if (!info.moved) return;
     const target = squareAt(event.clientX, event.clientY);
     if (target >= 0 && target !== info.from && legal.get(info.from)?.has(target)) {
-      attempt(info.from, target, false); // figura już jest na miejscu — bez animacji
+      attempt(info.from, target, false); // the piece is already in place — no animation
     } else if (target !== info.from) {
-      setSelected(null); // upuszczona na niedozwolone pole — wraca na miejsce
+      setSelected(null); // dropped on an illegal square — it returns to its place
     }
   }
 
@@ -370,7 +370,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     setDrawing(null);
   }
 
-  // --- rysowanie
+  // --- drawing
   const lastMove = board.lastMove;
   const nowP = easeInOutCubic(progress(performance.now()));
   const motionTo = new Map(anim?.moves.map((m) => [m.to, m]) ?? []);
@@ -390,8 +390,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   }
   const coords: ReactElement[] = [];
   for (let i = 0; i < 8; i++) {
-    const fileSquare = orientation === "white" ? i : 56 + i; // dolny rząd
-    const rankSquare = orientation === "white" ? i * 8 : i * 8 + 7; // lewa kolumna
+    const fileSquare = orientation === "white" ? i : 56 + i; // bottom rank
+    const rankSquare = orientation === "white" ? i * 8 : i * 8 + 7; // left file
     const f = squareRect(fileSquare);
     const r = squareRect(rankSquare);
     const fileLight = ((fileSquare % 8) + Math.floor(fileSquare / 8)) % 2 === 1;
@@ -454,7 +454,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   }
 
   const arrowEls: ReactElement[] = [];
-  const engineArrows = [...board.arrows].reverse(); // najlepszy ruch rysowany na wierzchu
+  const engineArrows = [...board.arrows].reverse(); // the best move is drawn on top
   engineArrows.forEach(([from, to, color], i) => {
     const [rgb, alpha] = splitAlpha(color);
     const width = i === engineArrows.length - 1 ? 0.2 : 0.16;
@@ -574,7 +574,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
         <svg className="board-layer" viewBox="0 0 8 8" shapeRendering="crispEdges">
           {squares}
         </svg>
-        {/* Współrzędne w osobnej warstwie o większej skali — przeglądarki źle rysują bardzo małe czcionki w SVG. */}
+        {/* Coordinates in a separate, larger-scale layer — browsers render very small fonts in SVG poorly. */}
         <svg className="board-layer" viewBox="0 0 800 800">
           {coords}
         </svg>

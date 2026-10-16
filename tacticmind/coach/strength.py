@@ -1,16 +1,16 @@
-"""Siła gry trenera zależna od wybranego Elo.
+"""The coach's playing strength, depending on the chosen Elo.
 
-Silnik zawsze szuka najlepszych ruchów, ale słabszy trener:
- - liczy płycej (mniejsza głębokość i krótszy czas),
- - wybiera ruch losowo spośród kilku najlepszych (MultiPV) z prawdopodobieństwem
-   p(ruch) ~ exp((ocena − ocena najlepszego) / T) — rozkład softmax z „temperaturą” T w centypionach:
-   przy dużym T ruchy gorsze o pół piona są prawie tak samo prawdopodobne jak najlepszy,
-   przy małym T trener prawie zawsze gra najlepszy ruch,
- - czasem robi zupełnie przypadkowy ruch („przeoczenie”), jak początkujący gracz.
+The engine always looks for the best moves, but a weaker coach:
+ - searches shallower (lower depth and less time),
+ - picks a move at random from the few best ones (MultiPV) with probability
+   p(move) ~ exp((score − best score) / T) - a softmax distribution with "temperature" T in centipawns:
+   with a high T, moves half a pawn worse are almost as likely as the best one,
+   with a low T, the coach almost always plays the best move,
+ - sometimes plays a completely random move (a "blunder"), like a beginner.
 
-Parametry zmieniają się płynnie z Elo (400–2000). Dobrane są tak, żeby różnica między poziomami
-była wyraźna, ale Elo trenera jest przybliżone — nie da się go dokładnie zmierzyć bez tysięcy partii
-z graczami o znanym rankingu.
+The parameters change smoothly with Elo (400–2000). They are tuned so that the difference between levels
+is clear, but the coach's Elo is approximate - it cannot be measured precisely without thousands of games
+against players with a known rating.
 """
 
 from __future__ import annotations
@@ -27,15 +27,15 @@ ELO_STEP = 100
 @dataclass(frozen=True)
 class Strength:
     elo: int
-    #: Maksymalna głębokość przeszukiwania (półruchy).
+    #: Maximum search depth (plies).
     depth: int
-    #: Limit czasu na ruch (ms).
+    #: Time limit per move (ms).
     time_ms: int
-    #: Ile najlepszych ruchów silnik ocenia dokładnie (spośród nich trener losuje).
+    #: How many best moves the engine evaluates exactly (the coach picks among them).
     multi_pv: int
-    #: Temperatura losowania w centypionach.
+    #: Sampling temperature in centipawns.
     temperature: float
-    #: Szansa na zupełnie przypadkowy ruch.
+    #: Chance of a completely random move.
     blunder: float
 
 
@@ -44,7 +44,7 @@ def clamp_elo(elo: float) -> int:
 
 
 def strength_for(elo: float) -> Strength:
-    """Parametry gry dla danego Elo (400 = początkujący, 2000 = silny gracz klubowy)."""
+    """Playing parameters for a given Elo (400 = beginner, 2000 = strong club player)."""
     elo = clamp_elo(elo)
     x = (elo - ELO_MIN) / (ELO_MAX - ELO_MIN)  # 0 … 1
     depth = 1 if elo < 800 else 2 if elo < 1200 else 3 if elo < 1600 else 4 if elo < 1900 else 5
@@ -59,10 +59,10 @@ def strength_for(elo: float) -> Strength:
 
 
 def choose_move(lines: list[tuple[str, int]], legal: list[str], strength: Strength, rng: random.Random) -> str:
-    """Wybór ruchu trenera.
+    """Choose the coach's move.
 
-    :param lines: ruchy kandydujące (UCI) z oceną z perspektywy trenera (w centypionach, mat = ±32000),
-    :param legal: wszystkie legalne ruchy (do „przeoczeń”).
+    :param lines: candidate moves (UCI) with a score from the coach's perspective (in centipawns, mate = ±32000),
+    :param legal: all legal moves (for "blunders").
     """
     if not lines:
         return rng.choice(legal)
@@ -74,7 +74,7 @@ def choose_move(lines: list[tuple[str, int]], legal: list[str], strength: Streng
 
 
 def describe_level(elo: int) -> str:
-    """Klucz tłumaczenia z opisem poziomu (np. „Początkujący”)."""
+    """Translation key describing the level (e.g. "Beginner")."""
     if elo < 800:
         return "coach.level.beginner"
     if elo < 1200:

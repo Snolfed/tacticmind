@@ -1,4 +1,4 @@
-"""Ekran startowy: nazwa gry, krótki opis i przyciski „Zadania”, „Graj z trenerem”, „Statystyki”, „Jak działa AI?”."""
+"""Home screen: game title, a short description and the "Puzzles", "Play the coach", "Statistics" and "How does the AI work?" buttons."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from .base import Screen
 if TYPE_CHECKING:
     from ..app import App
 
-#: Pozycja na ozdobnej szachownicy: mat szewski — AI pokazuje strzałką ruch Hxf7#.
+#: Position on the decorative board: Scholar's mate — the AI shows the move Qxf7# with an arrow.
 DEMO_FEN = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
 
 
@@ -70,7 +70,7 @@ class HomeScreen(Screen):
     def update(self, dt: float) -> None:
         self.clock += dt
         self.demo.update(dt)
-        # AI „myśli”: strzałka najlepszego ruchu pojawia się i pulsuje.
+        # The AI "thinks": the best-move arrow appears and pulses.
         if self.clock > 0.6:
             alpha = 150 + int(70 * (0.5 + 0.5 * math.sin(self.clock * 2.5)))
             self.demo.arrows = [(chess.H5, chess.F7, (*theme.ACCENT[:3], alpha))]
@@ -90,9 +90,9 @@ class HomeScreen(Screen):
         y += draw_wrapped(surface, t("home.desc"), pygame.Rect(r.x, y, r.width, px(96)), fs(15), theme.MUTED)
         y += px(22)
         if not self.wide:
-            # W wąskim układzie przyciski są pod szachownicą.
+            # In the narrow layout the buttons are below the board.
             y = self.demo.rect.bottom + px(26)
-        # Dwie gry jeden pod drugim, a pod nimi statystyki i „Jak działa AI?” obok siebie.
+        # The two game modes stacked, and below them statistics and "How does the AI work?" side by side.
         bw = min(r.width, px(380)) if self.wide else r.width
         for button in self.buttons[:2]:
             button.rect = pygame.Rect(r.x, y, bw, px(54))

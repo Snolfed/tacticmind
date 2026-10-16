@@ -1,7 +1,7 @@
-"""Perft (performance test) liczy wszystkie liście drzewa legalnych ruchów.
+"""Perft (performance test) counts all leaves of the legal move tree.
 
-Wartości referencyjne pochodzą z Chess Programming Wiki — jeśli generator ma
-jakikolwiek błąd (roszady, en passant, promocje, związania), liczby się nie zgodzą.
+The reference values come from the Chess Programming Wiki; if the generator has
+any bug (castling, en passant, promotions, pins), the numbers won't match.
 """
 
 import pytest
@@ -31,7 +31,7 @@ def test_perft_position_3(depth: int, expected: int) -> None:
     assert perft(Board(POSITION_3), depth) == expected
 
 
-# Dodatkowe pozycje z CPW: promocje z biciem, roszady pod szachem, bicie w przelocie.
+# Extra CPW positions: capture promotions, castling under check, en passant.
 @pytest.mark.parametrize("depth, expected", [(1, 6), (2, 264), (3, 9_467)])
 def test_perft_position_4(depth: int, expected: int) -> None:
     assert perft(Board(POSITION_4), depth) == expected
@@ -44,7 +44,7 @@ def test_perft_position_5(depth: int, expected: int) -> None:
 
 @pytest.mark.parametrize("fen", [START_FEN, KIWIPETE, POSITION_3, POSITION_4, POSITION_5])
 def test_fen_roundtrip_and_incremental_state(fen: str) -> None:
-    """FEN wraca bez zmian, a hasz i sumy oceny liczone przyrostowo zgadzają się z liczonymi od zera."""
+    """The FEN round-trips unchanged, and the incrementally updated hash and eval sums match those computed from scratch."""
     from tacticmind.engine.movegen import legal_moves
 
     board = Board(fen)

@@ -1,8 +1,8 @@
-"""Mała demonstracja minimaksu i alfa-bety na abstrakcyjnym drzewie (strona „Jak działa AI?”).
+"""A small demonstration of minimax and alpha-beta on an abstract tree (the "How does the AI work?" page).
 
-Drzewo ma 3 poziomy: korzeń MAX, węzły MIN, węzły MAX i liście z ocenami.
-Funkcje zwracają kolejne kroki algorytmu, żeby w interfejsie można było
-przechodzić je strzałką „Krok ▶” i zobaczyć, kiedy i dlaczego następuje cięcie.
+The tree has 3 levels: a MAX root, MIN nodes, MAX nodes and leaves with evaluations.
+The functions return the successive steps of the algorithm so that the interface can
+walk through them with the "Step ▶" arrow and show when and why a cutoff happens.
 """
 
 from __future__ import annotations
@@ -15,33 +15,33 @@ from ..i18n import t, tn
 @dataclass
 class DemoNode:
     id: str
-    value: int | None = None  # tylko liście mają wartość z góry
+    value: int | None = None  # only leaves have a value up front
     children: list[DemoNode] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class DemoStep:
     node: str
-    #: Klucz tłumaczenia opisu kroku i jego parametry (tekst w bieżącym języku: ``text()``).
+    #: Translation key of the step description and its parameters (text in the current language: ``text()``).
     key: str
     params: tuple[tuple[str, object], ...]
     alpha: float
     beta: float
     value: float | None
-    #: Węzły odcięte w tym kroku (tylko dla kroku z cięciem).
+    #: Nodes cut off in this step (only for a cutoff step).
     cut: tuple[str, ...] = ()
 
     def text(self) -> str:
         params = dict(self.params)
         if self.key == "demo.cut":
-            # Zdanie z cięciem: powód (MIN/MAX) + liczba pominiętych gałęzi w odpowiedniej formie.
+            # Cutoff sentence: the reason (MIN/MAX) + the number of skipped branches in the right plural form.
             reason = t(str(params["reason"]), a=params["a"], b=params["b"])
             return tn("demo.cut", len(self.cut_roots), reason=reason)
         return t(self.key, **params)
 
     @property
     def cut_roots(self) -> tuple[str, ...]:
-        """Korzenie odciętych poddrzew (identyfikatory o najkrótszej długości wśród odciętych)."""
+        """Roots of the cut-off subtrees (the shortest identifiers among the cut-off ones)."""
         if not self.cut:
             return ()
         shortest = min(len(node) for node in self.cut)
@@ -58,7 +58,7 @@ class DemoResult:
 
 
 def build_demo_tree() -> DemoNode:
-    """Drzewo przykładowe, w którym alfa-beta odcina dwie gałęzie."""
+    """Example tree in which alpha-beta cuts off two branches."""
     leaves = [[[3, 5], [6, 9]], [[1, 2], [0, -1]], [[7, 4], [8, 6]]]
     root = DemoNode("R")
     for i, min_children in enumerate(leaves):

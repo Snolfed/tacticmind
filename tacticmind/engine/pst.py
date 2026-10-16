@@ -1,27 +1,27 @@
-"""Materiał i tablice pozycyjne (piece-square tables) w wersji „tapered”.
+"""Material and piece-square tables, "tapered" version.
 
-Każda figura ma dwie wartości: dla gry środkowej (mg) i dla końcówki (eg).
-Ocena końcowa to średnia ważona fazą gry: im mniej figur na planszy, tym
-większa waga końcówki. Dzięki temu np. król w grze środkowej chowa się za
-pionami, a w końcówce idzie do centrum.
+Each piece has two values: one for the middlegame (mg) and one for the endgame (eg).
+The final score is the average weighted by game phase: the fewer pieces on the
+board, the greater the endgame weight. This way, for example, the king hides
+behind its pawns in the middlegame but walks to the centre in the endgame.
 
-Tablice są z perspektywy białych i zapisane „tak, jak widać planszę”:
-pierwszy wiersz to 8. rząd (a8..h8), ostatni to 1. rząd (a1..h1).
-Dla czarnych odbijamy planszę w pionie.
+The tables are from White's perspective and written "as the board is seen":
+the first row is the 8th rank (a8..h8), the last is the 1st rank (a1..h1).
+For Black the board is mirrored vertically.
 
-Plansza (board.py) sumuje te wartości przyrostowo przy każdym ruchu, więc
-funkcja oceny nie musi ich liczyć od zera.
+The board (board.py) sums these values incrementally on every move, so the
+evaluation function doesn't have to compute them from scratch.
 """
 
 from collections.abc import Mapping, Sequence
 
 from .constants import BISHOP, BLACK, KING, KNIGHT, PAWN, QUEEN, ROOK, WHITE, make_piece, on_board
 
-#: Wartości materiału [pusty, pion, skoczek, goniec, wieża, hetman, król].
+#: Material values [empty, pawn, knight, bishop, rook, queen, king].
 MATERIAL_MG = (0, 100, 320, 330, 500, 950, 0)
 MATERIAL_EG = (0, 120, 300, 320, 540, 980, 0)
 
-#: Wkład figur w fazę gry (24 = komplet figur, 0 = same piony i króle).
+#: Piece contribution to the game phase (24 = all pieces, 0 = only pawns and kings).
 PHASE_WEIGHT = (0, 0, 1, 1, 2, 4, 0)
 MAX_PHASE = 24
 
@@ -123,13 +123,13 @@ _PST_EG = {PAWN: PAWN_EG, KNIGHT: KNIGHT_PST, BISHOP: BISHOP_PST, ROOK: ROOK_EG,
 
 
 def pst_index(sq: int, color: int) -> int:
-    """Indeks w tablicy 64-elementowej dla pola 0x88 (dla czarnych odbicie w pionie)."""
+    """Index into a 64-element table for a 0x88 square (mirrored vertically for Black)."""
     rank, file = sq >> 4, sq & 7
     return (7 - rank) * 8 + file if color == WHITE else rank * 8 + file
 
 
 def _build(material: Sequence[int], tables: Mapping[int, Sequence[int]]) -> list[int]:
-    """Tablica [figura*128 + pole] = materiał + PST, ze znakiem (+ białe, − czarne)."""
+    """Table [piece*128 + square] = material + PST, signed (+ white, - black)."""
     combined = [0] * (16 * 128)
     for color in (WHITE, BLACK):
         sign = 1 if color == WHITE else -1
@@ -141,8 +141,8 @@ def _build(material: Sequence[int], tables: Mapping[int, Sequence[int]]) -> list
     return combined
 
 
-#: Gotowe sumy materiał+PST dla gry środkowej i końcówki (używa ich board.py).
+#: Precomputed material+PST sums for the middlegame and endgame (used by board.py).
 PSQ_MG = _build(MATERIAL_MG, _PST_MG)
 PSQ_EG = _build(MATERIAL_EG, _PST_EG)
-#: Faza gry dla kodu figury.
+#: Game phase per piece code.
 PIECE_PHASE = [PHASE_WEIGHT[p & 7] if 0 < (p & 7) <= KING else 0 for p in range(16)]

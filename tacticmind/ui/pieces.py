@@ -1,9 +1,9 @@
-"""Grafika figur rysowana z symboli szachowych Unicode (czcionka Noto Sans Symbols 2).
+"""Piece graphics drawn from Unicode chess symbols (Noto Sans Symbols 2 font).
 
-Biała figura = wypełniony symbol w kolorze białym + symbol konturowy w ciemnym.
-Czarna figura = wypełniony symbol w ciemnym kolorze + jasne linie wewnętrzne.
-Figury renderujemy w podwójnej rozdzielczości i zmniejszamy filtrem — krawędzie są
-gładsze niż przy zwykłym renderowaniu tekstu. Nie potrzebujemy plików graficznych.
+White piece = filled symbol in white + outline symbol in a dark colour.
+Black piece = filled symbol in a dark colour + light inner lines.
+Pieces are rendered at double resolution and filtered down — edges come out
+smoother than with plain text rendering. No image files are needed.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from . import fonts
 _FILLED = {chess.KING: "♚", chess.QUEEN: "♛", chess.ROOK: "♜", chess.BISHOP: "♝", chess.KNIGHT: "♞", chess.PAWN: "♟"}
 _OUTLINE = {chess.KING: "♔", chess.QUEEN: "♕", chess.ROOK: "♖", chess.BISHOP: "♗", chess.KNIGHT: "♘", chess.PAWN: "♙"}
 _SUPERSAMPLE = 2
-#: Symbole króla i hetmana w tej czcionce są wąskie (wyglądają na „ściśnięte”) — poszerzamy je w poziomie.
+#: The king and queen symbols in this font are narrow (they look squeezed) — we widen them horizontally.
 _WIDTH_SCALE = {chess.KING: 1.22, chess.QUEEN: 1.14}
 
 _cache: dict[tuple[str, int], pygame.Surface] = {}
@@ -27,7 +27,7 @@ def _layer(text: str, size: int, color: tuple[int, int, int]) -> pygame.Surface:
 
 
 def piece_surface(piece: chess.Piece, square_size: int) -> pygame.Surface:
-    """Powierzchnia z figurą dopasowaną do pola o boku ``square_size``."""
+    """Surface with the piece fitted to a square of side ``square_size``."""
     key = (piece.symbol(), square_size)
     cached = _cache.get(key)
     if cached is not None:
@@ -51,7 +51,7 @@ def piece_surface(piece: chess.Piece, square_size: int) -> pygame.Surface:
         canvas.blit(inner, (pad, pad))
     bounds = canvas.get_bounding_rect()
     cropped = canvas.subsurface(bounds).copy()
-    # Poszerzenie robimy razem ze zmniejszaniem z podwójnej rozdzielczości, więc krawędzie zostają ostre.
+    # Widening is done together with downscaling from double resolution, so edges stay crisp.
     width = cropped.get_width() / _SUPERSAMPLE * _WIDTH_SCALE.get(piece.piece_type, 1.0)
     width = min(width, square_size * 0.94)
     target = (max(1, round(width)), max(1, cropped.get_height() // _SUPERSAMPLE))

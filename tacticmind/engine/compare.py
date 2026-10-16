@@ -1,13 +1,13 @@
-"""Tryb porównawczy (na obronę projektu).
+"""Comparison mode (for the project defence).
 
-Ta sama pozycja liczona:
- 1) czystym minimaksem (przegląda całe drzewo),
- 2) alfa-betą bez porządkowania ruchów (kolejność z generatora),
- 3) alfa-betą z porządkowaniem ruchów (MVV-LVA, killery, history).
+The same position searched with:
+ 1) plain minimax (visits the whole tree),
+ 2) alpha-beta without move ordering (generator order),
+ 3) alpha-beta with move ordering (MVV-LVA, killers, history).
 
-Wszystkie trzy warianty liczą do tej samej głębokości tą samą funkcją oceny,
-bez quiescence i bez tablicy transpozycji — dlatego wynik musi być identyczny,
-a różnią się tylko liczbą odwiedzonych węzłów.
+All three variants search to the same depth with the same evaluation function,
+without quiescence and without a transposition table, so the result must be
+identical; they differ only in the number of visited nodes.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ class _Counters:
     __slots__ = ("nodes", "cutoffs")
 
     def __init__(self) -> None:
-        self.nodes = 1  # korzeń
+        self.nodes = 1  # root
         self.cutoffs = 0
 
 
 def _minimax(board: Board, depth: int, ply: int, c: _Counters) -> int:
-    """Minimaks w wersji negamax: ocena dla nas = −(ocena dla przeciwnika). Bez żadnych cięć."""
+    """Minimax in negamax form: our score = -(opponent's score). No cutoffs at all."""
     c.nodes += 1
     if depth == 0:
         return evaluate(board)
@@ -52,7 +52,7 @@ def _minimax(board: Board, depth: int, ply: int, c: _Counters) -> int:
 
 
 class _Ordering:
-    """Proste porządkowanie ruchów: bicia MVV-LVA, promocje, killery, history."""
+    """Simple move ordering: MVV-LVA captures, promotions, killers, history."""
 
     def __init__(self) -> None:
         self.killers = [[0, 0] for _ in range(64)]
@@ -87,11 +87,11 @@ class _Ordering:
 
 
 def _alpha_beta(board: Board, depth: int, alpha: int, beta: int, ply: int, c: _Counters, ordering: _Ordering | None) -> int:
-    """Alfa-beta (fail-hard).
+    """Alpha-beta (fail-hard).
 
-    alfa = wynik, który mamy już zagwarantowany; beta = najlepszy wynik, na jaki
-    pozwoli nam przeciwnik. Gdy ruch daje wynik >= beta, pozostałe ruchy nie
-    mają znaczenia — przeciwnik do tej pozycji nie dopuści (cięcie).
+    alpha = the score we are already guaranteed; beta = the best score the
+    opponent will allow us. When a move scores >= beta, the remaining moves do
+    not matter: the opponent will not allow this position (cutoff).
     """
     c.nodes += 1
     if depth == 0:
@@ -119,7 +119,7 @@ def _alpha_beta(board: Board, depth: int, alpha: int, beta: int, ply: int, c: _C
 
 
 def run_variant(fen: str, depth: int, variant: VariantName) -> CompareVariant:
-    """Liczy jedną odmianę algorytmu dla pozycji FEN na zadanej głębokości."""
+    """Run one algorithm variant for a FEN position at the given depth."""
     board = Board(fen)
     counters = _Counters()
     ordering = _Ordering() if variant == "alphabeta-ordered" else None
@@ -154,7 +154,7 @@ def run_variant(fen: str, depth: int, variant: VariantName) -> CompareVariant:
 
 
 def compare_algorithms(fen: str, depth: int, include_minimax: bool = True) -> CompareResult:
-    """Porównanie trzech wariantów (minimaks pomijamy, gdy byłby zbyt wolny)."""
+    """Compare the three variants (minimax is skipped when it would be too slow)."""
     return CompareResult(
         fen=fen,
         depth=depth,

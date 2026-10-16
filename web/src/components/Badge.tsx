@@ -1,4 +1,4 @@
-// Znaczki ruchów (jak w „Game Review” na chess.com): !!, !, ★, ✓, książka, ?!, ?, ?? oraz ✓ / ✗ w zadaniach.
+// Move badges (as in chess.com's "Game Review"): !!, !, ★, ✓, book, ?!, ?, ?? plus ✓ / ✗ in puzzles.
 
 import type { ReactElement } from "react";
 
@@ -42,7 +42,7 @@ const BOOK_LEFT: [number, number][] = [
 const pts = (list: [number, number][]): string => list.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(" ");
 
 function Glyph({ kind }: { kind: string }): ReactElement | null {
-  if (GLYPHS[kind]) return null; // tekst rysujemy poza skalowaną grupą (patrz Badge)
+  if (GLYPHS[kind]) return null; // text is drawn outside the scaled group (see Badge)
   if (kind === "best") return <polygon points={STAR} fill="#fff" />;
   if (kind === "book") {
     return (
@@ -59,7 +59,7 @@ function Glyph({ kind }: { kind: string }): ReactElement | null {
   return <polyline points="-0.46,0.02 -0.14,0.34 0.46,-0.3" fill="none" stroke={color} strokeWidth={0.22} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
-/** Okrągły znaczek; ``kind`` = klasa ruchu (best, blunder…) albo ok / bad. */
+/** A round badge; ``kind`` = move class (best, blunder…) or ok / bad. */
 export function Badge({ kind, size = 22, className }: { kind: string; size?: number; className?: string }): ReactElement {
   const color = BADGE_COLORS[kind] ?? "rgb(142,150,175)";
   const glyph = GLYPHS[kind];
@@ -71,7 +71,7 @@ export function Badge({ kind, size = 22, className }: { kind: string; size?: num
         <Glyph kind={kind} />
       </g>
       {glyph && (
-        // Czcionka w zwykłej skali — bardzo małe rozmiary czcionek w SVG przeglądarki rysują niedokładnie.
+        // Font at normal scale — browsers render very small font sizes in SVG inaccurately.
         <text x="0" y="3" textAnchor="middle" dominantBaseline="central" fontSize={glyph.length > 1 ? 56 : 68} fontWeight={700} fill="#fff">
           {glyph}
         </text>

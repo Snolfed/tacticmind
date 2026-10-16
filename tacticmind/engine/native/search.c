@@ -1,19 +1,19 @@
 /*
- * Wyszukiwanie: negamax z alfa-betą w wariancie PVS (Principal Variation Search).
+ * Search: negamax with alpha-beta in the PVS (Principal Variation Search) variant.
  *
- * Względem wersji w Pythonie dochodzą techniki, które w C mają sens, bo
- * liczymy ok. 100× więcej węzłów na sekundę:
- *  - PVS: po pierwszym ruchu sprawdzamy pozostałe „zerowym oknem” (czy są
- *    lepsze od alfy?) i liczymy dokładnie tylko te, które zaskoczą,
- *  - null move pruning: gdy nawet po oddaniu ruchu przeciwnikowi pozycja jest
- *    ≥ beta, gałąź na pewno da cięcie,
- *  - late move reductions (LMR): późne, ciche ruchy liczymy płycej,
- *  - reverse futility / futility / late move pruning / przycinanie SEE:
- *    w płytkich węzłach pomijamy ruchy, które nie mają szans podnieść alfy,
- *  - historia ruchów, killery, counter-move i historia kontynuacji do porządkowania.
+ * Compared to the Python version, it adds techniques that make sense in C,
+ * since we search about 100x more nodes per second:
+ *  - PVS: after the first move, the rest are checked with a "zero window" (are
+ *    they better than alpha?) and only those that surprise are searched exactly,
+ *  - null move pruning: when the position is >= beta even after handing the
+ *    move to the opponent, the branch will certainly cut off,
+ *  - late move reductions (LMR): late quiet moves are searched shallower,
+ *  - reverse futility / futility / late move pruning / SEE pruning:
+ *    in shallow nodes we skip moves that have no chance of raising alpha,
+ *  - move history, killers, counter-move and continuation history for ordering.
  *
- * MultiPV liczymy tak samo jak w Pythonie: alfa dla kolejnego ruchu
- * w korzeniu to wynik K-tego najlepszego ruchu znalezionego do tej pory.
+ * MultiPV works the same as in Python: alpha for the next root move is the
+ * score of the K-th best move found so far.
  */
 #include "tm.h"
 
@@ -50,7 +50,7 @@ static void init_lmr(void) {
     done = 1;
 }
 
-/* ------------------------------------------------------- tablica transpozycji */
+/* ------------------------------------------------------- transposition table */
 
 Engine *engine_new(int tt_mb) {
     pos_init_tables();
@@ -111,7 +111,7 @@ void engine_new_search(Engine *e) {
     e->seldepth = 0;
     e->stop = 0;
     memset(e->killers, 0, sizeof e->killers);
-    /* Historię „postarzamy” zamiast zerować — wiedza z poprzedniej pozycji wciąż się przydaje. */
+    /* "Age" the history instead of clearing it; knowledge from the previous position is still useful. */
     for (int c = 0; c < 2; c++)
         for (int a = 0; a < 64; a++)
             for (int b = 0; b < 64; b++) e->history[c][a][b] /= 2;
@@ -119,7 +119,7 @@ void engine_new_search(Engine *e) {
     e->last_poll_ms = e->start_ms;
 }
 
-/* ------------------------------------------------------- czas i przerywanie */
+/* ------------------------------------------------------- time and stopping */
 
 static void check_time(Engine *e) {
     if (e->node_limit && e->nodes >= e->node_limit && e->depth > 1) e->stop = 1;
@@ -132,7 +132,7 @@ static void check_time(Engine *e) {
     }
 }
 
-/* ------------------------------------------------------- porządkowanie ruchów */
+/* ------------------------------------------------------- move ordering */
 
 static const int MVV[6] = {100, 300, 320, 500, 900, 0};
 
@@ -194,7 +194,7 @@ static int has_non_pawn(const Position *pos, int side) {
     return (pos->by_color[side] & ~pos_bb(pos, side, PAWN) & ~pos_bb(pos, side, KING)) != 0;
 }
 
-/* ------------------------------------------------------- mini-drzewo (UI) */
+/* ------------------------------------------------------- mini tree (UI) */
 
 static void record_child(Engine *e, Move m, int score, int alpha, int beta, int pruned) {
     RootMove *rm = &e->root[e->current_root];
@@ -254,10 +254,10 @@ static int qsearch(Engine *e, int alpha, int beta, int ply) {
         if (!in_check) {
             if (!M_IS_PROMO(m)) {
                 int victim = M_FLAG(m) == MF_EP ? PAWN : PTYPE(pos->board[M_TO(m)]);
-                /* Delta pruning: nawet zbicie tej figury z zapasem nie podniesie alfy. */
+                /* Delta pruning: even capturing this piece with a margin won't raise alpha. */
                 if (stand_pat + MVV[victim] + 200 <= alpha) continue;
             }
-            /* Złe bicie (traci materiał w wymianie) — w liściu pomijamy. */
+            /* Bad capture (loses material in the exchange): skip it at a leaf. */
             if (list.scores[i] < 0) continue;
         }
         e->stack_piece[ply] = pos->board[M_FROM(m)];
@@ -289,8 +289,8 @@ static int qsearch(Engine *e, int alpha, int beta, int ply) {
 static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_node) {
     Position *pos = &e->pos;
     int pv_node = beta - alpha > 1;
-    /* Mini-drzewo zapisujemy w węzłach poziomu 1 (odpowiedzi przeciwnika), ale nie w pomocniczym
-       wyszukiwaniu „singular extension”, które odwiedza ten sam węzeł jeszcze raz. */
+    /* The mini tree is recorded at ply-1 nodes (opponent replies), but not in the auxiliary
+       "singular extension" search, which visits the same node again. */
     int recording = e->record_tree && ply == 1 && !e->excluded[ply];
     e->pv_len[ply] = 0;
     if (recording) {
@@ -299,7 +299,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
     }
     if (ply >= MAX_PLY - 1) return evaluate(pos);
 
-    /* Remisy: powtórzenie, brak materiału, reguła 50 ruchów (ale mat w setnym półruchu wygrywa). */
+    /* Draws: repetition, insufficient material, 50-move rule (but a mate on the hundredth ply wins). */
     if (pos_is_repetition(pos, ply) || pos_insufficient(pos)) return 0;
     if (pos->halfmove >= 100) {
         if (!pos_in_check(pos)) return 0;
@@ -308,13 +308,13 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
         return legal.count ? 0 : -MATE + ply;
     }
 
-    /* Mate distance pruning: nie szukaj mata dłuższego niż już znaleziony. */
+    /* Mate distance pruning: don't look for a mate longer than one already found. */
     int ma = alpha > -MATE + ply ? alpha : -MATE + ply;
     int mb = beta < MATE - ply - 1 ? beta : MATE - ply - 1;
     if (ma >= mb) return ma;
 
     int in_check = pos_in_check(pos);
-    if (in_check) depth++; /* przedłużenie szacha */
+    if (in_check) depth++; /* check extension */
     if (depth <= 0) return qsearch(e, alpha, beta, ply);
 
     e->nodes++;
@@ -344,7 +344,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
         eval = -INF;
     } else {
         eval = tt && tt->eval ? tt->eval : evaluate(pos);
-        /* Wynik z TT jest dokładniejszy niż ocena statyczna, jeśli granica na to pozwala. */
+        /* The TT score is more accurate than the static eval, if the bound allows it. */
         if (tt && ((tt_flag == TT_LOWER && tt_score > eval) || (tt_flag == TT_UPPER && tt_score < eval)) && abs(tt_score) < MATE_BOUND)
             eval = tt_score;
     }
@@ -353,10 +353,10 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
     e->killers[ply + 1][0] = e->killers[ply + 1][1] = 0;
 
     if (!pv_node && !in_check && !excluded) {
-        /* Reverse futility pruning: przewaga tak duża, że płytkie liczenie jej nie zmieni. */
+        /* Reverse futility pruning: the advantage is so large that a shallow search won't change it. */
         if (depth <= 8 && eval - 80 * (depth - improving) >= beta && eval < MATE_BOUND) return eval;
 
-        /* Null move pruning: oddajemy ruch; jeśli i tak jest ≥ beta, gałąź da cięcie. */
+        /* Null move pruning: pass the move; if it's still >= beta, the branch will cut off. */
         if (depth >= 3 && eval >= beta && ply > 0 && e->stack_piece[ply - 1] >= 0 && has_non_pawn(pos, pos->side)) {
             int r = 3 + depth / 4 + ((eval - beta) / 200 < 3 ? (eval - beta) / 200 : 3);
             e->stack_piece[ply] = -1;
@@ -368,7 +368,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
             if (score >= beta) return score >= MATE_BOUND ? beta : score;
         }
 
-        /* Razoring: beznadziejnie słaba pozycja na małej głębokości — sprawdzamy tylko bicia. */
+        /* Razoring: a hopelessly weak position at low depth; only check captures. */
         if (depth <= 3 && eval + 250 * depth < alpha) {
             int score = qsearch(e, alpha - 1, alpha, ply);
             if (e->stop) return 0;
@@ -376,7 +376,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
         }
     }
 
-    /* Internal iterative reduction: bez ruchu z TT liczymy płycej. */
+    /* Internal iterative reduction: without a TT move, search shallower. */
     if (!tt_move && depth >= 4 && !excluded) depth--;
 
     MoveList list;
@@ -398,7 +398,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
         int quiet = !M_IS_TACTICAL(m);
         int pc = pos->board[M_FROM(m)];
 
-        /* Przycinanie płytkich, późnych ruchów (tylko gdy mamy już ruch, który nie przegrywa). */
+        /* Pruning of shallow, late moves (only once we have a move that doesn't lose). */
         if (best > -MATE_BOUND && has_non_pawn(pos, pos->side)) {
             if (quiet && depth <= 8 && quiets_tried >= (3 + depth * depth) / (2 - improving)) {
                 e->pruned++;
@@ -417,7 +417,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
             }
         }
 
-        /* Singular extension: ruch z TT dużo lepszy od reszty — przedłużamy go. */
+        /* Singular extension: the TT move is much better than the rest, so extend it. */
         int extension = 0;
         if (m == tt_move && !excluded && ply > 0 && depth >= 7 && tt_flag != TT_UPPER && tt_depth >= depth - 3 &&
             abs(tt_score) < MATE_BOUND) {
@@ -452,7 +452,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
         } else if (!pv_node || legal > 1) {
             score = -negamax(e, new_depth, -alpha - 1, -alpha, ply + 1, !cut_node);
         } else {
-            score = alpha + 1; /* pierwszy ruch w węźle PV: od razu pełne okno */
+            score = alpha + 1; /* first move in a PV node: full window right away */
         }
         if (pv_node && (legal == 1 || (score > alpha && score < beta))) score = -negamax(e, new_depth, -beta, -alpha, ply + 1, 0);
         pos_unmake(pos);
@@ -469,7 +469,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
                 e->pv_len[ply] = e->pv_len[ply + 1] + 1;
                 if (score >= beta) {
                     e->cutoffs++;
-                    /* Ruchy, których alfa-beta w ogóle nie sprawdziła. */
+                    /* Moves that alpha-beta never examined. */
                     for (int j = i + 1; j < list.count; j++) {
                         if (!is_legal(pos, list.moves[j])) continue;
                         e->pruned++;
@@ -507,7 +507,7 @@ static int negamax(Engine *e, int depth, int alpha, int beta, int ply, int cut_n
     return best;
 }
 
-/* ------------------------------------------------------- korzeń */
+/* ------------------------------------------------------- root */
 
 int engine_prepare(Engine *e, int multipv, int record_tree) {
     MoveList list;
@@ -519,7 +519,7 @@ int engine_prepare(Engine *e, int multipv, int record_tree) {
     e->terminal = 0;
     e->depth = 0;
     pos_refresh_acc(&e->pos);
-    /* Ocena korzenia — punkt odniesienia dla „improving” na poziomie 2. */
+    /* Root evaluation: the reference point for "improving" at ply 2. */
     e->static_eval[0] = pos_in_check(&e->pos) ? -INF : evaluate(&e->pos);
     score_moves(e, &list, 0, 0);
     for (int i = 0; i < list.count; i++) {
@@ -563,7 +563,7 @@ int engine_iterate(Engine *e, int depth) {
         e->searched++;
         int score;
         if (i == 0 && k == 1 && depth >= 5 && abs(rm->score) < MATE_BOUND) {
-            /* Okno aspiracyjne: zakładamy, że wynik będzie blisko poprzedniego; gdy nie — poszerzamy. */
+            /* Aspiration window: assume the score will be close to the previous one; if not, widen it. */
             int delta = 20, a = rm->score - delta, b = rm->score + delta;
             for (;;) {
                 score = -negamax(e, depth - 1, -b, -a, 1, 0);
@@ -601,14 +601,14 @@ int engine_iterate(Engine *e, int depth) {
             top[j] = score;
         }
     }
-    /* Kolejność na następną iterację: najlepsze dokładne wyniki na początku. */
+    /* Order for the next iteration: best exact scores first. */
     qsort(e->root, (size_t)e->n_root, sizeof(RootMove), cmp_root);
     RootMove *best = &e->root[0];
     tt_store(e, pos->key, depth, TT_EXACT, best->score, 0, best->move, 0);
     return 1;
 }
 
-/* Dociąga wariant z tablicy transpozycji, gdy jest krótszy niż głębokość. */
+/* Extend the line from the transposition table when it is shorter than the depth. */
 int engine_extend_pv(Engine *e, const RootMove *rm, Move *out, int max_len) {
     Position *pos = &e->pos;
     int n = 0;

@@ -1,4 +1,4 @@
-// Ekran zadań: szachownica z paskiem oceny, karta zadania, przyciski i panel „Mózg AI”.
+// Puzzle screen: board with the evaluation bar, puzzle card, buttons and the "AI Brain" panel.
 
 import { useEffect, useState, type ReactElement } from "react";
 import { screenAction } from "../api";

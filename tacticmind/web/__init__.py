@@ -1,6 +1,6 @@
-"""Interfejs w przeglądarce (TypeScript): lokalny serwer HTTP + logika ekranów bez rysowania.
+"""Browser interface (TypeScript): a local HTTP server + screen logic without drawing.
 
-Logika gry, trener i silnik zostają w Pythonie. Ekrany z ``screens/`` to odpowiedniki ekranów
-pygame (``ui/screens``) bez kodu rysującego: trzymają stan, reagują na akcje z przeglądarki
-i co klatkę oddają „migawkę” stanu (JSON), którą interfejs w TypeScript rysuje wektorowo.
+Game logic, the coach and the engine stay in Python. The screens in ``screens/`` are counterparts of the
+pygame screens (``ui/screens``) without drawing code: they hold state, react to actions from the browser
+and every frame hand over a state "snapshot" (JSON) that the TypeScript interface draws as vectors.
 """

@@ -1,8 +1,8 @@
-"""Ikona aplikacji: biały pion na zaokrąglonym kwadracie z gradientem turkus → fiolet.
+"""App icon: a white pawn on a rounded square with a teal → violet gradient.
 
-Ikona jest rysowana w kodzie (bez plików graficznych). Polecenie
-``python -m tacticmind.ui.icon`` zapisuje ją też jako ``tacticmind/assets/icon.png``
-(np. do skrótu na pulpicie).
+The icon is drawn in code (no image files). Running
+``python -m tacticmind.ui.icon`` also saves it as ``tacticmind/assets/icon.png``
+(e.g. for a desktop shortcut).
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ ICON_PATH = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
 
 
 def app_icon(size: int = 256) -> pygame.Surface:
-    """Ikona o boku ``size`` pikseli (z przezroczystymi rogami)."""
+    """Icon ``size`` pixels square (with transparent corners)."""
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     margin = round(size * 0.04)
     tile = pygame.Rect(margin, margin, size - 2 * margin, size - 2 * margin)
     radius = round(size * 0.22)
     gfx.rrect_gradient(surf, theme.ACCENT, theme.VIOLET_2, tile, radius)
-    # Delikatny połysk w górnej części kafelka.
+    # Subtle sheen on the upper part of the tile.
     gloss = tile.inflate(-round(size * 0.08), -round(size * 0.5)).move(0, -round(size * 0.18))
     gfx.rrect(surf, (255, 255, 255, 38), gloss, gloss.height // 2)
     pawn = piece_surface(chess.Piece(chess.PAWN, chess.WHITE), round(size * 1.12))
@@ -43,4 +43,4 @@ def save_icon(path: Path = ICON_PATH, size: int = 256) -> Path:
 if __name__ == "__main__":
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     pygame.init()
-    print(f"Zapisano ikonę: {save_icon()}")
+    print(f"Icon saved: {save_icon()}")

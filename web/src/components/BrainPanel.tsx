@@ -1,4 +1,4 @@
-// Panel „Mózg AI”: liczniki na żywo, 3 najlepsze ruchy, strumień myśli i drzewo przeszukiwania.
+// The "AI Brain" panel: live counters, the 3 best moves, the thought stream and the search tree.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { t, useLanguage } from "../i18n";
@@ -37,7 +37,7 @@ function Thinking(): ReactElement {
   );
 }
 
-/** Lista przewijana, która sama jedzie na dół przy nowych wpisach (chyba że ktoś przewinął wyżej). */
+/** A scrolling list that follows new entries to the bottom (unless the user has scrolled up). */
 function useStickToBottom(dependency: unknown): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -60,7 +60,7 @@ function useStickToBottom(dependency: unknown): React.RefObject<HTMLDivElement |
 function Tree({ roots }: { roots: TreeRoot[] }): ReactElement {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const key = roots.map((r) => r.move).join(" ");
-  // Na start rozwijamy pierwszy ruch i pierwszy, w którym alfa-beta coś odcięła — żeby było widać cięcie.
+  // Initially expand the first move and the first one where alpha-beta pruned something — so a cutoff is visible.
   useEffect(() => {
     const initial = new Set<string>();
     if (roots[0]) initial.add(roots[0].move);
@@ -122,7 +122,7 @@ export function BrainPanel({
   onMode: (mode: string) => void;
   onPreview: (index: number) => void;
   previewIndex?: number | null;
-  /** Nowe zadanie — wracamy do zakładki „Strumień myśli”. */
+  /** New puzzle — switch back to the "Thought stream" tab. */
   resetKey?: number;
 }): ReactElement {
   useLanguage();

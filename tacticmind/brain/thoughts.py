@@ -1,12 +1,12 @@
-"""„Strumień myśli” AI: zdania generowane z danych wyszukiwania przez szablony (w języku interfejsu).
+"""The AI "thought stream": sentences generated from search data by templates (in the interface language).
 
-Nie używamy żadnego zewnętrznego modelu językowego. Każde zdanie wynika
-bezpośrednio z liczb, które zwraca silnik: najlepszy ruch, ocena, wariant (PV),
-odsetek odciętych gałęzi, trafienia w tablicę transpozycji. Zmiana najlepszego
-ruchu między głębokościami jest wyraźnie oznaczana — to pokazuje, że AI
-naprawdę „myśli” i poprawia swoje zdanie, gdy liczy głębiej.
+We use no external language model. Every sentence follows directly
+from the numbers the engine returns: best move, evaluation, line (PV),
+share of pruned branches, transposition-table hits. A change of the best
+move between depths is clearly marked — this shows that the AI
+really "thinks" and revises its opinion as it searches deeper.
 
-Szablony zdań są w ``tacticmind/i18n`` (klucze ``thought.*``, ``comment.*``, ``gain.*``).
+The sentence templates live in ``tacticmind/i18n`` (keys ``thought.*``, ``comment.*``, ``gain.*``).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class Thought:
 
 
 def material(board: chess.Board, color: chess.Color) -> int:
-    """Bilans materiału (w pionach) z perspektywy ``color``."""
+    """Material balance (in pawns) from the perspective of ``color``."""
     total = 0
     for piece in board.piece_map().values():
         value = _VALUES[piece.piece_type]
@@ -44,7 +44,7 @@ def material(board: chess.Board, color: chess.Color) -> int:
 
 
 def describe_gain(gain: int) -> str | None:
-    """Słowny opis zysku materialnego w pionach."""
+    """A verbal description of a material gain in pawns."""
     if gain >= 8:
         return t("gain.queen")
     if gain >= 5:
@@ -59,7 +59,7 @@ def describe_gain(gain: int) -> str | None:
 
 
 def line_comment(fen: str, pv: list[str]) -> str | None:
-    """Komentarz do wariantu, np. „Po Kxf7 Sg5+ wygrywam hetmana.”"""
+    """A comment on a line, e.g. "After Kxf7 Ng5+ I win the queen.\""""
     board = chess.Board(fen)
     me = board.turn
     start = material(board, me)
@@ -72,7 +72,7 @@ def line_comment(fen: str, pv: list[str]) -> str | None:
         played += 1
     if played < 2:
         return None
-    follow = " ".join(san_list(fen, pv, 3)[1:3])  # odpowiedź przeciwnika i nasz kolejny ruch
+    follow = " ".join(san_list(fen, pv, 3)[1:3])  # the opponent's reply and our next move
     if board.is_checkmate():
         return t("comment.mate", line=follow)
     gain = material(board, me) - start
@@ -85,7 +85,7 @@ def line_comment(fen: str, pv: list[str]) -> str | None:
 
 
 class ThoughtStream:
-    """Zamienia kolejne wiadomości silnika (głębokość po głębokości) na zdania."""
+    """Turns successive engine messages (depth by depth) into sentences."""
 
     def __init__(self, fen: str = chess.STARTING_FEN) -> None:
         self.reset(fen)
@@ -141,7 +141,7 @@ class ThoughtStream:
                 if abs(swing) >= 150:
                     new.append(self._say(t("thought.swing", old=format_score(self._score), new=score), "swing", d))
 
-        # Bliska alternatywa z MultiPV.
+        # A close alternative from MultiPV.
         if len(info.multi_pv) > 1 and mate is None:
             second = info.multi_pv[1]
             if abs(second.score.value - info.score.value) <= 25:
@@ -170,12 +170,12 @@ class ThoughtStream:
 
 
 # ---------------------------------------------------------------------------
-# Wyjaśnienia zadania i błędów
+# Explanations of the puzzle and of mistakes
 # ---------------------------------------------------------------------------
 
 
 def explain_puzzle(puzzle: Puzzle, engine_info: SearchInfo | None = None) -> list[str]:
-    """Tryb „Pełny” panelu: AI tłumaczy zadanie po jego zakończeniu."""
+    """The panel's "Full" mode: the AI explains the puzzle after it ends."""
     lines: list[str] = []
     start = puzzle.start_fen
     solution = list(puzzle.moves[1:])
@@ -207,7 +207,7 @@ def explain_puzzle(puzzle: Puzzle, engine_info: SearchInfo | None = None) -> lis
 
 
 def describe_refutation(fen_before: str, wrong_uci: str, reply_uci: str | None, after_score: EngineScore | None) -> str:
-    """Komunikat po błędnym ruchu, np. „Po Wd1? przeciwnik gra Hxh2#. Mat.”"""
+    """Message after a wrong move, e.g. "After Rd1? the opponent plays Qxh2#. Checkmate.\""""
     board = chess.Board(fen_before)
     me = board.turn
     wrong = chess.Move.from_uci(wrong_uci)

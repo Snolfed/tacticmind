@@ -1,4 +1,4 @@
-"""Tempo klatek: limiter FPS, licznik FPS i zapis ustawień w profilu."""
+"""Frame pacing: FPS limiter, FPS counter and saving the settings in the profile."""
 
 import time
 
@@ -8,11 +8,11 @@ from tacticmind.ui.pacing import FpsCounter, FramePacer
 
 def test_frame_pacer_keeps_even_period() -> None:
     pacer = FramePacer()
-    pacer.wait(100)  # pierwsza klatka startuje od razu
+    pacer.wait(100)  # the first frame starts immediately
     start = time.perf_counter()
     pacer.wait(100)
     pacer.wait(100)
-    assert time.perf_counter() - start >= 0.0199  # dwie klatki po 10 ms — nigdy krócej
+    assert time.perf_counter() - start >= 0.0199  # two 10 ms frames — never shorter
 
 
 def test_fps_counter_average() -> None:

@@ -1,14 +1,14 @@
-// Okno aplikacji TacticMind (Tauri 2).
+// TacticMind application window (Tauri 2).
 //
-// Gra, zadania, trener i silnik działają w Pythonie (i C); to okno tylko:
-//  1. pokazuje ekran ładowania,
-//  2. uruchamia w tle `python main.py --server --port 0` i czyta z niego linię `TACTICMIND_URL=…`,
-//  3. przechodzi pod ten adres (interfejs w TypeScript serwuje sam Python),
-//  4. przy zamknięciu okna zamyka standardowe wejście Pythona — to dla niego sygnał do wyjścia.
+// The game, puzzles, coach and engine run in Python (and C); this window only:
+//  1. shows a loading screen,
+//  2. starts `python main.py --server --port 0` in the background and reads the `TACTICMIND_URL=…` line from it,
+//  3. navigates to that address (Python itself serves the TypeScript interface),
+//  4. when the window closes, closes Python's standard input — the signal for it to exit.
 //
-// Jeśli Python się nie uruchomi albo przestanie działać, ekran ładowania pokazuje błąd z końcówką jego wyjścia.
+// If Python fails to start or stops running, the loading screen shows an error with the tail of its output.
 
-// W wersji release na Windows bez dodatkowego okna konsoli.
+// In release builds on Windows, no extra console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::VecDeque;
@@ -24,18 +24,18 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewWindow};
 
-/// Tyle czekamy na adres serwera (pierwsze uruchomienie Pythona bywa wolne: kompilacja .pyc, wczytanie zadań).
+/// How long we wait for the server address (the first Python start can be slow: compiling .pyc, loading puzzles).
 const START_TIMEOUT: Duration = Duration::from_secs(120);
-/// Tyle linii z końca wyjścia Pythona pokazujemy przy błędzie.
+/// How many lines from the end of Python's output we show on error.
 const LOG_LINES: usize = 30;
 const URL_PREFIX: &str = "TACTICMIND_URL=";
 
-/// Proces Pythona działający w tle.
+/// The Python process running in the background.
 struct Backend(Mutex<Option<Child>>);
 
 type Log = Arc<Mutex<VecDeque<String>>>;
 
-/// Katalog z `main.py`: `TACTICMIND_ROOT`, katalog repozytorium z czasu kompilacji albo przodek pliku wykonywalnego.
+/// Directory containing `main.py`: `TACTICMIND_ROOT`, the repository directory at compile time, or an ancestor of the executable.
 fn project_root() -> Option<PathBuf> {
     let is_root = |dir: &Path| dir.join("main.py").is_file() && dir.join("tacticmind").is_dir();
     if let Some(dir) = env::var_os("TACTICMIND_ROOT").map(PathBuf::from) {
@@ -51,7 +51,7 @@ fn project_root() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// Kandydaci na interpreter Pythona, od najlepszego: `TACTICMIND_PYTHON`, venv w projekcie, potem systemowy.
+/// Python interpreter candidates, best first: `TACTICMIND_PYTHON`, the project venv, then the system one.
 fn python_candidates(root: &Path) -> Vec<(OsString, Vec<&'static str>)> {
     let mut list: Vec<(OsString, Vec<&'static str>)> = Vec::new();
     if let Some(custom) = env::var_os("TACTICMIND_PYTHON") {
@@ -86,7 +86,7 @@ fn remember(log: &Log, line: String) {
     log.push_back(line);
 }
 
-/// Wątek przepisujący strumień Pythona na nasz (konsola w trybie deweloperskim) i do bufora `log`.
+/// A thread copying a Python stream to ours (console in development mode) and into the `log` buffer.
 fn pump(
     stream: impl Read + Send + 'static,
     log: Log,
@@ -110,7 +110,7 @@ fn pump(
             }
             remember(&log, line);
         }
-        // Koniec strumienia = Python zakończył pracę; zamknięcie kanału budzi czekającego na adres.
+        // End of stream = Python has exited; closing the channel wakes whoever waits for the address.
     });
 }
 
@@ -128,17 +128,17 @@ fn spawn_python(root: &Path, exe: &OsString, prefix: &[&str]) -> std::io::Result
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        // CREATE_NO_WINDOW: konsola Pythona (i procesów silnika, które ją dziedziczą) pozostaje niewidoczna.
+        // CREATE_NO_WINDOW: the console of Python (and of the engine processes that inherit it) stays hidden.
         command.creation_flags(0x0800_0000);
     }
     command.spawn()
 }
 
-/// Uruchamia serwer gry; zwraca proces, jego adres i bufor wyjścia albo opis błędu.
+/// Starts the game server; returns the process, its address and output buffer, or an error description.
 fn start_backend() -> Result<(Child, String, Log), String> {
     let root = project_root().ok_or_else(|| {
-        "Nie znalazłem katalogu gry (pliku main.py). Uruchom aplikację z repozytorium TacticMind \
-         albo ustaw zmienną TACTICMIND_ROOT."
+        "Could not find the game directory (the main.py file). Run the app from the TacticMind repository \
+         or set the TACTICMIND_ROOT variable."
             .to_string()
     })?;
     let mut tried = Vec::new();
@@ -146,7 +146,7 @@ fn start_backend() -> Result<(Child, String, Log), String> {
     for (exe, prefix) in python_candidates(&root) {
         let name = Path::new(&exe).display().to_string();
         let Ok(mut child) = spawn_python(&root, &exe, &prefix) else {
-            tried.push(format!("{name} (nie znaleziono)"));
+            tried.push(format!("{name} (not found)"));
             continue;
         };
         let log: Log = Arc::new(Mutex::new(VecDeque::new()));
@@ -163,7 +163,7 @@ fn start_backend() -> Result<(Child, String, Log), String> {
                 Ok(url) => return Ok((child, url, log)),
                 Err(RecvTimeoutError::Timeout) if started.elapsed() < START_TIMEOUT => {
                     if let Ok(Some(_)) = child.try_wait() {
-                        // Proces się skończył; jeszcze chwila na doczytanie jego wyjścia.
+                        // The process has ended; wait a moment to read the rest of its output.
                         thread::sleep(Duration::from_millis(300));
                         break;
                     }
@@ -182,7 +182,7 @@ fn start_backend() -> Result<(Child, String, Log), String> {
             .collect::<Vec<_>>()
             .join("\n");
     }
-    let mut message = format!("Próbowałem uruchomić Pythona: {}", tried.join(", "));
+    let mut message = format!("Tried to start Python: {}", tried.join(", "));
     if !last_log.is_empty() {
         message.push_str("\n\n");
         message.push_str(&last_log);
@@ -190,7 +190,7 @@ fn start_backend() -> Result<(Child, String, Log), String> {
     Err(message)
 }
 
-/// Kodowanie procentowe wszystkiego poza literami i cyframi ASCII (dla `decodeURIComponent` po stronie strony).
+/// Percent-encodes everything except ASCII letters and digits (for `decodeURIComponent` on the page side).
 fn encode(text: &str) -> String {
     text.bytes()
         .map(|b| {
@@ -203,7 +203,7 @@ fn encode(text: &str) -> String {
         .collect()
 }
 
-/// Wraca na ekran ładowania i pokazuje na nim błąd (przekazany we fragmencie adresu).
+/// Returns to the loading screen and shows the error on it (passed in the URL fragment).
 fn show_error(window: &WebviewWindow, home: &Url, message: &str) {
     eprintln!("TacticMind: {message}");
     let mut url = home.clone();
@@ -224,7 +224,7 @@ fn launch(app: &AppHandle) {
                 show_error(
                     &window,
                     &home,
-                    &format!("Python podał niepoprawny adres: {address}"),
+                    &format!("Python reported an invalid address: {address}"),
                 );
                 return;
             };
@@ -236,7 +236,7 @@ fn launch(app: &AppHandle) {
     }
 }
 
-/// Jeśli Python przestanie działać w trakcie gry (a okno nie jest zamykane), pokazujemy błąd zamiast martwej strony.
+/// If Python stops running during the game (and the window is not closing), show an error instead of a dead page.
 fn watch(app: AppHandle, window: WebviewWindow, home: Url, log: Log) {
     thread::spawn(move || loop {
         thread::sleep(Duration::from_millis(500));
@@ -257,14 +257,14 @@ fn watch(app: AppHandle, window: WebviewWindow, home: Url, log: Log) {
             show_error(
                 &window,
                 &home,
-                &format!("Python zakończył działanie ({status}).\n\n{tail}"),
+                &format!("Python exited ({status}).\n\n{tail}"),
             );
             return;
         }
     });
 }
 
-/// Zamknięcie standardowego wejścia kończy Pythona (tryb `--server`); po chwili — na wszelki wypadek — kill.
+/// Closing standard input ends Python (`--server` mode); after a moment — just in case — kill.
 fn stop_backend(app: &AppHandle) {
     let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() else {
         return;
@@ -290,7 +290,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("nie udało się utworzyć okna TacticMind")
+        .expect("failed to create the TacticMind window")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 stop_backend(app);

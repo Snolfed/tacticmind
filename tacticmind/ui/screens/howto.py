@@ -1,5 +1,5 @@
-"""Strona „Jak działa AI?” — wyjaśnienie algorytmów dla prowadzącego, z interaktywnym porównaniem
-minimaksu i alfa-bety (na prawdziwym silniku) oraz demonstracją cięć krok po kroku."""
+"""The "How does the AI work?" page — an explanation of the algorithms for the instructor, with an
+interactive comparison of minimax and alpha-beta (on the real engine) and a step-by-step pruning demo."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ POSITIONS = [
     ("pos.kiwipete", "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"),
     ("pos.endgame", "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"),
 ]
-#: Powyżej tylu szacowanych węzłów czysty minimaks w Pythonie trwałby zbyt długo.
+#: Above this many estimated nodes, plain minimax in Python would take too long.
 MINIMAX_LIMIT = 350_000
 SECTIONS = ["s1", "s2", "code", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"]
 
@@ -69,11 +69,11 @@ class HowToScreen(Screen):
         self.demo_next = Button("", partial(self._step, 1), icon="right")
         self.demo_all = Button(partial(t, "demo.all"), partial(self._step, 999), size=13)
         self.demo_reset = Button(partial(t, "demo.reset"), partial(self._step, -999), size=13)
-        # Wysokości kart z poprzedniej klatki (tło karty rysujemy przed treścią).
+        # Card heights from the previous frame (the card background is drawn before its content).
         self._compare_height = 300
         self._demo_height = 420
 
-    # ------------------------------------------------------------ akcje
+    # ------------------------------------------------------------ actions
     def _positions(self) -> list[tuple[str, str]]:
         positions = list(POSITIONS)
         play = self.app.screens.get("play")
@@ -119,7 +119,7 @@ class HowToScreen(Screen):
             self.error = event.message
             self.request = None
 
-    # ------------------------------------------------------------ zdarzenia
+    # ------------------------------------------------------------ events
     def _max_offset(self) -> float:
         return max(0.0, self.content_height - self.rect.height)
 
@@ -143,7 +143,7 @@ class HowToScreen(Screen):
                 return
         self.demo_switch.handle(event)
 
-    # ------------------------------------------------------------ rysowanie
+    # ------------------------------------------------------------ drawing
     def draw(self, surface: pygame.Surface) -> None:
         clock = now()
         self.offset = approach(self.offset, self.target, min(0.1, clock - self._last), 16)

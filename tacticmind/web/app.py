@@ -1,11 +1,11 @@
-"""Start interfejsu w przeglądarce: serwer + okno.
+"""Browser interface launcher: server + window.
 
-Tryby:
- - domyślny — serwer i okno aplikacji: Chrome / Edge / Chromium w trybie ``--app`` (osobne okno bez
-   pasków przeglądarki), a gdy żadnej z nich nie ma — zwykła karta w domyślnej przeglądarce,
- - ``--server`` — sam serwer (tak uruchamia go aplikacja Tauri): wypisuje ``TACTICMIND_URL=…``
-   i działa, dopóki proces nadrzędny nie zamknie standardowego wejścia,
- - ``--no-window`` — sam serwer z adresem w konsoli (np. do pracy nad interfejsem: ``npm run dev``).
+Modes:
+ - default — server and app window: Chrome / Edge / Chromium in ``--app`` mode (a separate window without
+   browser bars), and when none of them is available — a regular tab in the default browser,
+ - ``--server`` — server only (this is how the Tauri app runs it): prints ``TACTICMIND_URL=…``
+   and runs until the parent process closes standard input,
+ - ``--no-window`` — server only, with the address in the console (e.g. for interface work: ``npm run dev``).
 """
 
 from __future__ import annotations
@@ -25,14 +25,14 @@ from .core import WebApp
 from .server import DEFAULT_PORT, TacticMindServer
 
 WINDOW_SIZE = (1360, 860)
-#: Po zamknięciu ostatniej karty (zwykła przeglądarka) serwer kończy pracę po tylu sekundach.
+#: After the last tab is closed (regular browser) the server shuts down after this many seconds.
 IDLE_EXIT = 20.0
-#: Jeśli karta w ogóle się nie połączy, kończymy po tylu sekundach.
+#: If no tab connects at all, we exit after this many seconds.
 FIRST_CONNECT = 120.0
 
 
 def _candidates() -> list[str]:
-    """Przeglądarki z trybem aplikacji (``--app``), od najlepszej."""
+    """Browsers with an app mode (``--app``), best first."""
     names = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable", "brave-browser", "vivaldi"]
     found = [path for name in names if (path := shutil.which(name))]
     if sys.platform == "win32":
@@ -53,7 +53,7 @@ def _candidates() -> list[str]:
 
 
 def open_app_window(url: str) -> subprocess.Popen[bytes] | None:
-    """Okno aplikacji w Chrome/Edge (``--app``) z osobnym profilem — proces żyje tak długo jak okno."""
+    """App window in Chrome/Edge (``--app``) with a separate profile — the process lives as long as the window."""
     custom = os.environ.get("TACTICMIND_BROWSER")
     browsers = [custom] if custom else _candidates()
     profile = data_dir() / "window"
@@ -68,7 +68,7 @@ def open_app_window(url: str) -> subprocess.Popen[bytes] | None:
             "--disable-features=Translate",
         ]
         if sys.platform.startswith("linux"):
-            args.append("--class=tacticmind")  # klasa okna — pasuje do skrótu .desktop (StartupWMClass)
+            args.append("--class=tacticmind")  # window class — matches the .desktop shortcut (StartupWMClass)
         try:
             return subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
@@ -77,7 +77,7 @@ def open_app_window(url: str) -> subprocess.Popen[bytes] | None:
 
 
 def _wait_for_parent() -> None:
-    """Tryb ``--server``: koniec, gdy proces nadrzędny (Tauri) zamknie nasze standardowe wejście."""
+    """``--server`` mode: exit when the parent process (Tauri) closes our standard input."""
     try:
         while sys.stdin.read(1024):
             pass
@@ -87,7 +87,7 @@ def _wait_for_parent() -> None:
 
 
 def _wait_for_tabs(app: WebApp, idle_exit: float = IDLE_EXIT, seen: bool = False) -> None:
-    """Działamy, dopóki jakaś karta jest podłączona (i jeszcze ``idle_exit`` s po rozłączeniu ostatniej)."""
+    """Keep running while any tab is connected (and for ``idle_exit`` s after the last one disconnects)."""
     started = time.monotonic()
     while True:
         time.sleep(0.5)
@@ -100,11 +100,11 @@ def _wait_for_tabs(app: WebApp, idle_exit: float = IDLE_EXIT, seen: bool = False
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="tacticmind", description="TacticMind — interfejs w przeglądarce")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port serwera (0 = dowolny wolny)")
-    parser.add_argument("--server", action="store_true", help="sam serwer dla aplikacji Tauri")
-    parser.add_argument("--no-window", action="store_true", help="sam serwer, bez otwierania okna")
-    parser.add_argument("--browser", action="store_true", help="zwykła karta w domyślnej przeglądarce zamiast okna aplikacji")
+    parser = argparse.ArgumentParser(prog="tacticmind", description="TacticMind — browser interface")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="server port (0 = any free port)")
+    parser.add_argument("--server", action="store_true", help="server only, for the Tauri app")
+    parser.add_argument("--no-window", action="store_true", help="server only, without opening a window")
+    parser.add_argument("--browser", action="store_true", help="a regular tab in the default browser instead of an app window")
     args, _ = parser.parse_known_args(argv)
 
     app = WebApp()
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"TACTICMIND_URL={url}", flush=True)
             _wait_for_parent()
         elif args.no_window:
-            print(f"TacticMind: {url}  (Ctrl+C kończy)", flush=True)
+            print(f"TacticMind: {url}  (Ctrl+C to quit)", flush=True)
             while True:
                 time.sleep(3600)
         else:
@@ -125,11 +125,11 @@ def main(argv: list[str] | None = None) -> None:
             if window is not None:
                 print(f"TacticMind: {url}", flush=True)
                 window.wait()
-                # Gdy okno gry było już otwarte, nowy proces przeglądarki oddaje je staremu i od razu kończy —
-                # wtedy serwer działa dalej, dopóki jakaś karta jest podłączona.
+                # If the game window was already open, the new browser process hands over to the old one and exits
+                # immediately — then the server keeps running while any tab is connected.
                 _wait_for_tabs(app, idle_exit=3.0, seen=True)
             else:
-                print(f"TacticMind: {url}  (otwieram w przeglądarce)", flush=True)
+                print(f"TacticMind: {url}  (opening in the browser)", flush=True)
                 webbrowser.open(url)
                 _wait_for_tabs(app)
     except KeyboardInterrupt:

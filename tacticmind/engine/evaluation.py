@@ -1,14 +1,15 @@
-"""Funkcja oceny pozycji.
+"""Position evaluation function.
 
-Ocena = materiał + tablice pozycyjne (PST) + mobilność + bezpieczeństwo króla
-+ struktura pionków + para gońców. Każdy składnik ma wartość dla gry środkowej
-(mg) i końcówki (eg); wynik to średnia ważona fazą gry („tapered eval”).
+Score = material + piece-square tables (PST) + mobility + king safety
++ pawn structure + bishop pair. Each term has a middlegame (mg) and an
+endgame (eg) value; the result is their average weighted by game phase
+("tapered eval").
 
-Materiał i PST plansza sumuje przyrostowo przy każdym ruchu (``board.mg``,
-``board.eg``), tutaj dokładamy tylko składniki zależne od układu figur.
+The board sums material and PST incrementally on every move (``board.mg``,
+``board.eg``); here we only add the terms that depend on piece placement.
 
-Wynik jest w centypionach (100 = jeden pion). ``evaluate`` zwraca go
-z perspektywy strony na ruchu — tego wymaga negamax.
+The score is in centipawns (100 = one pawn). ``evaluate`` returns it from
+the side to move's perspective, as negamax requires.
 """
 
 from __future__ import annotations
@@ -32,16 +33,16 @@ from .constants import (
 )
 from .pst import MATERIAL_EG, MATERIAL_MG, MAX_PHASE
 
-#: Mobilność: premia za każde dostępne pole ponad typową liczbę pól (mg, eg).
+#: Mobility: bonus for each available square above the typical count (mg, eg).
 MOBILITY_MG = (0, 0, 4, 5, 2, 1, 0)
 MOBILITY_EG = (0, 0, 4, 5, 4, 2, 0)
 MOBILITY_BASE = (0, 0, 4, 6, 6, 12, 0)
 
-#: Premia za piona przechodniego wg rzędu (z perspektywy właściciela).
+#: Passed pawn bonus by rank (from the owner's perspective).
 PASSED_MG = (0, 5, 10, 15, 25, 40, 60, 0)
 PASSED_EG = (0, 10, 20, 35, 60, 95, 140, 0)
 
-#: Waga „przyciągania” do wrogiego króla (tropizm) — część bezpieczeństwa króla.
+#: Weight of "attraction" to the enemy king (tropism), part of king safety.
 TROPISM = (0, 0, 2, 1, 2, 4, 0)
 
 BISHOP_PAIR = (30, 50)
@@ -51,7 +52,7 @@ ISOLATED = (10, 15)
 
 @dataclass(slots=True)
 class EvalBreakdown:
-    """Rozbicie oceny na składniki (perspektywa białych, centypiony) — do panelu w UI."""
+    """Evaluation broken down into terms (White's perspective, centipawns), for the UI panel."""
 
     material: int
     pst: int
@@ -64,18 +65,18 @@ class EvalBreakdown:
 
 
 def evaluate(board: Board) -> int:
-    """Ocena z perspektywy strony na ruchu (wywoływana w liściach drzewa)."""
+    """Score from the side to move's perspective (called at the tree leaves)."""
     score = evaluate_white(board)
     return score if board.side == WHITE else -score
 
 
 def evaluate_white(board: Board) -> int:
-    """Ocena z perspektywy białych."""
+    """Score from White's perspective."""
     return _evaluate(board, None)
 
 
 def explain(board: Board) -> EvalBreakdown:
-    """Ocena rozbita na składniki (wolniej, tylko dla interfejsu i testów)."""
+    """Score broken down into terms (slower; only for the UI and tests)."""
     parts: dict[str, int] = {}
     _evaluate(board, parts)
     return EvalBreakdown(**parts)
@@ -89,13 +90,13 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
     sq = board.sq
     phase = min(board.phase, MAX_PHASE)
 
-    # Liczba pionów na kolumnach i ich najdalej/najbliżej wysunięte rzędy.
+    # Pawn count per file and their most/least advanced ranks.
     pawn_count = ([0] * 8, [0] * 8)
     pawn_min = ([8] * 8, [8] * 8)
     pawn_max = ([-1] * 8, [-1] * 8)
     mob_mg = [0, 0]
     mob_eg = [0, 0]
-    tropism = [0, 0]  # presja figur danego koloru na wrogiego króla
+    tropism = [0, 0]  # pressure of this color's pieces on the enemy king
     bishops = [0, 0]
     kings = board.kings
     any_pawn = False
@@ -121,7 +122,7 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
         if kind == BISHOP:
             bishops[color] += 1
 
-        # Mobilność: liczba pól, na które figura może pójść (puste lub z wrogą figurą).
+        # Mobility: number of squares the piece can move to (empty or holding an enemy piece).
         mobility = 0
         if kind == KNIGHT:
             for t in KNIGHT_TARGETS[s]:
@@ -142,18 +143,18 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
         extra = mobility - MOBILITY_BASE[kind]
         mob_mg[color] += extra * MOBILITY_MG[kind]
         mob_eg[color] += extra * MOBILITY_EG[kind]
-        # Tropizm: im bliżej wrogiego króla stoi figura, tym groźniejszy atak.
+        # Tropism: the closer a piece stands to the enemy king, the more dangerous the attack.
         enemy_king = kings[color ^ 1]
         distance = max(abs((enemy_king & 7) - (s & 7)), abs((enemy_king >> 4) - (s >> 4)))
         tropism[color] += (7 - distance) * TROPISM[kind]
 
-    # Brak materiału do mata: same króle albo król z jedną lekką figurą.
+    # Insufficient mating material: bare kings, or a king with a single minor piece.
     if not any_pawn and board.phase <= 1:
         if parts is not None:
             parts.update(material=0, pst=0, mobility=0, king_safety=0, pawns=0, bishop_pair=0, phase=phase, total=0)
         return 0
 
-    # Struktura pionków: zdwojone, izolowane, przechodnie.
+    # Pawn structure: doubled, isolated, passed.
     pawns_mg = [0, 0]
     pawns_eg = [0, 0]
     for color in (WHITE, BLACK):
@@ -171,8 +172,8 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
             if (f == 0 or not own[f - 1]) and (f == 7 or not own[f + 1]):
                 mg -= ISOLATED[0] * n
                 eg -= ISOLATED[1] * n
-            # Pion przechodni: przed najdalej wysuniętym pionem nie ma wrogich pionów
-            # na tej samej ani na sąsiednich kolumnach.
+            # Passed pawn: no enemy pawns ahead of the most advanced pawn
+            # on the same or adjacent files.
             lo, hi = max(0, f - 1), min(7, f + 1)
             if color == WHITE:
                 rank = pawn_max[WHITE][f]
@@ -188,7 +189,7 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
         pawns_mg[color] = mg
         pawns_eg[color] = eg
 
-    # Bezpieczeństwo króla (tylko gra środkowa): osłona pionków minus presja wrogich figur.
+    # King safety (middlegame only): pawn shield minus enemy piece pressure.
     shield_w = _king_shield(board, WHITE, pawn_count)
     shield_b = _king_shield(board, BLACK, pawn_count)
     king_mg = (shield_w - tropism[BLACK]) - (shield_b - tropism[WHITE])
@@ -228,12 +229,12 @@ def _evaluate(board: Board, parts: dict[str, int] | None) -> int:
 
 
 def _king_shield(board: Board, color: int, pawn_count: tuple[list[int], list[int]]) -> int:
-    """Osłona króla: premia za własne piony przed królem, kara za brak osłony i otwarte linie."""
+    """King shield: bonus for own pawns in front of the king, penalty for missing shield and open files."""
     king = board.kings[color]
     k_file, k_rank = king & 7, king >> 4
     home = 0 if color == WHITE else 7
     if abs(k_rank - home) > 1:
-        return -20  # król wyszedł z ukrycia
+        return -20  # the king has left its shelter
     step = 16 if color == WHITE else -16
     own_pawn = (color << 3) | PAWN
     sq = board.sq
@@ -250,12 +251,12 @@ def _king_shield(board: Board, color: int, pawn_count: tuple[list[int], list[int
         else:
             score -= 12
         if not own[f]:
-            score -= 15 if not enemy[f] else 8  # linia otwarta / półotwarta przy królu
+            score -= 15 if not enemy[f] else 8  # open / half-open file next to the king
     return score
 
 
 def piece_value(kind: int) -> int:
-    """Wartość figury (gra środkowa) — do porządkowania i przycinania bić."""
+    """Piece value (middlegame), for ordering and pruning captures."""
     return MATERIAL_MG[kind]
 
 

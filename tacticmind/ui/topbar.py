@@ -1,4 +1,4 @@
-"""Górny pasek: logo, nawigacja, język, dźwięk, duży ranking z animowaną zmianą i seria z płomieniem."""
+"""Top bar: logo, navigation, language, sound, a large rating with an animated change and a streak with a flame."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 BASE_HEIGHT = 68
 _NAV = (("play", "nav.play"), ("coach", "nav.coach"), ("stats", "nav.stats"), ("howto", "nav.howto"))
-#: Ekrany, przy których podświetla się dana zakładka.
+#: Screens on which a given tab is highlighted.
 _ACTIVE = {"coach": ("coach", "coach_game")}
 
 
@@ -50,7 +50,7 @@ class TopBar:
         profile = self.app.profile
         profile.sound = not profile.sound
         if profile.sound and profile.volume < 0.02:
-            profile.volume = self.volume.value = 0.5  # włączenie dźwięku przy suwaku na zerze
+            profile.volume = self.volume.value = 0.5  # enabling sound while the slider is at zero
             self.app.sounds.set_volume(profile.volume)
         self.app.sounds.enabled = profile.sound
         self.app.save()
@@ -65,19 +65,19 @@ class TopBar:
 
     def _volume_released(self) -> None:
         self.app.save()
-        self.app.sounds.play("move")  # próbka: od razu słychać nową głośność
+        self.app.sounds.play("move")  # sample: the new volume is heard right away
 
     def on_rating_change(self, change: RatingChange) -> None:
         self.delta = change.delta
         self.delta_at = now()
 
     def layout(self, width: int) -> None:
-        """Rozmieszcza elementy w jednym wierszu, a gdy okno jest wąskie — w dwóch
-        (logo i ranking u góry, nawigacja, język i dźwięk pod spodem)."""
+        """Lays out the items in one row, or in two when the window is narrow
+        (logo and rating on top, navigation, language and sound below)."""
         logo_w = fonts.text_size("TacticMind", fs(26), "bold")[0]
         narrow = width < px(560)
         slider_w = px(56) if narrow else px(90)
-        self.fullscreen.visible = not narrow  # w bardzo wąskim oknie pełny ekran zostaje pod F11
+        self.fullscreen.visible = not narrow  # in a very narrow window fullscreen stays available via F11
         controls_w = px(84) + px(8) + px(40) + px(6) + slider_w + (px(12) + px(40) if self.fullscreen.visible else 0) + px(6) + px(40)
         labels = [t(key) for _, key in _NAV]
         widths = [fonts.text_size(label, fs(14), "bold")[0] + px(30) for label in labels]
@@ -122,7 +122,7 @@ class TopBar:
         return any(button.handle(event) for button in [*self.nav, self.sound, self.fullscreen, self.settings])
 
     def _source(self) -> str:
-        """Na ekranach trenera pasek pokazuje ranking partii z trenerem, a nie zadań."""
+        """On the coach screens the bar shows the coach-game rating instead of the puzzle rating."""
         return "coach" if self.app.current_name.startswith("coach") else "puzzles"
 
     def _rating(self) -> tuple[float, float | None]:
@@ -136,7 +136,7 @@ class TopBar:
         source = self._source()
         if source != self.source:
             self.source = source
-            self.shown_rating = target  # inny ranking — bez animowania „przewijania” liczby
+            self.shown_rating = target  # a different rating — don't animate the number rolling
         self.shown_rating = approach(self.shown_rating, target, dt, 5)
         if abs(target - self.shown_rating) < 0.5:
             self.shown_rating = target
@@ -147,7 +147,7 @@ class TopBar:
         pygame.draw.line(surface, theme.BORDER_SOFT, (0, self.rect.height - 1), (self.rect.width, self.rect.height - 1))
         if self.two_rows:
             pygame.draw.line(surface, (*theme.BORDER_SOFT[:3],), (px(14), h), (self.rect.width - px(14), h))
-        # Logo: „Tactic” + „Mind” w gradiencie turkus → fiolet
+        # Logo: "Tactic" + "Mind" in a teal → violet gradient
         logo = draw_text(surface, "Tactic", (px(22), h // 2), fs(26), theme.TEXT, "bold", "midleft")
         ai_surface = gfx.gradient_text(fonts.render("Mind", fs(26), (255, 255, 255), "bold"), theme.ACCENT, theme.VIOLET)
         ai_rect = ai_surface.get_rect(midleft=(logo.right, h // 2))
@@ -185,7 +185,7 @@ class TopBar:
         if rd is not None:
             rd_rect = draw_text(surface, f"± {round(rd)}", (rx, h // 2 + px(6)), fs(14), theme.MUTED, "bold", "midright")
             rx = rd_rect.x - px(6)
-        # Liczba lekko „podskakuje” tuż po zmianie rankingu.
+        # The number bounces slightly right after the rating changes.
         age = clock - self.delta_at
         value_surf = fonts.render(str(round(self.shown_rating)), fs(30), theme.TEXT, "bold")
         if age < 0.6:
@@ -202,7 +202,7 @@ class TopBar:
             if profile.calibrating:
                 caption += " · " + t("rating.calibration", n=profile.games)
         draw_text(surface, caption, (right - streak_w, px(5)), fs(11), theme.MUTED, "regular", "topright", max_width=px(240))
-        # Animowana zmiana: +12 turkusowo, −9 czerwono — wyskakuje, unosi się i znika.
+        # Animated change: +12 in teal, −9 in red — pops up, floats and fades.
         if self.delta is not None and age < 2.6:
             pop = ease_out_back(age / 0.35, 2.0)
             fade = 1.0 if age < 1.8 else max(0.0, 1 - (age - 1.8) / 0.8)

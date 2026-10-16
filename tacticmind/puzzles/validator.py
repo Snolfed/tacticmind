@@ -1,4 +1,4 @@
-"""Ocena ruchu gracza, który różni się od rozwiązania wzorcowego."""
+"""Evaluation of a player's move that differs from the reference solution."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ import chess
 
 from ..engine.types import EngineScore
 
-#: Ruch „nadal wyraźnie wygrywa”, gdy ocena po nim przekracza +3 piony…
+#: A move "still clearly wins" when the evaluation after it exceeds +3 pawns…
 WINNING_THRESHOLD = 300
-#: …i jest najwyżej 50 cp gorsza od najlepszej.
+#: …and is at most 50 cp worse than the best one.
 MAX_LOSS = 50
 
 
@@ -20,7 +20,7 @@ class Alternative(Enum):
 
 
 def gives_mate(board: chess.Board, move: chess.Move) -> bool:
-    """Czy ruch daje mata? Taki ruch zawsze rozwiązuje zadanie, nawet jeśli różni się od wzorca."""
+    """Does the move deliver mate? Such a move always solves the puzzle, even if it differs from the reference."""
     board.push(move)
     try:
         return board.is_checkmate()
@@ -29,19 +29,19 @@ def gives_mate(board: chess.Board, move: chess.Move) -> bool:
 
 
 def score_for(score: EngineScore, color: chess.Color) -> int:
-    """Wartość oceny z perspektywy wskazanego koloru (mat = ±(32000 − półruchy))."""
+    """Evaluation value from the perspective of the given colour (mate = ±(32000 − plies))."""
     return score.value if color == chess.WHITE else -score.value
 
 
 def judge_alternative(best: EngineScore, after: EngineScore, player: chess.Color) -> Alternative:
-    """Ocena ruchu innego niż wzorcowy na podstawie analizy silnika.
+    """Judges a move other than the reference one based on engine analysis.
 
-    :param best: ocena najlepszego ruchu w pozycji przed ruchem gracza,
-    :param after: ocena pozycji po ruchu gracza,
-    :param player: kolor gracza.
+    :param best: evaluation of the best move in the position before the player's move,
+    :param after: evaluation of the position after the player's move,
+    :param player: the player's colour.
 
-    Jeśli ruch nadal wyraźnie wygrywa (> +3) i jest najwyżej 50 cp gorszy od
-    najlepszego, nie liczymy go jako błędu — gracz dostaje drugą szansę.
+    If the move still clearly wins (> +3) and is at most 50 cp worse than
+    the best one, we do not count it as a mistake — the player gets a second chance.
     """
     best_value = score_for(best, player)
     after_value = score_for(after, player)
@@ -51,19 +51,19 @@ def judge_alternative(best: EngineScore, after: EngineScore, player: chess.Color
 
 
 # ---------------------------------------------------------------------------
-# Genialny ruch (!!) — poświęcenie materiału
+# Brilliant move (!!) — a material sacrifice
 # ---------------------------------------------------------------------------
 _VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
-#: Ile pionów (co najmniej) trzeba oddać, żeby ruch uznać za poświęcenie.
+#: How many pawns (at least) must be given up for a move to count as a sacrifice.
 SACRIFICE_MIN_LOSS = 2
 
 
 def see(board: chess.Board, square: chess.Square) -> int:
-    """Wymiana na polu (static exchange evaluation): ile materiału (w pionach) zyskuje strona przy ruchu,
-    bijąc figurę stojącą na ``square``, gdy obie strony biją zawsze najtańszą figurą i mogą przerwać wymianę.
+    """Static exchange evaluation: how much material (in pawns) the side to move gains by capturing
+    the piece on ``square``, when both sides always capture with the cheapest piece and may stop the exchange.
 
-    Pierwsze bicie musi być legalne (związanie, szach); dalsze liczone są uproszczenie, ale z promieniami
-    rentgenowskimi — po zdjęciu bijącej figury z planszy odsłaniają się figury stojące za nią. 0, gdy nie ma bicia.
+    The first capture must be legal (pins, check); later ones are computed in a simplified way, but with
+    X-rays — removing the capturing piece from the board uncovers the pieces behind it. 0 when there is no capture.
     """
     target = board.piece_at(square)
     if target is None:
@@ -86,9 +86,9 @@ def see(board: chess.Board, square: chess.Square) -> int:
             break
         from_square = min(attackers, key=lambda sq: _VALUES[work.piece_type_at(sq) or chess.KING] or 100)
         if work.piece_type_at(from_square) == chess.KING and work.attackers(not side, square):
-            break  # król nie wejdzie pod bicie
+            break  # the king will not step into a capture
         gains.append((_VALUES[on_square] or 100) - gains[-1])
-    # Minimaks od końca: każda strona może przerwać wymianę, jeśli dalsze bicie jej się nie opłaca.
+    # Minimax from the end: each side may stop the exchange if capturing further does not pay off.
     for i in range(len(gains) - 1, 0, -1):
         gains[i - 1] = -max(-gains[i - 1], gains[i])
     return max(0, gains[0])
@@ -102,7 +102,7 @@ def _captured_value(board: chess.Board, move: chess.Move) -> int:
 
 
 def _exposed(after: chess.Board, square: chess.Square) -> int:
-    """Ile przeciwnik (strona przy ruchu w ``after``) wygrywa, bijąc figurę na ``square`` (bez pionów i króla)."""
+    """How much the opponent (the side to move in ``after``) wins by capturing the piece on ``square`` (excluding pawns and the king)."""
     piece = after.piece_at(square)
     if piece is None or piece.piece_type in (chess.PAWN, chess.KING):
         return 0
@@ -110,7 +110,7 @@ def _exposed(after: chess.Board, square: chess.Square) -> int:
 
 
 def _doomed(board: chess.Board, square: chess.Square) -> bool:
-    """Czy figury na ``square`` nie da się już uratować — każdy ruch ją oddaje (wtedy to nie poświęcenie)."""
+    """Whether the piece on ``square`` can no longer be saved — every move loses it (then it is not a sacrifice)."""
     for move in board.legal_moves:
         target = move.to_square if move.from_square == square else square
         after = board.copy(stack=False)
@@ -121,11 +121,11 @@ def _doomed(board: chess.Board, square: chess.Square) -> bool:
 
 
 def sacrifice_loss(board: chess.Board, move: chess.Move) -> int:
-    """Ile materiału (w pionach) oddaje ruch: przeciwnik może zbić ruszoną figurę albo figurę zostawioną bez obrony.
+    """How much material (in pawns) the move gives up: the opponent may capture the moved piece or a piece left undefended.
 
-    Jak na chess.com, poświęceniem jest też zostawienie figury pod biciem (np. zignorowanie ataku na hetmana)
-    albo odejście obrońcą — ale nie oddanie figury, której i tak nie dało się uratować (desperado).
-    Zwraca 0, gdy przeciwnik nie może nic wygrać biciem albo ruch daje mata.
+    As on chess.com, leaving a piece en prise (e.g. ignoring an attack on the queen) or moving a defender away
+    also counts as a sacrifice — but not giving up a piece that could not be saved anyway (desperado).
+    Returns 0 when the opponent cannot win anything by capturing or the move delivers mate.
     """
     piece = board.piece_at(move.from_square)
     if piece is None:
@@ -144,13 +144,13 @@ def sacrifice_loss(board: chess.Board, move: chess.Move) -> int:
             continue
         origin = move.from_square if square == move.to_square else square
         if board.piece_at(origin) == other and _exposed_before(board, origin) >= given and _doomed(board, origin):
-            continue  # figura i tak była stracona
+            continue  # the piece was lost anyway
         loss = given
     return loss
 
 
 def _exposed_before(board: chess.Board, square: chess.Square) -> int:
-    """Ile przeciwnik wygrałby biciem figury na ``square`` przed ruchem (gdyby to on był przy ruchu)."""
+    """How much the opponent would win by capturing the piece on ``square`` before the move (if it were their turn)."""
     if board.is_check():
         return 0
     null = board.copy(stack=False)
@@ -159,8 +159,8 @@ def _exposed_before(board: chess.Board, square: chess.Square) -> int:
 
 
 def is_sacrifice(board: chess.Board, move: chess.Move) -> bool:
-    """Czy ruch jest poświęceniem (oddaje figurę, nie piona, za co najmniej 2 piony materiału)?
+    """Is the move a sacrifice (gives up a piece, not a pawn, for at least 2 pawns of material)?
 
-    Poprawny ruch, który jest poświęceniem, gra pokazuje jako „genialny” (!!), jak chess.com.
+    A correct move that is a sacrifice is shown by the game as "brilliant" (!!), like chess.com.
     """
     return sacrifice_loss(board, move) >= SACRIFICE_MIN_LOSS

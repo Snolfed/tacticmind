@@ -1,7 +1,7 @@
-"""Znaczki klasyfikacji ruchów (jak w „Game Review” na chess.com): !!, !, ★, ✓, książka, ?!, ?, ??.
+"""Move-classification badges (as in chess.com "Game Review"): !!, !, ★, ✓, book, ?!, ?, ??.
 
-Kształty rysujemy wektorowo (gwiazdka, książka, ptaszek), a wykrzykniki i pytajniki zwykłą czcionką,
-więc nie zależymy od tego, czy czcionka ma symbole typu ★.
+Shapes (star, book, check mark) are drawn as vectors and the exclamation/question marks with a
+regular font, so we don't depend on whether the font has symbols like ★.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def draw_star(surface: pygame.Surface, center: tuple[float, float], radius: floa
 
 
 def _book(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color) -> None:
-    """Otwarta książka: dwie strony z grzbietem pośrodku."""
+    """An open book: two pages with a spine in the middle."""
     cx, cy = center
     w, h = size * 0.36, size * 0.26
     left = [(cx - w, cy - h * 0.8), (cx - w * 0.15, cy - h), (cx, cy - h * 0.7), (cx, cy + h), (cx - w * 0.15, cy + h * 0.75), (cx - w, cy + h)]
@@ -54,7 +54,7 @@ def _book(surface: pygame.Surface, center: tuple[float, float], size: float, col
 
 
 def draw_badge(surface: pygame.Surface, center: tuple[float, float], radius: float, cls: str, pop: float = 1.0) -> None:
-    """Okrągły znaczek klasy ruchu (``pop`` < 1 — w trakcie wyskakiwania)."""
+    """Round move-class badge (``pop`` < 1 — while popping in)."""
     r = radius * pop
     if r < 1.5:
         return
