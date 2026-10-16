@@ -289,10 +289,14 @@ def _failed_before() -> bool:
         return False
 
 
+def prebuilt_dll_path() -> Path:
+    return NATIVE_DIR / "prebuilt" / "windows-x64" / "tmengine.dll"
+
+
 def prebuilt_library() -> Path | None:
     """Gotowa biblioteka dołączona do repozytorium (Windows x64 — tam rzadko jest kompilator C)."""
     if sys.platform == "win32" and platform.machine().lower() in ("amd64", "x86_64"):
-        return NATIVE_DIR / "prebuilt" / "windows-x64" / "tmengine.dll"
+        return prebuilt_dll_path()
     return None
 
 
