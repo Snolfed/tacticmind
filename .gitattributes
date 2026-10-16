@@ -1,0 +1,4 @@
+# Zbudowany interfejs (npm run build w katalogu web) — nie edytować ręcznie.
+tacticmind/web/static/** linguist-generated=true
+web/package-lock.json linguist-generated=true
+web/src-tauri/Cargo.lock linguist-generated=true

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TacticMind</title>
+    <!-- Ekran ładowania okna Tauri: widać go, dopóki Python nie poda adresu gry (albo gdy coś pójdzie nie tak). -->
+    <style>
+      :root {
+        color-scheme: dark;
+        --accent: rgb(45, 212, 191);
+        --text: rgb(238, 241, 248);
+        --muted: rgb(142, 150, 175);
+        --surface: rgb(27, 31, 45);
+        --rose: rgb(244, 63, 94);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: linear-gradient(rgb(15, 17, 26), rgb(21, 24, 36));
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, -apple-system, "Noto Sans", sans-serif;
+        user-select: none;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        width: min(760px, 100%);
+        text-align: center;
+      }
+      img {
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: 0.02em;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 3px solid rgba(45, 212, 191, 0.2);
+        border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .error {
+        display: none;
+        width: 100%;
+        text-align: left;
+        padding: 16px 18px;
+        border-radius: 14px;
+        background: var(--surface);
+        border: 1px solid rgba(244, 63, 94, 0.45);
+      }
+      .error strong {
+        color: var(--rose);
+      }
+      pre {
+        margin: 10px 0 0;
+        max-height: 46vh;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: 12.5px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace;
+        color: var(--text);
+        user-select: text;
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 13.5px;
+      }
+      code {
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      body.failed .spinner,
+      body.failed .status {
+        display: none;
+      }
+      body.failed .error {
+        display: block;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 3s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="icon.png" alt="" />
+      <h1>TacticMind</h1>
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="status">Uruchamiam grę…</p>
+      <div class="error" role="alert">
+        <strong>Gra w Pythonie nie działa.</strong>
+        <pre id="details"></pre>
+        <p class="hint">
+          Okno uruchamia Pythona z katalogu <code>.venv</code> w folderze gry. Utwórz go i zainstaluj biblioteki:
+          <code>python3 -m venv .venv</code>, potem <code>.venv/bin/pip install -r requirements.txt</code>
+          (Windows: <code>.venv\Scripts\pip install -r requirements.txt</code>). Potem uruchom okno ponownie.
+        </p>
+      </div>
+    </main>
+    <script>
+      // Błąd przychodzi we fragmencie adresu (#error=…) — ustawia go okno Tauri, gdy Python się nie uruchomi.
+      function update() {
+        const match = /^#error=(.*)$/s.exec(location.hash);
+        if (!match) return;
+        let text = match[1];
+        try {
+          text = decodeURIComponent(text);
+        } catch {
+          // zostawiamy surowy tekst
+        }
+        document.getElementById("details").textContent = text;
+        document.body.classList.add("failed");
+      }
+      window.addEventListener("hashchange", update);
+      update();
+    </script>
+  </body>
+</html>

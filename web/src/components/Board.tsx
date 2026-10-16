@@ -1,0 +1,608 @@
+// Szachownica: pola i strzałki w SVG (ostre przy każdym powiększeniu), figury jako obrazki SVG.
+// Pozycję i to, co jest legalne, podaje Python; tutaj są animacje, przeciąganie, wybór promocji
+// i rysowanie strzałek prawym przyciskiem myszy.
+
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactElement } from "react";
+import { store } from "../api";
+import {
+  applyMove,
+  arrowPath,
+  arrowPoints,
+  easeInOutCubic,
+  easeOutCubic,
+  fromView,
+  parseFen,
+  splitAlpha,
+  squareIndex,
+  squareName,
+  toView,
+  transition,
+  type Placement,
+  type Transition,
+} from "../chess";
+import { ACCENT, BRILLIANT, CONFETTI, WHITE, effects } from "../effects";
+import { useFrame } from "../ticker";
+import type { BoardSnapshot, Color } from "../types";
+import { BADGE_COLORS, Badge } from "./Badge";
+
+/** Czas animacji ruchu (jak w wersji pygame). */
+const MOVE_TIME = 200;
+const PROMOTION_PIECES = ["q", "n", "r", "b"];
+const USER_COLORS = {
+  plain: "rgba(251,191,36,0.8)",
+  shift: "rgba(244,63,94,0.8)",
+  ctrl: "rgba(96,165,250,0.8)",
+  alt: "rgba(45,212,191,0.8)",
+};
+
+export function pieceUrl(piece: string): string {
+  return `/pieces/${piece}.svg`;
+}
+
+function signature(placement: Placement): string {
+  let sig = "";
+  for (let square = 0; square < 64; square++) sig += placement.get(square) ?? "--";
+  return sig;
+}
+
+function rgbOf(css: string): [number, number, number] {
+  const match = /(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(css);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [142, 150, 175];
+}
+
+interface Anim extends Transition {
+  start: number;
+}
+
+interface View {
+  sig: string;
+  placement: Placement;
+  orientation: Color;
+  seq: number;
+  anim: Anim | null;
+}
+
+interface Optimistic {
+  seq: number;
+  uci: string;
+  animate: boolean;
+}
+
+interface DragInfo {
+  from: number;
+  x: number;
+  y: number;
+  lastX: number;
+  lastY: number;
+  moved: boolean;
+}
+
+export interface BoardProps {
+  board: BoardSnapshot;
+  /** Nazwa szachownicy w zdarzeniach „fx” z serwera (play / coach). */
+  name?: string;
+  onMove?: (uci: string) => void;
+  /** Strzałki pulsują (ozdobna szachownica na stronie startowej). */
+  pulseArrows?: boolean;
+  className?: string;
+}
+
+export function Board({ board, name, onMove, pulseArrows = false, className }: BoardProps): ReactElement {
+  const wrap = useRef<HTMLDivElement>(null);
+  const pieceEls = useRef(new Map<number, HTMLElement>());
+  const ghostEls = useRef(new Map<number, HTMLElement>());
+  const dragEl = useRef<HTMLImageElement>(null);
+  const dragInfo = useRef<DragInfo | null>(null);
+  const [, setTick] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [promotion, setPromotion] = useState<{ from: number; to: number; animate: boolean } | null>(null);
+  const [optimistic, setOptimistic] = useState<Optimistic | null>(null);
+  const [userArrows, setUserArrows] = useState<Map<string, string>>(new Map());
+  const [marks, setMarks] = useState<Map<number, string>>(new Map());
+  const [drawing, setDrawing] = useState<{ from: number; to: number; color: string } | null>(null);
+
+  const orientation = board.orientation;
+  const serverPlacement = useMemo(() => parseFen(board.fen), [board.fen]);
+  const pending = optimistic && optimistic.seq === board.seq ? optimistic : null;
+  const placement = useMemo(() => (pending ? applyMove(serverPlacement, pending.uci) : serverPlacement), [serverPlacement, pending]);
+  const sig = useMemo(() => signature(placement), [placement]);
+
+  // --- animacja: porównujemy nową pozycję z tą, którą widać (obliczenia idempotentne, bez efektów ubocznych)
+  const view = useRef<View>({ sig: "", placement, orientation, seq: board.seq, anim: null });
+  const v = view.current;
+  if (v.sig !== sig || v.orientation !== orientation) {
+    const animate = v.sig !== "" && v.orientation === orientation && (pending ? pending.animate : board.anim !== "none" && board.seq !== v.seq);
+    v.anim = animate ? { start: performance.now(), ...transition(v.placement, placement) } : null;
+    v.sig = sig;
+    v.placement = placement;
+    v.orientation = orientation;
+    v.seq = board.seq;
+  }
+  const anim = v.anim;
+
+  const legal = useMemo(() => {
+    const targets = new Map<number, Set<number>>();
+    for (const uci of board.legal) {
+      const from = squareIndex(uci.slice(0, 2));
+      const set = targets.get(from) ?? new Set<number>();
+      set.add(squareIndex(uci.slice(2, 4)));
+      targets.set(from, set);
+    }
+    return targets;
+  }, [board.legal]);
+  const canMove = board.interactive && !pending && !!onMove;
+  const playerPrefix = board.player === "white" ? "w" : "b";
+
+  // Odpowiedź serwera (nowy numer pozycji) kończy „ruch na próbę”, zaznaczenie i rysunki.
+  useEffect(() => {
+    setOptimistic(null);
+    setSelected(null);
+    setPromotion(null);
+    setUserArrows(new Map());
+    setMarks(new Map());
+  }, [board.seq]);
+
+  // Ruch odrzucony (np. pozycja zmieniła się w międzyczasie) — po chwili figura wraca na miejsce.
+  useEffect(() => {
+    if (!optimistic) return;
+    const timer = window.setTimeout(() => setOptimistic((current) => (current === optimistic ? null : current)), 1500);
+    return () => window.clearTimeout(timer);
+  }, [optimistic]);
+
+  useEffect(() => {
+    if (!canMove) {
+      setSelected(null);
+      setPromotion(null);
+    }
+  }, [canMove]);
+
+  // --- animacja figur w pętli klatek (z limitem FPS z ustawień)
+  const progress = (now: number): number => (anim ? Math.min(1, (now - anim.start) / MOVE_TIME) : 1);
+  useFrame((now) => {
+    const current = view.current.anim;
+    if (!current) return;
+    const t = Math.min(1, (now - current.start) / MOVE_TIME);
+    if (t >= 1) {
+      view.current.anim = null;
+      setTick((n) => n + 1);
+      return;
+    }
+    const p = easeInOutCubic(t);
+    for (const motion of current.moves) {
+      const el = pieceEls.current.get(motion.to);
+      if (el) el.style.transform = offset(motion.from, motion.to, p);
+    }
+    const fade = easeOutCubic(t * 1.4);
+    for (const { square } of current.vanish) {
+      const el = ghostEls.current.get(square);
+      if (el) el.style.opacity = String(1 - fade);
+    }
+    for (const { square } of current.appear) {
+      const el = pieceEls.current.get(square);
+      if (el) el.style.opacity = String(fade);
+    }
+  }, anim !== null);
+
+  function offset(from: number, to: number, p: number): string {
+    const [fc, fr] = toView(from, orientation);
+    const [tc, tr] = toView(to, orientation);
+    return `translate(${((fc - tc) * (1 - p) * 100).toFixed(2)}%, ${((fr - tr) * (1 - p) * 100).toFixed(2)}%)`;
+  }
+
+  // --- efekty: znaczek na polu (pierścień, iskry), potrząśnięcie, konfetti
+  const lastFeedback = useRef(board.feedback?.seq ?? 0);
+  useEffect(() => {
+    const feedback = board.feedback;
+    if (!feedback || feedback.seq === lastFeedback.current) return;
+    lastFeedback.current = feedback.seq;
+    if (!feedback.effect || !wrap.current) return;
+    const rect = wrap.current.getBoundingClientRect();
+    const s = rect.width / 8;
+    const [col, row] = toView(squareIndex(feedback.square), orientation);
+    const x = rect.left + (col + 0.9) * s;
+    const y = rect.top + (row + 0.1) * s;
+    const kind = feedback.kind.startsWith("cls:") ? feedback.kind.slice(4) : feedback.kind;
+    effects.ring(x, y, s * 0.3, rgbOf(BADGE_COLORS[kind] ?? "rgb(45,212,191)"));
+    if (kind === "brilliant") {
+      effects.ring(x, y, s * 0.55, BRILLIANT, 0.9);
+      effects.burst(x, y, [BRILLIANT, WHITE, ACCENT], 22, Math.min(1.6, Math.max(0.6, s / 80)));
+    }
+  }, [board.feedback, orientation]);
+
+  useEffect(() => {
+    if (!name) return;
+    return store.onFx((event) => {
+      const el = wrap.current;
+      if (!el || !("board" in event) || event.board !== name) return;
+      if (event.type === "shake") {
+        const frames: Keyframe[] = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = (i / 24) * 0.4;
+          frames.push({ transform: `translateX(${(Math.sin(t * 48) * 9 * (1 - t / 0.4)).toFixed(2)}px)` });
+        }
+        el.animate(frames, { duration: 400 });
+      } else if (event.type === "celebrate") {
+        const rect = el.getBoundingClientRect();
+        const s = rect.width / 8;
+        const [col, row] = toView(squareIndex(event.square), orientation);
+        effects.burst(rect.left + (col + 0.5) * s, rect.top + (row + 0.5) * s, CONFETTI, 46, Math.min(1.6, Math.max(0.6, s / 80)));
+      }
+    });
+  }, [name, orientation]);
+
+  // --- wskaźnik: kliknięcie, przeciąganie, strzałki prawym przyciskiem
+  function squareAt(clientX: number, clientY: number): number {
+    const el = wrap.current;
+    if (!el) return -1;
+    const rect = el.getBoundingClientRect();
+    const col = Math.floor(((clientX - rect.left) / rect.width) * 8);
+    const row = Math.floor(((clientY - rect.top) / rect.height) * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return -1;
+    return fromView(col, row, orientation);
+  }
+
+  function commit(uci: string, animate: boolean): void {
+    setSelected(null);
+    setPromotion(null);
+    setOptimistic({ seq: board.seq, uci, animate });
+    onMove?.(uci);
+  }
+
+  function attempt(from: number, to: number, animate: boolean): void {
+    const prefix = squareName(from) + squareName(to);
+    const moves = board.legal.filter((uci) => uci.startsWith(prefix));
+    setSelected(null);
+    if (!moves.length) return;
+    if (moves.some((uci) => uci.length === 5)) {
+      setPromotion({ from, to, animate });
+      return;
+    }
+    commit(moves[0] as string, animate);
+  }
+
+  function moveGhost(clientX: number, clientY: number): void {
+    const el = wrap.current;
+    const ghost = dragEl.current;
+    if (!el || !ghost) return;
+    const rect = el.getBoundingClientRect();
+    ghost.style.transform = `translate(${clientX - rect.left}px, ${clientY - rect.top}px) translate(-50%, -50%)`;
+  }
+
+  // Przeciągana figura pojawia się od razu pod kursorem (zanim przyjdzie kolejny ruch myszy).
+  useLayoutEffect(() => {
+    const info = dragInfo.current;
+    if (dragFrom !== null && info) moveGhost(info.lastX, info.lastY);
+  }, [dragFrom]);
+
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+    const square = squareAt(event.clientX, event.clientY);
+    if (event.button === 2) {
+      setSelected(null);
+      setPromotion(null);
+      if (square < 0) return;
+      const color = event.shiftKey ? USER_COLORS.shift : event.ctrlKey ? USER_COLORS.ctrl : event.altKey ? USER_COLORS.alt : USER_COLORS.plain;
+      setDrawing({ from: square, to: square, color });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (event.button !== 0) return;
+    if (promotion) {
+      setPromotion(null);
+      return;
+    }
+    if (square < 0) {
+      setSelected(null);
+      return;
+    }
+    if (userArrows.size || marks.size) {
+      setUserArrows(new Map());
+      setMarks(new Map());
+    }
+    if (selected !== null && canMove && legal.get(selected)?.has(square)) {
+      attempt(selected, square, true);
+      return;
+    }
+    const piece = placement.get(square);
+    if (canMove && piece && piece[0] === playerPrefix) {
+      setSelected(square);
+      dragInfo.current = { from: square, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } else {
+      setSelected(null);
+    }
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (drawing) {
+      const square = squareAt(event.clientX, event.clientY);
+      if (square >= 0 && square !== drawing.to) setDrawing({ ...drawing, to: square });
+      return;
+    }
+    const info = dragInfo.current;
+    if (!info) return;
+    info.lastX = event.clientX;
+    info.lastY = event.clientY;
+    if (!info.moved) {
+      const size = (wrap.current?.getBoundingClientRect().width ?? 400) / 8;
+      if (Math.hypot(event.clientX - info.x, event.clientY - info.y) <= Math.max(10, size * 0.2)) return;
+      info.moved = true;
+      setDragFrom(info.from);
+    }
+    moveGhost(event.clientX, event.clientY);
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (drawing && event.button === 2) {
+      const end = squareAt(event.clientX, event.clientY);
+      setDrawing(null);
+      if (end < 0) return;
+      if (end === drawing.from) {
+        const next = new Map(marks);
+        if (next.get(end) === drawing.color) next.delete(end);
+        else next.set(end, drawing.color);
+        setMarks(next);
+      } else {
+        const key = `${drawing.from}-${end}`;
+        const next = new Map(userArrows);
+        if (next.get(key) === drawing.color) next.delete(key);
+        else next.set(key, drawing.color);
+        setUserArrows(next);
+      }
+      return;
+    }
+    const info = dragInfo.current;
+    if (!info || event.button !== 0) return;
+    dragInfo.current = null;
+    setDragFrom(null);
+    if (!info.moved) return;
+    const target = squareAt(event.clientX, event.clientY);
+    if (target >= 0 && target !== info.from && legal.get(info.from)?.has(target)) {
+      attempt(info.from, target, false); // figura już jest na miejscu — bez animacji
+    } else if (target !== info.from) {
+      setSelected(null); // upuszczona na niedozwolone pole — wraca na miejsce
+    }
+  }
+
+  function onPointerCancel(): void {
+    dragInfo.current = null;
+    setDragFrom(null);
+    setDrawing(null);
+  }
+
+  // --- rysowanie
+  const lastMove = board.lastMove;
+  const nowP = easeInOutCubic(progress(performance.now()));
+  const motionTo = new Map(anim?.moves.map((m) => [m.to, m]) ?? []);
+  const appearing = new Set(anim?.appear.map((a) => a.square) ?? []);
+  const fadeNow = anim ? easeOutCubic(progress(performance.now()) * 1.4) : 1;
+
+  const squareRect = (square: number): { x: number; y: number } => {
+    const [col, row] = toView(square, orientation);
+    return { x: col, y: row };
+  };
+
+  const squares: ReactElement[] = [];
+  for (let square = 0; square < 64; square++) {
+    const { x, y } = squareRect(square);
+    const light = ((square % 8) + Math.floor(square / 8)) % 2 === 1;
+    squares.push(<rect key={square} x={x} y={y} width={1} height={1} className={light ? "sq-light" : "sq-dark"} />);
+  }
+  const coords: ReactElement[] = [];
+  for (let i = 0; i < 8; i++) {
+    const fileSquare = orientation === "white" ? i : 56 + i; // dolny rząd
+    const rankSquare = orientation === "white" ? i * 8 : i * 8 + 7; // lewa kolumna
+    const f = squareRect(fileSquare);
+    const r = squareRect(rankSquare);
+    const fileLight = ((fileSquare % 8) + Math.floor(fileSquare / 8)) % 2 === 1;
+    const rankLight = ((rankSquare % 8) + Math.floor(rankSquare / 8)) % 2 === 1;
+    coords.push(
+      <text key={`f${i}`} x={(f.x + 0.95) * 100} y={(f.y + 0.95) * 100} textAnchor="end" className={fileLight ? "coord-on-light" : "coord-on-dark"}>
+        {"abcdefgh"[i]}
+      </text>,
+      <text key={`r${i}`} x={(r.x + 0.05) * 100} y={(r.y + 0.2) * 100} className={rankLight ? "coord-on-light" : "coord-on-dark"}>
+        {i + 1}
+      </text>,
+    );
+  }
+
+  const tints: ReactElement[] = [];
+  if (lastMove) {
+    for (const name of [lastMove.slice(0, 2), lastMove.slice(2, 4)]) {
+      const { x, y } = squareRect(squareIndex(name));
+      tints.push(<rect key={`lm-${name}`} x={x} y={y} width={1} height={1} className="sq-last" />);
+    }
+  }
+  if (selected !== null) {
+    const { x, y } = squareRect(selected);
+    tints.push(<rect key="sel" x={x} y={y} width={1} height={1} className="sq-selected" />);
+  }
+  for (const [square, color] of marks) {
+    const { x, y } = squareRect(square);
+    const [rgb] = splitAlpha(color);
+    tints.push(
+      <rect key={`mark-${square}`} x={x + 0.05} y={y + 0.05} width={0.9} height={0.9} rx={0.1} fill={rgb} fillOpacity={0.47} stroke={rgb} strokeOpacity={0.9} strokeWidth={0.04} />,
+    );
+  }
+  const glows: ReactElement[] = [];
+  if (board.check) {
+    const { x, y } = squareRect(squareIndex(board.check));
+    glows.push(<circle key="check" cx={x + 0.5} cy={y + 0.5} r={0.78} fill="url(#check-glow)" className="glow-check" />);
+  }
+  if (board.hint) {
+    const { x, y } = squareRect(squareIndex(board.hint));
+    glows.push(
+      <g key={`hint-${board.hint}`} className="glow-hint">
+        <circle cx={x + 0.5} cy={y + 0.5} r={0.75} fill="url(#hint-glow)" />
+        <circle cx={x + 0.5} cy={y + 0.5} r={0.45} fill="none" stroke="rgba(167,139,250,0.9)" strokeWidth={0.05} />
+      </g>,
+    );
+  }
+
+  const dots: ReactElement[] = [];
+  if (selected !== null && canMove) {
+    for (const target of legal.get(selected) ?? []) {
+      const { x, y } = squareRect(target);
+      dots.push(
+        placement.has(target) ? (
+          <circle key={target} cx={x + 0.5} cy={y + 0.5} r={0.46} className="dot-capture" />
+        ) : (
+          <circle key={target} cx={x + 0.5} cy={y + 0.5} r={0.16} className="dot" />
+        ),
+      );
+    }
+  }
+
+  const arrowEls: ReactElement[] = [];
+  const engineArrows = [...board.arrows].reverse(); // najlepszy ruch rysowany na wierzchu
+  engineArrows.forEach(([from, to, color], i) => {
+    const [rgb, alpha] = splitAlpha(color);
+    const width = i === engineArrows.length - 1 ? 0.2 : 0.16;
+    const d = arrowPath(arrowPoints(squareIndex(from), squareIndex(to), orientation), width);
+    arrowEls.push(<path key={`e-${from}${to}`} d={d} fill={rgb} opacity={alpha} className={pulseArrows ? "arrow arrow-pulse" : "arrow"} />);
+  });
+  for (const [key, color] of userArrows) {
+    const [from, to] = key.split("-").map(Number) as [number, number];
+    const [rgb, alpha] = splitAlpha(color);
+    arrowEls.push(<path key={`u-${key}`} d={arrowPath(arrowPoints(from, to, orientation), 0.18)} fill={rgb} opacity={alpha} />);
+  }
+  if (drawing && drawing.to !== drawing.from) {
+    const [rgb] = splitAlpha(drawing.color);
+    arrowEls.push(<path key="drawing" d={arrowPath(arrowPoints(drawing.from, drawing.to, orientation), 0.18)} fill={rgb} opacity={0.55} />);
+  }
+
+  const pieceStyle = (square: number): CSSProperties => {
+    const { x, y } = squareRect(square);
+    return { left: `${x * 12.5}%`, top: `${y * 12.5}%` };
+  };
+
+  const pieces: ReactElement[] = [];
+  for (const { piece, square } of anim?.vanish ?? []) {
+    pieces.push(
+      <img
+        key={`ghost-${square}`}
+        ref={(el) => {
+          if (!el) return;
+          ghostEls.current.set(square, el);
+          return () => {
+            if (ghostEls.current.get(square) === el) ghostEls.current.delete(square);
+          };
+        }}
+        className="piece"
+        src={pieceUrl(piece)}
+        alt=""
+        draggable={false}
+        style={{ ...pieceStyle(square), opacity: 1 - fadeNow }}
+      />,
+    );
+  }
+  for (const [square, piece] of placement) {
+    const motion = motionTo.get(square);
+    const style: CSSProperties = pieceStyle(square);
+    if (motion) style.transform = offset(motion.from, motion.to, nowP);
+    if (appearing.has(square)) style.opacity = fadeNow;
+    if (dragFrom === square) style.visibility = "hidden";
+    pieces.push(
+      <img
+        key={`p-${square}-${piece}`}
+        ref={(el) => {
+          if (!el) return;
+          pieceEls.current.set(square, el);
+          return () => {
+            if (pieceEls.current.get(square) === el) pieceEls.current.delete(square);
+          };
+        }}
+        className="piece"
+        src={pieceUrl(piece)}
+        alt=""
+        draggable={false}
+        style={style}
+      />,
+    );
+  }
+
+  let badge: ReactElement | null = null;
+  if (board.feedback) {
+    const feedback = board.feedback;
+    const { x, y } = squareRect(squareIndex(feedback.square));
+    const kind = feedback.kind.startsWith("cls:") ? feedback.kind.slice(4) : feedback.kind;
+    badge = (
+      <div
+        key={`badge-${feedback.seq}`}
+        className={`board-badge${feedback.effect ? " pop" : ""}${kind === "brilliant" ? " brilliant" : ""}`}
+        style={{ left: `${(x + 0.9) * 12.5}%`, top: `${(y + 0.1) * 12.5}%` }}
+      >
+        <Badge kind={kind} size={64} />
+      </div>
+    );
+  }
+
+  let chooser: ReactElement | null = null;
+  if (promotion) {
+    const { x, y } = squareRect(promotion.to);
+    const down = y < 4;
+    const color = placement.get(promotion.from)?.[0] ?? playerPrefix;
+    chooser = (
+      <div className="promotion" style={{ left: `${x * 12.5}%`, top: `${(down ? y : y - 3) * 12.5}%` }} onPointerDown={(e) => e.stopPropagation()}>
+        {(down ? PROMOTION_PIECES : [...PROMOTION_PIECES].reverse()).map((letter) => (
+          <button
+            key={letter}
+            type="button"
+            className="promotion-option"
+            onClick={() => commit(squareName(promotion.from) + squareName(promotion.to) + letter, promotion.animate)}
+          >
+            <img src={pieceUrl(color + letter.toUpperCase())} alt={letter} draggable={false} />
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  const dragPiece = dragFrom !== null ? placement.get(dragFrom) : undefined;
+
+  return (
+    <div
+      ref={wrap}
+      className={`board${canMove ? " can-move" : ""}${className ? " " + className : ""}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div className="board-clip">
+        <svg className="board-layer" viewBox="0 0 8 8" shapeRendering="crispEdges">
+          {squares}
+        </svg>
+        {/* Współrzędne w osobnej warstwie o większej skali — przeglądarki źle rysują bardzo małe czcionki w SVG. */}
+        <svg className="board-layer" viewBox="0 0 800 800">
+          {coords}
+        </svg>
+        <svg className="board-layer" viewBox="0 0 8 8">
+          <defs>
+            <radialGradient id="check-glow">
+              <stop offset="0" stopColor="rgb(244,63,94)" stopOpacity={0.95} />
+              <stop offset="0.45" stopColor="rgb(244,63,94)" stopOpacity={0.6} />
+              <stop offset="1" stopColor="rgb(244,63,94)" stopOpacity={0} />
+            </radialGradient>
+            <radialGradient id="hint-glow">
+              <stop offset="0.35" stopColor="rgb(167,139,250)" stopOpacity={0.55} />
+              <stop offset="1" stopColor="rgb(167,139,250)" stopOpacity={0} />
+            </radialGradient>
+          </defs>
+          {tints}
+          {glows}
+        </svg>
+        <div className="pieces">{pieces}</div>
+        <svg className="board-layer" viewBox="0 0 8 8">
+          {dots}
+          {arrowEls}
+        </svg>
+        {promotion && <div className="promotion-shade" />}
+      </div>
+      {badge}
+      {chooser}
+      {dragPiece && <img ref={dragEl} className="drag-piece" src={pieceUrl(dragPiece)} alt="" draggable={false} />}
+    </div>
+  );
+}

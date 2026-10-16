@@ -59,14 +59,70 @@ nie zadziała, gra po cichu przełącza się na silnik w Pythonie (słabszy, ale
 python scripts/build_engine.py     # biblioteka dla gry + program UCI tmengine
 ```
 
+`python main.py` uruchamia lokalny serwer gry i otwiera interfejs (TypeScript) w osobnym oknie Chrome / Edge
+w trybie aplikacji (bez pasków przeglądarki); gdy żadnej z nich nie ma — w domyślnej przeglądarce. Inne tryby:
+
+| Polecenie | Co robi |
+|---|---|
+| `python main.py --browser` | interfejs w zwykłej karcie domyślnej przeglądarki |
+| `python main.py --no-window` | sam serwer gry (adres w konsoli), np. do pracy nad interfejsem |
+| `python main.py --pygame` | dawny interfejs w pygame |
+
+### Okno aplikacji (Tauri 2)
+
+Własne okno gry, bez przeglądarki. Node.js nie jest potrzebny — zbudowany interfejs jest w repozytorium.
+
+1. **Python z bibliotekami w `.venv`** — jak w poleceniach wyżej (`python3 -m venv .venv`, potem
+   `pip install -r requirements.txt` w aktywnym `.venv`). Okno samo używa `.venv` z katalogu gry; bez niego sięga
+   po systemowego Pythona (`python`, `py -3`, `python3`), który zwykle nie ma pygame-ce i python-chess.
+   Inny interpreter wskazuje zmienna `TACTICMIND_PYTHON`.
+2. **[Rust](https://rustup.rs)** oraz biblioteki systemowe okna:
+
+   | System | Polecenie |
+   |---|---|
+   | Arch / Manjaro | `sudo pacman -S --needed webkit2gtk-4.1 base-devel` |
+   | Debian / Ubuntu / Mint | `sudo apt install libwebkit2gtk-4.1-dev build-essential pkg-config` |
+   | Fedora | `sudo dnf install webkit2gtk4.1-devel gcc pkgconf-pkg-config` |
+   | Windows | „Desktop development with C++” z Visual Studio Build Tools (instalator Rusta sam go proponuje); WebView2 jest w Windows 10 i 11 |
+   | macOS | `xcode-select --install` |
+
+   Bez WebKitGTK kompilacja kończy się błędem „The system library … was not found” przy `javascriptcore-rs-sys`
+   albo `webkit2gtk-sys` (pełna lista dla innych systemów:
+   [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)).
+3. **Start okna:**
+
+   ```bash
+   cargo run --release --manifest-path web/src-tauri/Cargo.toml
+   ```
+
+Pierwsza kompilacja trwa kilka minut, kolejne starty są natychmiastowe (gotowy program:
+`web/src-tauri/target/release/tacticmind`, na Windows `tacticmind.exe`). Okno uruchamia Pythona w tle i zamyka go
+razem z sobą; gdy Python się nie uruchomi, pokazuje komunikat z jego błędem.
+Instalator (.msi / .exe, .deb, .dmg): `cd web && npm install && npm run tauri build`.
+
 Testy:
 
 ```bash
 python -m pytest
+cd web && npm install && npm test    # testy interfejsu (vitest)
 ```
 
 Postępy (ranking, historia, statystyki, partie z trenerem i nauka otwarć) zapisują się w pliku `~/.tacticmind/profile.json`
-(inny katalog można wskazać zmienną `TACTICMIND_HOME`).
+(inny katalog można wskazać zmienną `TACTICMIND_HOME`), a ustawienia interfejsu (licznik FPS, limit klatek)
+w `~/.tacticmind/ui_settings.json`.
+
+### Praca nad interfejsem
+
+Kod interfejsu jest w `web/src` (React 19 + TypeScript + Vite). Zbudowana wersja trafia do `tacticmind/web/static`
+i jest w repozytorium, więc do grania nie trzeba Node.js.
+
+```bash
+python main.py --no-window         # serwer gry na http://127.0.0.1:8517
+cd web && npm install
+npm run dev                        # http://localhost:5173 — zmiany w kodzie widać od razu
+npm run typecheck && npm test      # TypeScript (strict) i testy vitest
+npm run build                      # nowa wersja do tacticmind/web/static
+```
 
 ## Jak grać
 
@@ -115,14 +171,19 @@ Postępy (ranking, historia, statystyki, partie z trenerem i nauka otwarć) zapi
 - **Dźwięki (w stylu chess.com)**: drewniane „puknięcie” przy ruchu, podwójne „klaśnięcie” przy biciu, dzwoneczek
   przy szachu, dwa puknięcia przy roszadzie, rosnący ton przy promocji, dzwonkowe arpeggio po rozwiązaniu zadania
   (jaśniejsze przy genialnym ruchu) i miękkie „bonk” po błędzie. Wszystkie są syntezowane w kodzie
-  (`ui/sounds.py`), więc nie ma plików z cudzą licencją. Brzmią miękko: niskie, „ciepłe” tony drewna, filtr
+  (`ui/sounds.py`, a w interfejsie TypeScript ten sam syntezator na Web Audio: `web/src/sound.ts`), więc nie ma
+  plików z cudzą licencją. Brzmią miękko: niskie, „ciepłe” tony drewna, filtr
   dolnoprzepustowy i lekkie echo, bez ostrych wysokich częstotliwości.
 - **Głośność**: w górnym pasku jest suwak głośności (przeciągnij, kliknij albo kręć kółkiem myszy nad nim);
   ikona głośnika wycisza/włącza dźwięk. Głośność jest zapamiętywana w profilu.
 - **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy; Esc z niego wychodzi.
-- **Ustawienia (koło zębate ⚙)**: licznik FPS w rogu okna (także F3) i limit klatek na sekundę: 60, 120, 144, 170
+- **Ustawienia (koło zębate ⚙, interfejs pygame)**: licznik FPS w rogu okna (także F3) i limit klatek na sekundę: 60, 120, 144, 170
   albo 240. Klatki zaczynają się w równych odstępach (precyzyjny limiter w `ui/pacing.py`), a wszystkie animacje
   w danej klatce liczą się od jednego, dokładnego zegara — dzięki temu ruch nie „drga”.
+- **Pełny ekran**: F11 albo przycisk ⛶ w prawym górnym rogu przełącza tryb pełnoekranowy (w przeglądarce wychodzi
+  z niego też Esc).
+- **Ustawienia** (zębatka w górnym pasku, interfejs TypeScript): licznik FPS w lewym dolnym rogu (F3 włącza go i wyłącza) oraz limit
+  klatek animacji: 60, 120, 144, 170, 240 albo bez limitu (tyle, ile odświeża monitor).
 - **Przeciąganie z „martwą strefą”**: figura zaczyna się przeciągać dopiero, gdy mysz odjedzie od miejsca kliknięcia
   o ok. 1/5 pola — drobne drgnięcie przy kliknięciu nie „łapie” figury, tylko ją zaznacza (klik-klik).
 - **Wygląd i animacje**: własny ciemny motyw (granat + turkus dla gracza + fiolet dla AI) i szachownica w stalowych
@@ -168,7 +229,7 @@ jest rysowany w kodzie (`ui/coach_avatar.py`), bez plików graficznych.
 ## Architektura
 
 ```
-main.py                     # start gry
+main.py                     # start gry (interfejs TypeScript; --pygame = dawny interfejs)
 tacticmind/
   engine/                   # WŁASNY SILNIK
     native/                 #   silnik w C: bitboard.c, position.c (make/unmake + akumulator NNUE),
@@ -200,9 +261,19 @@ tacticmind/
                             #   grafika, cienie), anim.py (wygładzanie animacji), effects.py (konfetti, fale),
                             #   coach_avatar.py (portret trenera), badges.py (znaczki !!, ?, ?? …),
                             #   screens/coach_menu.py i screens/coach_game.py (ekrany trenera)
+  web/                      # SERWER INTERFEJSU TYPESCRIPT (bez pygame): core.py (ekrany → migawki stanu, akcje),
+                            #   screens/ (zadanie, trener, statystyki, „Jak działa AI?”), board.py, brain.py,
+                            #   server.py (HTTP + SSE na 127.0.0.1), app.py (tryby uruchomienia, okno),
+                            #   static/ (zbudowany interfejs — tworzy go `npm run build`, nie edytować ręcznie)
   data/                     # starter_puzzles.json (50 zadań), puzzles.json (3000 zadań)
   assets/fonts/             # fonty Noto (tekst i symbole figur)
   assets/coach.png          # portret trenera (wygenerowany kodem: python -m tacticmind.ui.coach_avatar)
+web/                        # INTERFEJS W TYPESCRIPT
+  src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — szachownica w SVG, BrainPanel,
+                            #   EvalBar, TopBar z ustawieniami, CoachAvatar…), chess.ts (FEN, animacje, strzałki),
+                            #   ticker.ts (jedna pętla requestAnimationFrame z limitem FPS), effects.ts, sound.ts
+  public/pieces/            #   figury „cburnett” (SVG)
+  src-tauri/                #   okno aplikacji Tauri 2 (Rust): uruchamia Pythona i pokazuje interfejs
 scripts/build_puzzles.py    # budowa zestawu zadań z bazy Lichess
 scripts/benchmark.py        # pomiary do tabeli w README
 scripts/build_engine.py     # kompilacja silnika w C
@@ -213,6 +284,16 @@ tests/                      # pytest
 
 Logika gry i silnik są oddzielone od interfejsu: `engine/`, `rating/`, `puzzles/`, `brain/` i `coach/` to czyste
 moduły bez pygame, testowane jednostkowo. Interfejs tylko je wywołuje i rysuje wyniki.
+
+**Interfejs w TypeScript.** Stan gry trzyma Python: `tacticmind/web/core.py` prowadzi ekrany (zadanie, partia
+z trenerem, statystyki…) bez rysowania i po każdej zmianie wysyła migawkę stanu (JSON) strumieniem SSE
+`/api/events`; ruchy i kliknięcia wracają jako `POST /api/action`. Przeglądarka tylko rysuje: szachownica w SVG
+(ostra w każdej rozdzielczości i przy każdym skalowaniu ekranu), animacje ruchów, strzałki, znaczki ruchów, efekty
+i wykresy — wszystko w jednej pętli `requestAnimationFrame` z limitem klatek z ustawień. Ruch gracza pojawia się
+od razu (optymistycznie), a Python go zatwierdza albo cofa. Serwer słucha tylko na `127.0.0.1`, odrzuca obcy
+nagłówek `Host` (DNS rebinding) i akcje bez nagłówka `X-TacticMind`. Okno Tauri (`web/src-tauri`) uruchamia
+`python main.py --server --port 0`, czyta z niego adres i pokazuje ten sam interfejs; Python kończy pracę, gdy
+okno zamknie jego standardowe wejście. Silnik jest używany przez ten sam interfejs `EngineClient` co w pygame.
 
 ```mermaid
 flowchart LR
@@ -637,7 +718,7 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 
 ## Testy
 
-`python -m pytest` — 158 testów, m.in.:
+`python -m pytest` — 173 testów, m.in.:
 
 | Plik | Co sprawdza |
 |---|---|
@@ -651,7 +732,11 @@ szacha) i potwierdza do 2 s. To samo porównanie można uruchomić interaktywnie
 | `test_coach.py` | każda linia otwarcia legalna i objaśniona w obu językach, nazwy debiutów i transpozycje, książka otwarć, siła trenera rośnie z Elo (silny gra najlepsze ruchy, słaby losuje), szansa na wygraną i celność, progi klas ruchów, „świetny” i „genialny”, wyjaśnienia (wisząca figura, przegapiony i dopuszczony mat, widełki, groźby trenera), przebieg lekcji i cofanie ruchów, wynik partii i kara za pomoc, kalibracja 10 partii i zmiana poziomu co 5, zapis profilu |
 | `test_pacing.py` | limiter FPS trzyma równe odstępy między klatkami, licznik FPS, zapis ustawień FPS w profilu (błędne wartości → 60) |
 | `test_i18n.py` | każdy język ma komplet kluczy i te same pola `{…}`, liczba mnoga (polska: 1/2–4/5+), formaty liczb, litery figur |
+| `test_web.py` | serwer interfejsu TypeScript: ustawienia (walidacja i zapis), nawigacja i migawki ekranów, rozwiązanie zadania i partia z trenerem przez akcje, promocja i legalne ruchy w migawce, strona/teksty/stan przez HTTP, strumień SSE, odrzucanie obcych żądań (Host, brak nagłówka, zły JSON, wyjście poza katalog), tryb `--server` dla okna Tauri |
 | `test_ui_smoke.py` | gra uruchomiona bez okna: rozwiązanie zadania, błąd, genialny ruch, cofanie ◀ ▶ (z animacją przywracającą zbitą figurę), martwa strefa przeciągania, dźwięki, suwak głośności i pełny ekran, okienko ustawień (limit FPS, F3, Esc), zmiana języka w trakcie zadania, wszystkie ekrany (także trenera) w rozdzielczościach od 430×640 do 2560×1440, rysowanie strzałek prawym przyciskiem; partia z trenerem (ruch z teorii, przeoczenie → pauza i strzałka lepszego ruchu, cofnięcie, poddanie, podsumowanie i kalibracja), lekcja otwarcia od błędu do końca linii, menu trenera i portret; demonstracja alfa-bety |
+
+Interfejs TypeScript ma własne testy (`cd web && npm test`, vitest): FEN, ruchy na próbę (roszada, bicie w przelocie,
+promocja), animacje przejść między pozycjami, strzałki, pasek oceny, tłumaczenia i liczba mnoga.
 
 Kod jest sprawdzany także narzędziami `ruff` i `mypy` (typy we wszystkich funkcjach, bez `type: ignore`
 w kodzie gry):
@@ -776,6 +861,9 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
    trenera, kalibracja i „Twój poziom” co 5 partii, portret trenera z minami, ekrany „Trener” i partii, testy.
 10. **Silnik w C z NNUE** — bitboardy, PVS z przycinaniem, sieć NNUE z przyrostową aktualizacją, własny generator
     danych i trener sieci, cztery rundy uczenia (27 mln pozycji), ok. 2890 Elo w skali Stockfisha z ograniczoną siłą.
+11. **Interfejs w TypeScript i okno Tauri 2** — ostry interfejs (SVG zamiast pikseli pygame) w React + TypeScript,
+    logika gry nadal w Pythonie za lokalnym serwerem (HTTP + SSE), ustawienia z licznikiem FPS i limitem klatek,
+    okno aplikacji w Tauri 2, które samo uruchamia Pythona; dawny interfejs dostępny przez `--pygame`.
 
 ## Źródła i licencje
 
@@ -790,4 +878,7 @@ a gracz gra stroną, która jest na ruchu po nim (szachownica obraca się na jeg
 - Tablice pozycyjne oparte na „Simplified Evaluation Function” (T. Michniewski, Chess Programming Wiki),
   rozszerzone o wartości dla końcówki.
 - Fonty Noto (Google) — licencja w `tacticmind/assets/fonts/`.
-- Biblioteki: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, tylko warstwa interfejsu).
+- Figury w interfejsie TypeScript: zestaw „cburnett” (Colin M.L. Burnett, Wikimedia Commons), licencja
+  **CC BY-SA 3.0** (także GFDL, BSD i GPL), pliki z pakietu chessground (lichess.org) — `web/public/pieces/LICENSE.txt`.
+- Biblioteki: [pygame-ce](https://pyga.me/) (LGPL), [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, tylko warstwa interfejsu),
+  [React](https://react.dev/) i [Vite](https://vite.dev/) (MIT), [Tauri](https://tauri.app/) (MIT / Apache-2.0).
