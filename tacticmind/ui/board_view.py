@@ -390,25 +390,44 @@ class BoardView:
         s = self.square_size
         size = (s * 8, s * 8)
         radius = max(4, px(12))
-        if self._canvas is None or self._canvas.get_size() != size:
-            self._canvas = pygame.Surface(size, pygame.SRCALPHA)
-        canvas = self._canvas
-        canvas.blit(self._base_layer(s), (0, 0))
         clock = self.clock
-        gfx.shadow(surface, pygame.Rect(self.rect.topleft, size), radius, px(22), 150, (0, px(10)))
+        gfx.shadow(surface, pygame.Rect(self.rect.topleft, size), radius, px(22), 150, (0, px(10)), covered=True)
+        # Potrząśnięcie po błędzie przesuwa całą szachownicę w poziomie.
+        shake_age = clock - self._shake_at
+        offset = round(math.sin(shake_age * 48) * px(9) * (1 - shake_age / 0.4)) if shake_age < 0.4 else 0
+        target = pygame.Rect((self.rect.x + offset, self.rect.y), size)
 
+        # Rysujemy prosto na ekran (bez pośredniego płótna wielkości szachownicy — to dwa kopiowania
+        # miliona pikseli mniej na klatkę w 1440p); zaokrąglone rogi poprawiamy potem na małych wycinkach.
+        direct = surface.get_clip().contains(target)  # podpowierzchnia nie respektuje obszaru przycięcia
+        if direct:
+            corners = gfx.corner_areas(size, radius)
+            behind = [surface.subsurface(area.move(target.topleft)).copy() for area in corners]
+            canvas = surface.subsurface(target)
+        else:
+            if self._canvas is None or self._canvas.get_size() != size:
+                self._canvas = pygame.Surface(size, pygame.SRCALPHA)
+            canvas = self._canvas
+        canvas.blit(self._base_layer(s), (0, 0))
         self._draw_squares(canvas, s, clock)
         self._draw_pieces(canvas, s, clock)
         self._draw_arrows(canvas, s, clock)
         if self.promotion is not None:
             self._draw_promotion(canvas, size)
 
-        # Zaokrąglone rogi i wklejenie na ekran (z ewentualnym potrząśnięciem po błędzie).
-        canvas.blit(gfx.rounded_mask(size, radius), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        shake_age = clock - self._shake_at
-        offset = round(math.sin(shake_age * 48) * px(9) * (1 - shake_age / 0.4)) if shake_age < 0.4 else 0
-        surface.blit(canvas, (self.rect.x + offset, self.rect.y))
-        gfx.rrect(surface, (255, 255, 255, 20), pygame.Rect((self.rect.x + offset, self.rect.y), size), radius, max(1, px(1)))
+        if direct:
+            mask = gfx.rounded_mask(size, radius)
+            for area, under in zip(corners, behind):
+                corner = pygame.Surface(area.size, pygame.SRCALPHA)
+                corner.blit(canvas, (0, 0), area)
+                corner.blit(mask, (0, 0), area, special_flags=pygame.BLEND_RGBA_MULT)
+                pos = area.move(target.topleft).topleft
+                surface.blit(under, pos)
+                surface.blit(corner, pos)
+        else:
+            gfx.round_corners(canvas, radius)
+            surface.blit(canvas, target.topleft)
+        gfx.rrect(surface, (255, 255, 255, 20), target, radius, max(1, px(1)))
 
         self._draw_feedback(surface, s, clock, offset)
         if self.drag_square is not None and self.drag_moved:

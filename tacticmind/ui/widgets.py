@@ -87,8 +87,17 @@ def card(surface: pygame.Surface, rect: pygame.Rect, radius: int | None = None, 
     if rect.width <= 0 or rect.height <= 0:
         return
     blur, dy = (px(16), px(6)) if elevated else (0, 0)
-    surf, pad = gfx.card_surface(rect.size, radius, color, theme.BORDER_SOFT, max(1, px(1)), blur, 120, dy)
-    surface.blit(surf, (rect.x - pad, rect.y - pad))
+    border_w = max(1, px(1))
+    surf, pad = gfx.card_surface(rect.size, radius, color, theme.BORDER_SOFT, border_w, blur, 120, dy)
+    if len(color) == 4 and color[3] < 255:
+        surface.blit(surf, (rect.x - pad, rect.y - pad))
+        return
+    # Środek nieprzezroczystej karty to jednolity kolor: wypełnienie jest dużo tańsze niż kopiowanie pikseli.
+    radius = max(0, min(radius, min(rect.size) // 2))
+    inner = pygame.Rect(pad + border_w + 1, pad + radius + 1, rect.width - 2 * (border_w + 1), rect.height - 2 * (radius + 1))
+    gfx.blit_frame(surface, surf, (rect.x - pad, rect.y - pad), inner)
+    if inner.width > 0 and inner.height > 0:
+        surface.fill(color[:3], inner.move(rect.x - pad, rect.y - pad))
 
 
 def icon_check(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color = theme.TEXT) -> None:
@@ -183,7 +192,7 @@ class Button:
     enabled: bool = True
     visible: bool = True
     size: int = 15  # bazowy rozmiar czcionki (skalowany przez fs)
-    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit"
+    icon: str | None = None  # "left" | "right" | "sound_on" | "sound_off" | "fullscreen" | "fullscreen_exit" | "settings"
     pill: bool = False
     active: bool = False  # np. aktywna zakładka nawigacji
     hovered: bool = False
@@ -234,6 +243,9 @@ class Button:
             return
         if self.icon in ("fullscreen", "fullscreen_exit"):
             icon_fullscreen(surface, rect.center, rect.height * 0.62, text_color, self.icon == "fullscreen_exit")
+            return
+        if self.icon == "settings":
+            icon_gear(surface, rect.center, rect.height * 0.56, text_color)
             return
         draw_text(surface, label_text(self.label), rect.center, fs(self.size), text_color, "bold", "center", max_width=rect.width - px(14))
 
@@ -364,6 +376,17 @@ def icon_fullscreen(surface: pygame.Surface, center: tuple[float, float], size: 
             else:
                 gfx.thick_line(surface, color, corner, (corner[0] - sx * arm, corner[1]), w)
                 gfx.thick_line(surface, color, corner, (corner[0], corner[1] - sy * arm), w)
+
+
+def icon_gear(surface: pygame.Surface, center: tuple[float, float], size: float, color: Color) -> None:
+    """Ikona ustawień: koło zębate (pierścień i osiem zębów)."""
+    cx, cy = center
+    w = max(1.5, size * 0.16)
+    for k in range(8):
+        a = k * math.pi / 4
+        dx, dy = math.cos(a), math.sin(a)
+        gfx.thick_line(surface, color, (cx + dx * size * 0.3, cy + dy * size * 0.3), (cx + dx * size * 0.46, cy + dy * size * 0.46), w)
+    gfx.circle(surface, color, center, size * 0.31, max(2, round(size * 0.15)))
 
 
 @dataclass
