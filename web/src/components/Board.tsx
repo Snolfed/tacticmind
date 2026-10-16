@@ -27,6 +27,10 @@ import { BADGE_COLORS, Badge } from "./Badge";
 
 /** Move animation duration. */
 const MOVE_TIME = 200;
+/** How quickly a dragged piece catches up with the cursor (time constant, ms): a little inertia, not a lag. */
+const DRAG_FOLLOW = 38;
+/** The dragged piece swings toward its motion by up to this many degrees. */
+const DRAG_TILT = 9;
 const PROMOTION_PIECES = ["q", "n", "r", "b"];
 const USER_COLORS = {
   plain: "rgba(251,191,36,0.8)",
@@ -75,10 +79,16 @@ interface DragInfo {
   lastX: number;
   lastY: number;
   moved: boolean;
+  /** The piece was already selected when it was grabbed: letting go without moving it unselects it. */
+  wasSelected: boolean;
   /** Board position on screen, measured once when the piece is grabbed (no layout reads while dragging). */
   left: number;
   top: number;
   size: number;
+  /** Where the dragged piece is drawn (relative to the board): it chases the cursor. */
+  gx: number;
+  gy: number;
+  tilt: number;
 }
 
 export interface BoardProps {
@@ -105,6 +115,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const [userArrows, setUserArrows] = useState<Map<string, string>>(new Map());
   const [marks, setMarks] = useState<Map<number, string>>(new Map());
   const [drawing, setDrawing] = useState<{ from: number; to: number; color: string } | null>(null);
+  /** The square under a dragged piece (framed when the piece may land there). */
+  const [hover, setHover] = useState<number | null>(null);
 
   const orientation = board.orientation;
   const serverPlacement = useMemo(() => parseFen(board.fen), [board.fen]);
@@ -265,18 +277,31 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     commit(moves[0] as string, animate);
   }
 
-  function moveGhost(clientX: number, clientY: number): void {
+  function placeGhost(): void {
     const ghost = dragEl.current;
     const info = dragInfo.current;
     if (!ghost || !info) return;
-    ghost.style.transform = `translate3d(${(clientX - info.left).toFixed(1)}px, ${(clientY - info.top).toFixed(1)}px, 0) translate(-50%, -50%)`;
+    ghost.style.transform = `translate3d(${info.gx.toFixed(1)}px, ${info.gy.toFixed(1)}px, 0) translate(-50%, -50%) rotate(${info.tilt.toFixed(2)}deg)`;
   }
 
-  // The dragged piece appears under the cursor immediately (before the next mouse move arrives).
+  // A grabbed piece jumps to the cursor at once (like on chess.com), before the next mouse move arrives.
   useLayoutEffect(() => {
-    const info = dragInfo.current;
-    if (dragFrom !== null && info) moveGhost(info.lastX, info.lastY);
+    if (dragFrom !== null) placeGhost();
   }, [dragFrom]);
+
+  // ... and then chases it: each frame it covers part of the remaining way and leans into the motion.
+  useFrame((_now, dt) => {
+    const info = dragInfo.current;
+    if (!info) return;
+    const ms = dt * 1000;
+    const pull = 1 - Math.exp(-ms / DRAG_FOLLOW);
+    const step = (info.lastX - info.left - info.gx) * pull;
+    info.gx += step;
+    info.gy += (info.lastY - info.top - info.gy) * pull;
+    const lean = Math.max(-DRAG_TILT, Math.min(DRAG_TILT, ((step / Math.max(ms, 1)) * 6 * 100) / info.size));
+    info.tilt += (lean - info.tilt) * (1 - Math.exp(-ms / 70));
+    placeGhost();
+  }, dragFrom !== null);
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     const square = squareAt(event.clientX, event.clientY);
@@ -317,10 +342,15 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
         lastX: event.clientX,
         lastY: event.clientY,
         moved: false,
+        wasSelected: selected === square,
         left: rect.left,
         top: rect.top,
         size: rect.width / 8,
+        gx: event.clientX - rect.left,
+        gy: event.clientY - rect.top,
+        tilt: 0,
       };
+      setDragFrom(square);
       event.currentTarget.setPointerCapture(event.pointerId);
     } else {
       setSelected(null);
@@ -337,12 +367,11 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     if (!info) return;
     info.lastX = event.clientX;
     info.lastY = event.clientY;
-    if (!info.moved) {
-      if (Math.hypot(event.clientX - info.x, event.clientY - info.y) <= Math.max(6, info.size * 0.12)) return;
-      info.moved = true;
-      setDragFrom(info.from);
-    }
-    moveGhost(event.clientX, event.clientY);
+    if (!info.moved && Math.hypot(event.clientX - info.x, event.clientY - info.y) > Math.max(6, info.size * 0.12)) info.moved = true;
+    const col = Math.floor((event.clientX - info.left) / info.size);
+    const row = Math.floor((event.clientY - info.top) / info.size);
+    const square = col >= 0 && col < 8 && row >= 0 && row < 8 ? fromView(col, row, orientation) : null;
+    if (square !== hover) setHover(square);
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -368,11 +397,13 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     if (!info || event.button !== 0) return;
     dragInfo.current = null;
     setDragFrom(null);
-    if (!info.moved) return;
+    setHover(null);
     const target = squareAt(event.clientX, event.clientY);
-    if (target >= 0 && target !== info.from && legal.get(info.from)?.has(target)) {
+    if (target === info.from) {
+      if (info.wasSelected && !info.moved) setSelected(null); // a second click on the selected piece puts it down
+    } else if (target >= 0 && legal.get(info.from)?.has(target)) {
       attempt(info.from, target, false); // the piece is already in place — no animation
-    } else if (target !== info.from) {
+    } else {
       setSelected(null); // dropped on an illegal square — it returns to its place
     }
   }
@@ -380,8 +411,16 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   function onPointerCancel(): void {
     dragInfo.current = null;
     setDragFrom(null);
+    setHover(null);
     setDrawing(null);
   }
+
+  // While a piece is held the cursor is an open hand everywhere, also outside the board.
+  useEffect(() => {
+    if (dragFrom === null) return;
+    document.documentElement.classList.add("holding-piece");
+    return () => document.documentElement.classList.remove("holding-piece");
+  }, [dragFrom]);
 
   // --- drawing
   const lastMove = board.lastMove;
@@ -452,17 +491,20 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     );
   }
 
+  // Legal moves of the selected piece: dots pop up and capture rings close in, in a wave from the piece outwards.
+  // HTML rather than SVG: scaling SVG shapes left stray lines in WebKitGTK (the fallback game window on Linux).
   const dots: ReactElement[] = [];
   if (selected !== null && canMove) {
+    const from = squareRect(selected);
     for (const target of legal.get(selected) ?? []) {
       const { x, y } = squareRect(target);
-      dots.push(
-        placement.has(target) ? (
-          <circle key={target} cx={x + 0.5} cy={y + 0.5} r={0.46} className="dot-capture" />
-        ) : (
-          <circle key={target} cx={x + 0.5} cy={y + 0.5} r={0.16} className="dot" />
-        ),
-      );
+      const delay = Math.min(110, Math.hypot(x - from.x, y - from.y) * 16);
+      const kind = placement.has(target) ? "hint-capture" : "hint-dot";
+      dots.push(<div key={`${selected}-${target}`} className={`hint ${kind}`} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%`, animationDelay: `${delay.toFixed(0)}ms` }} />);
+    }
+    if (dragFrom !== null && hover !== null && hover !== selected && legal.get(selected)?.has(hover)) {
+      const { x, y } = squareRect(hover);
+      dots.push(<div key="drop" className="hint hint-drop" style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%` }} />);
     }
   }
 
@@ -578,7 +620,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   return (
     <div
       ref={wrap}
-      className={`board${canMove ? " can-move" : ""}${className ? " " + className : ""}`}
+      className={`board${canMove ? " can-move" : ""}${dragFrom !== null ? " dragging" : ""}${className ? " " + className : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -609,8 +651,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
           {glows}
         </svg>
         <div className="pieces">{pieces}</div>
+        <div className="hints">{dots}</div>
         <svg className="board-layer" viewBox="0 0 8 8">
-          {dots}
           {arrowEls}
         </svg>
         {promotion && <div className="promotion-shade" />}

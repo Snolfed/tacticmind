@@ -50,6 +50,8 @@ export interface UiSettings {
   fpsLimit: number; // 0 = unlimited (display refresh rate)
   theme: "dark" | "light";
   board: "green" | "terracotta" | "slate";
+  /** The evaluation bar in a game against the coach. */
+  coachEval: boolean;
 }
 
 export interface Thought {
@@ -186,6 +188,8 @@ export interface CoachGameSnapshot {
   controls: Control[];
   nav: { prev: boolean; next: boolean };
   moves: { first: number; offset: number; current: number; list: { san: string; cls: string | null; player: boolean }[] };
+  /** The engine's evaluation of the position on the board (null while not known yet). */
+  eval: { score: Score | null; whiteBottom: boolean };
   summary: {
     result: "win" | "loss" | "draw";
     title: string;

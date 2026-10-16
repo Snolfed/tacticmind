@@ -77,6 +77,16 @@ def test_strength_grows_with_elo() -> None:
     assert strength.strength_for(5000).elo == strength.ELO_MAX
 
 
+def test_strongest_coach_is_the_full_engine() -> None:
+    top = strength.strength_for(strength.ELO_MAX)
+    assert (top.depth, top.multi_pv, top.blunder) == (strength.FULL_DEPTH, 1, 0)
+    assert strength.describe_level(strength.ELO_MAX) == "coach.level.engine"
+    assert strength.describe_level(2400) == "coach.level.master"
+    assert strength.describe_level(2000) == "coach.level.expert"
+    # The club levels play as before: 2000 is still depth 5, picking between the two best moves.
+    assert (strength.strength_for(2000).depth, strength.strength_for(2000).multi_pv) == (5, 2)
+
+
 def test_strong_trainer_plays_best_weak_trainer_varies() -> None:
     lines = [("e2e4", 40), ("d2d4", 35), ("a2a3", -60), ("g2g4", -150)]
     legal = [m for m, _ in lines] + ["h2h3", "b1a3"]

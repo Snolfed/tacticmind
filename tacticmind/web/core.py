@@ -41,7 +41,8 @@ FPS_LIMITS = (60, 120, 144, 170, 240, 0)
 #: Colour theme of the app and colours of the board (web/src/styles.css, ``data-theme`` / ``data-board``).
 THEMES = ("dark", "light")
 BOARDS = ("green", "terracotta", "slate")
-DEFAULT_SETTINGS: dict[str, Any] = {"showFps": False, "fpsLimit": 0, "theme": "dark", "board": "green"}
+#: ``coachEval``: the evaluation bar next to the board in a game against the coach.
+DEFAULT_SETTINGS: dict[str, Any] = {"showFps": False, "fpsLimit": 0, "theme": "dark", "board": "green", "coachEval": True}
 
 
 def settings_path() -> Path:
@@ -55,8 +56,9 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
     except (OSError, ValueError):
         return settings
     if isinstance(raw, dict):
-        if isinstance(raw.get("showFps"), bool):
-            settings["showFps"] = raw["showFps"]
+        for key in ("showFps", "coachEval"):
+            if isinstance(raw.get(key), bool):
+                settings[key] = raw[key]
         if raw.get("fpsLimit") in FPS_LIMITS and not isinstance(raw.get("fpsLimit"), bool):
             settings["fpsLimit"] = raw["fpsLimit"]
         if raw.get("theme") in THEMES:
@@ -192,9 +194,9 @@ class WebApp:
             self.save()
 
     def _ui_settings(self, action: dict[str, Any]) -> None:
-        show = action.get("showFps")
-        if isinstance(show, bool):
-            self.settings["showFps"] = show
+        for key in ("showFps", "coachEval"):
+            if isinstance(action.get(key), bool):
+                self.settings[key] = action[key]
         limit = action.get("fpsLimit")
         if limit in FPS_LIMITS and not isinstance(limit, bool):
             self.settings["fpsLimit"] = limit

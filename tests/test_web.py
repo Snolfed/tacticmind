@@ -84,6 +84,10 @@ def test_settings_file_is_validated(home: Path) -> None:
     assert load_settings(path) == {**DEFAULT_SETTINGS, "theme": "light", "board": "slate"}
     path.write_text(json.dumps({"theme": "neon", "board": 3}), encoding="utf-8")
     assert load_settings(path) == DEFAULT_SETTINGS
+    path.write_text(json.dumps({"coachEval": False}), encoding="utf-8")
+    assert load_settings(path) == {**DEFAULT_SETTINGS, "coachEval": False}
+    path.write_text(json.dumps({"coachEval": 0}), encoding="utf-8")
+    assert load_settings(path) == DEFAULT_SETTINGS
 
 
 def test_settings_actions_are_saved(home: Path) -> None:
@@ -92,7 +96,8 @@ def test_settings_actions_are_saved(home: Path) -> None:
     app.dispatch({"type": "settings", "fpsLimit": 75})  # not in the list — ignored
     app.dispatch({"type": "settings", "theme": "light", "board": "terracotta"})
     app.dispatch({"type": "settings", "theme": "neon", "board": "marble"})  # unknown — ignored
-    expected = {"showFps": True, "fpsLimit": 240, "theme": "light", "board": "terracotta"}
+    app.dispatch({"type": "settings", "coachEval": False})
+    expected = {"showFps": True, "fpsLimit": 240, "theme": "light", "board": "terracotta", "coachEval": False}
     assert view(app)["settings"] == expected
     assert load_settings(home / "ui_settings.json") == expected
     app.dispatch({"type": "sound", "volume": 0.3})
@@ -172,11 +177,15 @@ def test_coach_game_through_actions(home: Path) -> None:
         first = state["view"]["moves"]["list"][0]
         assert first["san"] == "e4" and first["player"] and first["cls"]
         assert state["view"]["card"]["comment"]["text"]
+        # The evaluation bar: the engine's analysis of the position on the board, from White's side.
+        state = wait_until(app, lambda s: s["view"]["eval"]["score"] is not None, 20)
+        assert state["view"]["eval"]["whiteBottom"] and abs(state["view"]["eval"]["score"]["value"]) < 300
         # Stepping back through the game with the ◀ arrow and returning.
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "step", "data": {"delta": -1}})
         assert view(app)["view"]["moves"]["current"] == 0
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "jump", "data": {"index": 2}})
         assert view(app)["view"]["moves"]["current"] == 1
+        assert view(app)["view"]["eval"]["score"] is not None  # after 1. e4: the score of the judged move
         # An illegal move is ignored.
         before = view(app)["view"]["board"]["seq"]
         app.dispatch({"type": "screen", "screen": "coach_game", "name": "move", "data": {"uci": "e1e5"}})

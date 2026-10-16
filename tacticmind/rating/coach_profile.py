@@ -5,7 +5,7 @@ with uncertainty RD = 80, because the coach's Elo is approximate). We do not sho
 
  - the first 10 games are **calibration** — the rating is only "getting to know" the player,
  - after the 10th game a new difficulty level appears, **"Your level"**: the coach plays at a strength equal
-   to the player's rating (rounded to 25, within 400–2000),
+   to the player's rating (rounded to 25, within the coach's Elo range),
  - after that the level changes **every 5 games** (after the 15th, 20th, 25th …), not after every game —
    this keeps the opponent stable and progress shows in "steps", like being promoted a rank.
 

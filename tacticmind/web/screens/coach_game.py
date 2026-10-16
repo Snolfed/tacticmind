@@ -27,12 +27,14 @@ from ...coach.game import CoachGame, MoveRecord
 from ...coach.openings import Opening, book_moves, comment_key, is_book_move, move_comment, opening_name
 from ...coach.review import CLASSES, SERIOUS, WEAK, classify, move_accuracy, score_for, win_drop, win_percent
 from ...coach.strength import choose_move, describe_level, strength_for
+from ...engine.constants import WHITE
 from ...engine.process import DoneEvent, EngineEvent, ErrorEvent
-from ...engine.types import MATE, SearchInfo
+from ...engine.types import MATE, SearchInfo, to_white_score
 from ...i18n import fmt_decimal, get_language, t, tn
 from ...puzzles.validator import SACRIFICE_MIN_LOSS, is_sacrifice, see
 from ...rating.coach_profile import CALIBRATION_GAMES, CoachGameRecord, LevelChange
 from ...rating.profile import RatingChange, data_dir
+from .. import brain
 from ..board import BoardModel
 from ..colors import BEST_ARROW, BEST_ARROW_REVIEW, HINT_ARROW, LESSON_ARROW
 from .base import WebScreen
@@ -1141,6 +1143,18 @@ class CoachGameScreen(WebScreen):
         current = len(game.records) if self.view_index is None else self.view_index
         return {"evals": eval_curve(game.records), "current": current, "pgn": self.pgn(), "archived": self.archived is not None}
 
+    def _eval(self, game: CoachGame) -> dict[str, Any]:
+        """The evaluation bar: the engine's view of the position on the board (its analysis, or the score of the move
+        that led there). ``None`` while it is not known yet — the bar then stays where it was."""
+        current = len(game.records) if self.view_index is None else self.view_index
+        fen = game.records[current].fen_before if current < len(game.records) else game.board.fen()
+        info = self.analyses.get(fen)
+        score = info.score if info is not None else None
+        if score is None and 0 < current <= len(game.records):
+            value = game.records[current - 1].score
+            score = to_white_score(value, WHITE) if value is not None else None
+        return {"score": brain.score_json(score), "whiteBottom": game.player_color == chess.WHITE}
+
     def _notice(self) -> str | None:
         if self.notice is None or self.clock > self.notice[1]:
             return None
@@ -1184,6 +1198,7 @@ class CoachGameScreen(WebScreen):
             "controls": self._controls(),
             "nav": {"prev": navigable and current > 0, "next": navigable and self.view_index is not None},
             "moves": self._moves(game),
+            "eval": self._eval(game),
             "summary": self._summary(game),
             "review": self._review(game),
             "notice": self._notice(),

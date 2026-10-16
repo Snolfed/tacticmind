@@ -24,6 +24,7 @@ export const UI_STRINGS: Record<string, Record<string, string>> = {
     "ui.close": "Zamknij",
     "ui.prev": "Poprzedni ruch (←)",
     "ui.next": "Następny ruch (→)",
+    "ui.eval_bar": "Pasek oceny: pokaż lub ukryj",
     "ui.back_to_game": "Wróć do partii",
   },
   en: {
@@ -48,6 +49,7 @@ export const UI_STRINGS: Record<string, Record<string, string>> = {
     "ui.close": "Close",
     "ui.prev": "Previous move (←)",
     "ui.next": "Next move (→)",
+    "ui.eval_bar": "Evaluation bar: show or hide",
     "ui.back_to_game": "Back to the game",
   },
 };
