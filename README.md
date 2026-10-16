@@ -141,6 +141,17 @@ npm run build                      # new build into tacticmind/web/static
   glides back to its square, a captured piece reappears, and the sound matches the move being undone (capture,
   check, castling…). You cannot move or see a hint in an earlier position; ▶ to the end (or the opponent's next
   move) returns to the current position.
+- **Puzzle modes**: the chip above the puzzle ("Rated ▾") opens the mode picker:
+  - *Rated* — the default: puzzles picked for your level and weak spots,
+  - *Train a theme* — only puzzles with one theme (forks, pins, mates in 2…), still at your level and still rated;
+    each theme shows how many puzzles it has and your success rate in it (weak themes in orange),
+  - *Review mistakes* — puzzles you failed come back, oldest first, until you solve them without a mistake or a hint;
+    unrated, and when the queue is empty you go back to rated puzzles,
+  - *Puzzle Rush* — 3 min, 5 min or Survival (no clock): every puzzle is a little harder (from about 600), a mistake,
+    a hint or giving up is a strike, and 3 strikes end the run. Unrated; the best score of each variant is remembered
+    and the summary shows the rating of every puzzle in the run.
+
+  Switching modes in the middle of a rated puzzle asks first, because the started puzzle then counts as unsolved.
 - **Buttons**: during a puzzle you see "Hint" and "Show solution" (after a mistake also "Try again");
   "Next puzzle" appears only after solving the puzzle or revealing the solution.
 - **Alternative solutions**: a move other than the reference move that delivers mate solves the puzzle. A move that,
@@ -534,6 +545,9 @@ A puzzle is treated as an opponent with the puzzle's rating.
 - puzzles do not repeat, and themes from the last 3 puzzles get a penalty (variety),
 - every decision has a justification in the **"Why this puzzle?"** pop-up, e.g. "Puzzle rating about 1380, aiming
   for a 65% chance (flow zone). Your weak spot: pin (41%)."
+- **theme training** uses the same rules on the puzzles of one theme; the **review queue** (`PlayerProfile.review`, at most
+  200 puzzles) gets every failed puzzle and loses it once it is solved cleanly (older profiles rebuild it from the history);
+  **Puzzle Rush** ignores the rating: puzzle *n* is drawn from the 6 unused puzzles closest to `600 + 55·n`.
 
 ### Coach: playing strength based on Elo
 
@@ -719,7 +733,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 164 tests, including:
+`python -m pytest` — 173 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -733,6 +747,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 | `test_coach.py` | every opening line legal and explained in both languages, opening names and transpositions, opening book, coach strength grows with Elo (a strong coach plays the best moves, a weak one samples), win chance and accuracy, move-class thresholds, "great" and "brilliant", explanations (hanging piece, missed and allowed mate, forks, coach threats), lesson flow and take-backs, game result and the help penalty, 10-game calibration and a level change every 5, profile saving |
 | `test_i18n.py` | every language has the full key set and the same `{…}` fields, plurals (Polish: 1/2–4/5+), number formats, piece letters |
 | `test_web.py` | TypeScript interface server: settings (validation and saving), navigation and screen snapshots, solving a puzzle and playing a coach game through actions, promotion and legal moves in the snapshot, page/texts/state over HTTP, SSE stream, rejecting foreign requests (Host, missing header, bad JSON, path traversal), `--server` mode for the Tauri window |
+| `test_training.py` | puzzle modes: theme training draws only that theme, the review queue (order, clean solve removes, limit, missing puzzles, rebuilt from an old profile), Puzzle Rush gets harder without repeats and keeps the best score; on the puzzle screen: switching asks first, review is unrated, a whole Rush run (solve, 3 strikes, summary, again, back) and the clock running out |
 | `test_archive.py` | saved coach games: comments and moves survive JSON (and still follow the language), damaged moves are rejected, the advantage graph, PGN export (result, NAGs, `[%eval]`), only the newest 100 games keep their moves, old profiles load; opening a saved game from the list, jumping on the graph, saving the PGN file |
 
 The TypeScript interface has its own tests (`cd web && npm test`, vitest): FEN, trial moves (castling, en passant,
@@ -746,6 +761,10 @@ pip install -r requirements-dev.txt
 ruff check .
 mypy tacticmind scripts main.py --disallow-untyped-defs
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs all of this on every pull request and push to `main`: ruff, mypy and
+pytest on Python 3.11 and 3.14 (the C engine is built with the runner's gcc), and for the interface vitest, the build and a
+check that the committed `tacticmind/web/static` matches `web/src`.
 
 ## Puzzles from the Lichess database
 
@@ -860,6 +879,8 @@ and the player plays the side to move after it (the board flips to that side).
     an application window in Tauri 2 that starts Python by itself.
 12. **Game review and a lighter repository** — saved coach games with the advantage graph and PGN export; the old pygame
     interface removed (about 7 000 lines and the pygame-ce dependency) and the fonts reduced to WOFF2 subsets.
+13. **Puzzle modes and CI** — theme training, review of failed puzzles and Puzzle Rush (3 min, 5 min, Survival); tests
+    on GitHub Actions for every pull request.
 
 ## Sources and licenses
 
