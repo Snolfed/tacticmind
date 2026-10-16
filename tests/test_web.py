@@ -5,7 +5,9 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import signal
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -384,6 +386,26 @@ def test_a_second_game_gets_its_own_browser_profile(home: Path, tmp_path: Path) 
     spare = Path(used.split("=", 1)[1])
     assert spare != profile
     assert not spare.exists()  # removed after the game
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="POSIX signals")
+def test_killing_the_game_closes_its_browser_window(home: Path, tmp_path: Path) -> None:
+    """Closing the terminal or `kill` must not leave the window open on a dead server."""
+    from tacticmind.web import window
+
+    browser = tmp_path / "slow-browser"
+    browser.write_text(f"#!/bin/sh\necho $$ > {tmp_path / 'pid'}\nexec sleep 30\n")
+    browser.chmod(0o755)
+    before = signal.getsignal(signal.SIGTERM)
+    killer = threading.Timer(1.0, os.kill, (os.getpid(), signal.SIGTERM))
+    killer.start()
+    with pytest.raises(SystemExit):
+        window.show_in_browser(str(browser), "http://127.0.0.1:1/")
+    killer.join()
+    pid = int((tmp_path / "pid").read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)  # the browser was closed (and reaped) with the game
+    assert signal.getsignal(signal.SIGTERM) == before
 
 
 def test_nvidia_under_wayland_turns_off_explicit_sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

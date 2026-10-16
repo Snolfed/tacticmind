@@ -12,11 +12,14 @@ import importlib
 import importlib.util
 import os
 import shutil
+import signal
 import site
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
+from types import FrameType
 from typing import Any
 
 from ..rating.profile import data_dir
@@ -130,6 +133,10 @@ def _profile_in_use(profile: Path) -> bool:
     return True
 
 
+def _exit_on_signal(signum: int, frame: FrameType | None) -> None:
+    raise SystemExit(128 + signum)
+
+
 def show_in_browser(browser: str, url: str) -> None:
     """Shows the game in an app window of the browser and returns once the player closes it."""
     profile = data_dir() / "window"
@@ -147,6 +154,14 @@ def show_in_browser(browser: str, url: str) -> None:
         "--no-default-browser-check",
         "--disable-features=Translate",
     ]
+    # Closing the terminal (SIGHUP) or `kill` (SIGTERM) would end Python without the `finally` below and leave the
+    # window open on a dead server: as SystemExit they close the browser together with the game.
+    previous: dict[int, Any] = {}
+    if threading.current_thread() is threading.main_thread():
+        for name in ("SIGTERM", "SIGHUP"):
+            number = getattr(signal, name, None)
+            if number is not None:
+                previous[number] = signal.signal(number, _exit_on_signal)
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         process.wait()
@@ -156,6 +171,9 @@ def show_in_browser(browser: str, url: str) -> None:
             process.wait(5)
         if spare:
             shutil.rmtree(spare, ignore_errors=True)
+        for number, handler in previous.items():
+            if handler is not None:
+                signal.signal(number, handler)
 
 
 def check() -> str | None:
