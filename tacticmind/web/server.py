@@ -30,7 +30,7 @@ from .core import WebApp
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 DEFAULT_PORT = 8517
-_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "tauri.localhost")
+_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 MAX_BODY = 64 * 1024
 
 mimetypes.add_type("text/javascript", ".js")

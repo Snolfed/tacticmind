@@ -1,14 +1,13 @@
-"""Browser interface: screen logic, state snapshots, the HTTP server and ``--server`` mode (Tauri)."""
+"""Interface: screen logic, state snapshots, the HTTP server and the game window (without a real window)."""
 
 from __future__ import annotations
 
 import http.client
 import json
-import os
-import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import chess
@@ -16,8 +15,6 @@ import pytest
 
 from tacticmind.web.core import DEFAULT_SETTINGS, WebApp, load_settings
 from tacticmind.web.server import TacticMindServer, strings_payload
-
-ROOT = Path(__file__).resolve().parent.parent
 
 
 class StubEngine:
@@ -259,32 +256,63 @@ def test_server_event_stream_sends_state(server: TacticMindServer) -> None:
     conn.close()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="closing stdin works differently here")
-def test_server_mode_for_tauri(home: Path) -> None:
-    """``main.py --server`` (how the Tauri window runs it): prints the address and exits once stdin is closed."""
-    env = {**os.environ, "TACTICMIND_HOME": str(home)}
-    process = subprocess.Popen(
-        [sys.executable, str(ROOT / "main.py"), "--server", "--port", "0"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        text=True,
-    )
-    try:
-        assert process.stdout is not None and process.stdin is not None
-        line = process.stdout.readline().strip()
-        assert line.startswith("TACTICMIND_URL=http://127.0.0.1:")
-        port = int(line.rsplit(":", 1)[1].strip("/"))
+def test_window_shows_the_game_and_closing_it_ends_the_game(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``python main.py``: the server starts, the window opens on its address, and closing the window stops everything."""
+    from tacticmind.web import app as launcher
+    from tacticmind.web import window
+
+    opened: dict[str, Any] = {}
+
+    class FakeWindow:
+        def __init__(self) -> None:
+            self.toggles = 0
+
+        def toggle_fullscreen(self) -> None:
+            self.toggles += 1
+
+    def create_window(title: str, url: str, **options: Any) -> FakeWindow:
+        opened.update(title=title, url=url, options=options, window=FakeWindow())
+        return opened["window"]
+
+    def start(**options: Any) -> None:
+        """The window is "open" until this returns: the game must already be served at its address."""
+        opened["start"] = options
+        port = int(opened["url"].rsplit(":", 1)[1].strip("/"))
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         conn.request("GET", "/api/state")
-        assert json.loads(conn.getresponse().read())["screen"] == "home"
+        opened["screen"] = json.loads(conn.getresponse().read())["screen"]
         conn.close()
-        process.stdin.close()
-        assert process.wait(timeout=15) == 0
-    finally:
-        if process.poll() is None:
-            process.kill()
+        api = opened["options"]["js_api"]
+        opened["fullscreen"] = [api.is_fullscreen(), api.toggle_fullscreen(), api.toggle_fullscreen()]
+
+    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(create_window=create_window, start=start))
+    monkeypatch.setattr(window, "check", lambda: None)
+    monkeypatch.setattr(launcher, "WebApp", lambda: WebApp(engine=StubEngine()))  # type: ignore[arg-type]
+    launcher.main([])
+
+    assert opened["title"] == "TacticMind"
+    assert opened["url"].startswith("http://127.0.0.1:")
+    assert opened["screen"] == "home"
+    assert opened["options"]["background_color"] == window.BACKGROUND
+    assert Path(opened["start"]["icon"]).is_file()
+    assert opened["fullscreen"] == [False, True, False]
+    assert opened["window"].toggles == 2
+
+
+def test_without_the_window_the_game_explains_what_to_install(home: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from tacticmind.web import app as launcher
+    from tacticmind.web import window
+
+    monkeypatch.setitem(sys.modules, "webview", None)  # pywebview not installed
+    assert window.check() == window.MISSING_PYWEBVIEW
+    monkeypatch.setattr(window, "check", lambda: "no window here")
+    started: list[bool] = []
+    monkeypatch.setattr(launcher, "WebApp", lambda: started.append(True))
+    with pytest.raises(SystemExit) as exit_info:
+        launcher.main([])
+    assert exit_info.value.code == 1
+    assert "no window here" in capsys.readouterr().err
+    assert not started  # nothing starts in the background
 
 
 def test_board_snapshot_promotion_and_legality(home: Path) -> None:

@@ -1,4 +1,3 @@
 # Built UI (npm run build in the web directory). Do not edit by hand.
 tacticmind/web/static/** linguist-generated=true
 web/package-lock.json linguist-generated=true
-web/src-tauri/Cargo.lock linguist-generated=true

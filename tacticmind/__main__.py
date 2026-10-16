@@ -1,4 +1,4 @@
-"""Run the game with: python -m tacticmind (same options as main.py, e.g. --browser)."""
+"""Run the game with: python -m tacticmind (same options as main.py, e.g. --no-window)."""
 
 import sys
 
