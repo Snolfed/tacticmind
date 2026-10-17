@@ -17,3 +17,8 @@ target-version = "py311"
 select = ["E", "F", "W", "B", "UP", "SIM", "I"]
 # SIM109/SIM110: in the engine's hot loops, explicit comparisons and loops are faster than any()/tuples.
 ignore = ["E501", "SIM108", "SIM109", "SIM110", "B023", "B905"]
+
+[[tool.mypy.overrides]]
+# Only scripts/trace_pieces.py uses them, and only when the pieces are traced again (not installed in CI).
+module = ["numpy", "numpy.*", "PIL", "PIL.*", "vtracer"]
+ignore_missing_imports = true
