@@ -548,7 +548,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const { x, y } = squareRect(square);
     const [rgb] = splitAlpha(color);
     tints.push(
-      <rect key={`mark-${square}`} x={x + 0.05} y={y + 0.05} width={0.9} height={0.9} rx={0.1} fill={rgb} fillOpacity={0.47} stroke={rgb} strokeOpacity={0.9} strokeWidth={0.04} />,
+      <rect key={`mark-${square}`} x={x} y={y} width={1} height={1} fill={rgb} fillOpacity={0.6} />,
     );
   }
   const glows: ReactElement[] = [];

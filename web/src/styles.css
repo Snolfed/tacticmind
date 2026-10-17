@@ -1000,9 +1000,9 @@ input[type="range"]::-moz-range-thumb {
 .hint-capture::after {
   content: "";
   position: absolute;
-  inset: 4%;
+  inset: 0;
   border-radius: 50%;
-  background: radial-gradient(closest-side, transparent 81%, rgba(20, 16, 10, 0.3) 82.5% 98%, transparent 100%);
+  background: radial-gradient(closest-side, transparent 80%, rgba(20, 16, 10, 0.2) 81.5% 99%, transparent 100%);
   animation: hint-close 0.28s cubic-bezier(0.25, 1.4, 0.5, 1) both;
   animation-delay: inherit;
 }
