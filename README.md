@@ -918,6 +918,8 @@ and the player plays the side to move after it (the board flips to that side).
 21. **Calmer pieces** — square marks fill the whole square, capture rings reach its sides; the knights are centred on
     their whole width (their heads stuck out to the left) and the pieces are a touch darker than the drawing, whose
     near-white looked washed out on the light squares.
+22. **Smoother pieces on small boards** — the outline is now two pixels of the drawing wide (the inner lines a little
+    bolder too): at the drawing's own width it was under a screen pixel on 76-pixel squares and its curves stair-stepped.
 
 ## Sources and licenses
 
