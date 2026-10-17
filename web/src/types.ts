@@ -19,8 +19,8 @@ export interface BoardSnapshot {
   player: Color;
   interactive: boolean;
   legal: string[];
-  /** Where the other side's pieces could go (they can be picked up to look, not moved). */
-  peek: string[];
+  /** While the opponent thinks: the pre-moves the player may queue (from + to), checked on their turn. */
+  premoves: string[];
   lastMove: string | null;
   check: string | null;
   hint: string | null;

@@ -1,4 +1,8 @@
-"""Cuts the game's pieces out of Juras's drawing (``scripts/pieces_sheet.png``) and traces them into SVG.
+"""Cuts the game's pieces out of Juras's drawing and traces them into SVG.
+
+The drawing is ``scripts/pieces_sheet.png``; the script traces its 4× upscale ``scripts/pieces_sheet_4x.png``, made
+with Real-ESRGAN (``realesrgan-ncnn-vulkan -n realesrgan-x4plus-anime -s 4``), so the curves follow smooth lines
+rather than the original's pixels.
 
 Usage::
 
@@ -27,15 +31,20 @@ import vtracer
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEET = Path(__file__).resolve().parent / "pieces_sheet.png"
+SHEET = Path(__file__).resolve().parent / "pieces_sheet_4x.png"
 OUT = ROOT / "web" / "public" / "pieces"
 ORDER = "RNBQKP"
-#: Each piece is traced at this many times the sheet's resolution.
-UP = 8
-#: Box units per sheet pixel (the king, 100 px tall, becomes 93 units: the pieces fill the square like on chess.com).
-UNIT = 0.93
+#: The drawing is traced from its 4× upscale (Real-ESRGAN, ``realesrgan-x4plus-anime``): smooth lines instead of the
+#: original's pixel steps. Sizes below are in pixels of the original drawing (``pieces_sheet.png``).
+SHEET_SCALE = 4
+#: Each piece is traced at this many times the original drawing's resolution.
+TRACE = 8
+#: The upscaled sheet is enlarged this many times more before it is traced.
+UP = TRACE // SHEET_SCALE
+#: Box units per pixel of the original drawing (the king, 100 px tall, becomes 87 units).
+UNIT = 0.87
 #: Where the pieces stand.
-GROUND = 95.5
+GROUND = 91.0
 #: Flat colours of each side, darkest first: (upper luminance limit of the class, colour).
 PALETTE: dict[str, list[tuple[float, str]]] = {
     "b": [(40, "#060507"), (75, "#444243"), (112, "#555355"), (256, "#929193")],
@@ -43,13 +52,14 @@ PALETTE: dict[str, list[tuple[float, str]]] = {
 }
 #: The shade class: bands of it thinner than about one sheet pixel are just the blend between outline and fill.
 SHADE = 1
-#: Width of the outline around the piece, in traced pixels (one and a half sheet pixels: the drawn line, a little bolder so it stays crisp on a small board).
-OUTLINE = round(UP * 1.5)
+#: Width of the outline around the piece, in traced pixels (a little over one pixel of the drawing, like the drawn line).
+OUTLINE = round(TRACE * 1.25)
 
 
 def flood_background(image: np.ndarray, background: np.ndarray) -> np.ndarray:
-    """Pixels of the background colour reachable from the sheet's edges."""
-    close = np.abs(image - background).max(axis=2) < 14
+    """Background pixels reachable from the sheet's edges: its colour, or lighter (the upscaler's light halo around
+    the outline belongs to the background too)."""
+    close = (np.abs(image - background).max(axis=2) < 14) | (image.mean(axis=2) > background.mean())
     reached = np.zeros(close.shape, bool)
     reached[0, :], reached[-1, :], reached[:, 0], reached[:, -1] = close[0, :], close[-1, :], close[:, 0], close[:, -1]
     while True:
@@ -121,13 +131,14 @@ def coverage(shape: np.ndarray, lum: np.ndarray, background: float) -> np.ndarra
 
 def holes(piece: np.ndarray, image: np.ndarray, background: np.ndarray) -> np.ndarray:
     """Background-grey areas inside a piece that the outline closes all around (not shade, which touches the fill)."""
-    grey = piece & (np.abs(image - background).max(axis=2) < 12)
     lum = image.mean(axis=2)
+    # The background's grey, or the upscaler's light halo along the outline (lighter, but not as light as the fill).
+    grey = piece & ((np.abs(image - background).max(axis=2) < 12) | ((lum > background.mean()) & (lum < 235)))
     found = np.zeros(piece.shape, bool)
     for area in components(grey):
-        ring = grow(area, 2) & ~area
+        ring = grow(area, SHEET_SCALE) & ~area
         # Mostly outline around it and no fill: shade on a white piece is just as grey, but it touches the fill.
-        if area.sum() >= 6 and (lum[ring] < 170).mean() > 0.6 and (lum[ring] > 235).mean() < 0.05:
+        if area.sum() >= 6 * SHEET_SCALE**2 and (lum[ring] < 170).mean() > 0.6 and (lum[ring] > 235).mean() < 0.05:
             found |= area
     return found
 
@@ -146,12 +157,12 @@ def classify(crop: Image.Image, mask: Image.Image, side: str) -> np.ndarray:
     width, height = crop.size
     palette = PALETTE[side]
     big = np.asarray(crop.resize((width * UP, height * UP), Image.Resampling.LANCZOS)).astype(float)
-    edge = mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(UP * 0.6))
+    edge = mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(TRACE * 0.45))
     alpha = np.asarray(edge) > 127
-    classes = smooth_classes(np.digitize(big.mean(axis=2), [limit for limit, _ in palette[:-1]]), len(palette), UP * 0.6)
+    classes = smooth_classes(np.digitize(big.mean(axis=2), [limit for limit, _ in palette[:-1]]), len(palette), TRACE * 0.45)
     # A thin band of shade along the outline is only the blend between outline and fill.
     shade = classes == SHADE
-    size = UP + 1
+    size = TRACE + 1
     opened = Image.fromarray(shade.astype(np.uint8) * 255).filter(ImageFilter.MinFilter(size)).filter(ImageFilter.MaxFilter(size))
     classes[shade & ~(np.asarray(opened) > 127)] = SHADE + 1
     # The outline all around the piece, as even as in the drawing (along the edge the thin line blends into the fill).
@@ -172,7 +183,7 @@ def trace(rgba: np.ndarray, scale: float, dx: float, dy: float) -> list[str]:
         source, target = Path(folder, "piece.png"), Path(folder, "piece.svg")
         Image.fromarray(rgba).save(source)
         vtracer.convert_image_to_svg_py(
-            str(source), str(target), colormode="color", hierarchical="stacked", mode="spline", filter_speckle=UP * 2,
+            str(source), str(target), colormode="color", hierarchical="stacked", mode="spline", filter_speckle=TRACE * 2,
             color_precision=8, layer_difference=4, corner_threshold=60, length_threshold=4.0, max_iterations=10,
             splice_threshold=45, path_precision=2,
         )  # fmt: skip
@@ -204,7 +215,7 @@ def main(argv: list[str] | None = None) -> None:
     image = np.asarray(sheet).astype(float)
     border = np.concatenate([image[0], image[-1], image[:, 0], image[:, -1]])
     background = np.median(border, axis=0)
-    pieces = components(~flood_background(image, background), min_size=500)
+    pieces = components(~flood_background(image, background), min_size=500 * SHEET_SCALE**2)
     if len(pieces) != 12:
         raise SystemExit(f"expected 12 pieces on the sheet, found {len(pieces)}")
     middle = image.shape[0] / 2
@@ -213,17 +224,17 @@ def main(argv: list[str] | None = None) -> None:
     for index, piece in enumerate(pieces):
         side, letter = "bw"[index // 6], ORDER[index % 6]
         ys, xs = np.nonzero(piece)
-        pad = 4
+        pad = 4 * SHEET_SCALE
         x0, y0, x1, y1 = xs.min() - pad, ys.min() - pad, xs.max() + pad + 1, ys.max() + pad + 1
         shape = piece & ~holes(piece, image, background)
         crop = sheet.crop((int(x0), int(y0), int(x1), int(y1)))
         cover = coverage(shape, image.mean(axis=2), float(background.mean()))
         mask = Image.fromarray(np.round(cover[y0:y1, x0:x1] * 255).astype(np.uint8))
         bottom = ys.max() + 1
-        base = xs[ys >= ys.max() - 6].astype(float)
+        base = xs[ys >= ys.max() - 6 * SHEET_SCALE].astype(float)
         centre = (base.min() + base.max() + 1) / 2  # the middle of the base, not of the whole piece (the knight)
-        scale = UNIT / UP
-        paths = trace(classify(crop, mask, side), scale, 50 + (x0 - centre) * UNIT, GROUND + (y0 - bottom) * UNIT)
+        unit = UNIT / SHEET_SCALE  # box units per pixel of the upscaled sheet
+        paths = trace(classify(crop, mask, side), unit / UP, 50 + (x0 - centre) * unit, GROUND + (y0 - bottom) * unit)
         body = "".join(paths)
         (args.out / f"{side}{letter}.svg").write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">{body}</svg>\n', encoding="utf-8")
     print(f"12 pieces -> {args.out}")

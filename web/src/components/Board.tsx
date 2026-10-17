@@ -128,6 +128,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const [hover, setHover] = useState<number | null>(null);
   /** The pointer is over a piece the player can pick up (an open-hand cursor). */
   const [overPiece, setOverPiece] = useState(false);
+  /** A move queued while the opponent thinks (pre-move). */
+  const [premove, setPremove] = useState<{ from: number; to: number } | null>(null);
 
   const orientation = board.orientation;
   const serverPlacement = useMemo(() => parseFen(board.fen), [board.fen]);
@@ -149,9 +151,12 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const anim = v.anim;
 
   const legal = useMemo(() => targetsOf(board.legal), [board.legal]);
-  // The other side's pieces can be picked up to see where they could go (like on chess.com); they always go back.
-  const peek = useMemo(() => targetsOf(board.peek), [board.peek]);
+  const premoveTargets = useMemo(() => targetsOf(board.premoves), [board.premoves]);
   const canMove = board.interactive && !pending && !!onMove;
+  // While the opponent thinks, a move can be queued (a pre-move) and is played as soon as it is the player's turn.
+  const canPremove = !canMove && board.premoves.length > 0 && !!onMove;
+  // Any piece can be picked up, like on chess.com; the opponent's ones always go back to their square.
+  const canPick = canMove || canPremove;
   const playerPrefix = board.player === "white" ? "w" : "b";
 
   // The server's reply (a new position number) ends the "tentative move", the selection and the drawings.
@@ -176,6 +181,21 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       setPromotion(null);
     }
   }, [canMove]);
+
+  // The player's turn has come: the pre-move is played at once if it is legal now (a promotion becomes a queen),
+  // otherwise it is dropped. A take-back or the end of the game drops it too.
+  useEffect(() => {
+    if (!premove) return;
+    if (board.anim === "undo" || (!canMove && !canPremove)) {
+      setPremove(null);
+      return;
+    }
+    if (!canMove) return;
+    const prefix = squareName(premove.from) + squareName(premove.to);
+    const moves = board.legal.filter((uci) => uci.startsWith(prefix));
+    setPremove(null);
+    if (moves.length) commit(moves.find((uci) => uci.endsWith("q")) ?? (moves[0] as string), true);
+  }, [canMove, canPremove, board.seq]);
 
   // --- piece animation in the frame loop (with the FPS limit from the settings)
   const progress = (now: number): number => (anim ? Math.min(1, (now - anim.start) / MOVE_TIME) : 1);
@@ -308,6 +328,10 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     if (event.button === 2) {
       setSelected(null);
       setPromotion(null);
+      if (premove) {
+        setPremove(null); // a right click cancels the pre-move, like on chess.com
+        return;
+      }
       if (square < 0) return;
       const color = event.shiftKey ? USER_COLORS.shift : event.ctrlKey ? USER_COLORS.ctrl : event.altKey ? USER_COLORS.alt : USER_COLORS.plain;
       setDrawing({ from: square, to: square, color });
@@ -331,8 +355,14 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       attempt(selected, square, true);
       return;
     }
+    if (selected !== null && canPremove && premoveTargets.get(selected)?.has(square)) {
+      setPremove({ from: selected, to: square });
+      setSelected(null);
+      return;
+    }
     const piece = placement.get(square);
-    if (canMove && piece) {
+    if (premove && !piece) setPremove(null); // a click on an empty square cancels the pre-move
+    if (canPick && piece) {
       setSelected(square);
       const rect = event.currentTarget.getBoundingClientRect();
       dragInfo.current = {
@@ -365,7 +395,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const info = dragInfo.current;
     if (!info) {
       const square = squareAt(event.clientX, event.clientY);
-      const pickable = canMove && square >= 0 && placement.has(square);
+      const pickable = canPick && square >= 0 && placement.has(square);
       if (pickable !== overPiece) setOverPiece(pickable);
       return;
     }
@@ -407,6 +437,9 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       if (info.wasSelected && !info.moved) setSelected(null); // a second click on the selected piece puts it down
     } else if (target >= 0 && legal.get(info.from)?.has(target)) {
       attempt(info.from, target, false); // the piece is already in place — no animation
+    } else if (target >= 0 && canPremove && premoveTargets.get(info.from)?.has(target)) {
+      setPremove({ from: info.from, to: target });
+      setSelected(null);
     } else {
       setSelected(null); // dropped on an illegal square — it returns to its place
     }
@@ -469,6 +502,12 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       tints.push(<rect key={`lm-${name}`} x={x} y={y} width={1} height={1} className="sq-last" />);
     }
   }
+  if (premove) {
+    for (const square of [premove.from, premove.to]) {
+      const { x, y } = squareRect(square);
+      tints.push(<rect key={`pre-${square}`} x={x} y={y} width={1} height={1} className="sq-premove" />);
+    }
+  }
   if (selected !== null) {
     const { x, y } = squareRect(selected);
     tints.push(<rect key="sel" x={x} y={y} width={1} height={1} className="sq-selected" />);
@@ -498,16 +537,17 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   // Legal moves of the selected piece: dots pop up and capture rings close in, in a wave from the piece outwards.
   // HTML rather than SVG: scaling SVG shapes left stray lines in WebKitGTK (the fallback game window on Linux).
   const dots: ReactElement[] = [];
-  if (selected !== null && canMove) {
+  // Only the player's own pieces show where they can go (the opponent's are picked up just to hold them).
+  const targets = selected === null ? undefined : canMove ? legal.get(selected) : canPremove ? premoveTargets.get(selected) : undefined;
+  if (selected !== null && targets) {
     const from = squareRect(selected);
-    const own = legal.get(selected);
-    for (const target of own ?? peek.get(selected) ?? []) {
+    for (const target of targets) {
       const { x, y } = squareRect(target);
       const delay = Math.min(110, Math.hypot(x - from.x, y - from.y) * 16);
       const kind = placement.has(target) ? "hint-capture" : "hint-dot";
-      dots.push(<div key={`${selected}-${target}`} className={`hint ${kind}${own ? "" : " hint-peek"}`} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%`, animationDelay: `${delay.toFixed(0)}ms` }} />);
+      dots.push(<div key={`${selected}-${target}`} className={`hint ${kind}`} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%`, animationDelay: `${delay.toFixed(0)}ms` }} />);
     }
-    if (dragFrom !== null && hover !== null && hover !== selected && legal.get(selected)?.has(hover)) {
+    if (dragFrom !== null && hover !== null && hover !== selected && targets.has(hover)) {
       const { x, y } = squareRect(hover);
       dots.push(<div key="drop" className="hint hint-drop" style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%` }} />);
     }

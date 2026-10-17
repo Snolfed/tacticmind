@@ -1184,6 +1184,8 @@ class CoachGameScreen(WebScreen):
         total = len(game.board.move_stack)
         current = total if self.view_index is None else self.view_index
         name_id = game.opening_id()
+        # Pre-moves while the coach thinks, only in the live game (not while stepping through it or in a review).
+        self.board_view.premoves = self.view_index is None and self.archived is None and self.in_progress()
         return {
             "game": self.game_seq,
             "board": self.board_view.snapshot(),
