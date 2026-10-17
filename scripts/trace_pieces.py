@@ -32,10 +32,10 @@ OUT = ROOT / "web" / "public" / "pieces"
 ORDER = "RNBQKP"
 #: Each piece is traced at this many times the sheet's resolution.
 UP = 8
-#: Box units per sheet pixel (the king, 100 px tall, becomes 87 units).
-UNIT = 0.87
+#: Box units per sheet pixel (the king, 100 px tall, becomes 93 units: the pieces fill the square like on chess.com).
+UNIT = 0.93
 #: Where the pieces stand.
-GROUND = 91.0
+GROUND = 95.5
 #: Flat colours of each side, darkest first: (upper luminance limit of the class, colour).
 PALETTE: dict[str, list[tuple[float, str]]] = {
     "b": [(40, "#060507"), (75, "#444243"), (112, "#555355"), (256, "#929193")],
@@ -43,8 +43,8 @@ PALETTE: dict[str, list[tuple[float, str]]] = {
 }
 #: The shade class: bands of it thinner than about one sheet pixel are just the blend between outline and fill.
 SHADE = 1
-#: Width of the outline around the piece, in traced pixels (a little over one sheet pixel, like the drawn line).
-OUTLINE = round(UP * 1.25)
+#: Width of the outline around the piece, in traced pixels (one and a half sheet pixels: the drawn line, a little bolder so it stays crisp on a small board).
+OUTLINE = round(UP * 1.5)
 
 
 def flood_background(image: np.ndarray, background: np.ndarray) -> np.ndarray:
@@ -126,7 +126,8 @@ def holes(piece: np.ndarray, image: np.ndarray, background: np.ndarray) -> np.nd
     found = np.zeros(piece.shape, bool)
     for area in components(grey):
         ring = grow(area, 2) & ~area
-        if area.sum() >= 6 and (lum[ring] < 170).mean() > 0.75:
+        # Mostly outline around it and no fill: shade on a white piece is just as grey, but it touches the fill.
+        if area.sum() >= 6 and (lum[ring] < 170).mean() > 0.6 and (lum[ring] > 235).mean() < 0.05:
             found |= area
     return found
 
@@ -145,9 +146,9 @@ def classify(crop: Image.Image, mask: Image.Image, side: str) -> np.ndarray:
     width, height = crop.size
     palette = PALETTE[side]
     big = np.asarray(crop.resize((width * UP, height * UP), Image.Resampling.LANCZOS)).astype(float)
-    edge = mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(UP * 0.45))
+    edge = mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(UP * 0.6))
     alpha = np.asarray(edge) > 127
-    classes = smooth_classes(np.digitize(big.mean(axis=2), [limit for limit, _ in palette[:-1]]), len(palette), UP * 0.45)
+    classes = smooth_classes(np.digitize(big.mean(axis=2), [limit for limit, _ in palette[:-1]]), len(palette), UP * 0.6)
     # A thin band of shade along the outline is only the blend between outline and fill.
     shade = classes == SHADE
     size = UP + 1

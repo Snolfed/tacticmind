@@ -442,6 +442,20 @@ def test_nvidia_under_wayland_turns_off_explicit_sync(tmp_path: Path, monkeypatc
     assert os.environ["__NV_DISABLE_EXPLICIT_SYNC"] == "0"
 
 
+def test_board_snapshot_lists_where_the_other_side_could_go(home: Path) -> None:
+    from tacticmind.web.board import BoardModel, opponent_moves
+
+    model = BoardModel("test", lambda event: None)
+    model.set_position(chess.Board(), animate=False)
+    model.interactive = True
+    peek = model.snapshot()["peek"]
+    assert "e7e5" in peek and "g8f6" in peek and "e2e4" not in peek
+    # In check, the other side still "could" move, but never onto the king; promotions are listed once.
+    moves = opponent_moves("4k3/8/8/8/8/8/1p6/R3K3 w - - 0 1")
+    assert "b2b1" in moves and "b2a1" in moves and "b2b1q" not in moves
+    assert not any(uci[2:4] == "e1" for uci in opponent_moves("4k3/8/8/8/8/8/8/r3K3 w - - 0 1"))
+
+
 def test_board_snapshot_promotion_and_legality(home: Path) -> None:
     from tacticmind.web.board import BoardModel
 
@@ -459,6 +473,7 @@ def test_board_snapshot_promotion_and_legality(home: Path) -> None:
     model.player_color = chess.BLACK  # not our turn — moves rejected, no legal-move list
     assert not model.play("e1e2")
     assert model.snapshot()["legal"] == []
+    assert model.snapshot()["peek"] == []
     model.shake()
     model.celebrate(chess.E4)
     assert events == [{"type": "shake", "board": "test"}, {"type": "celebrate", "board": "test", "square": "e4"}]

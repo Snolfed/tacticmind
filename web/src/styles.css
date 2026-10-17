@@ -1002,6 +1002,10 @@ input[type="range"]::-moz-range-thumb {
   animation-delay: inherit;
 }
 /* While dragging: the square the piece would land on gets a light frame. */
+/* Moves of the other side's piece (picked up only to look): fainter. */
+.hint-peek {
+  opacity: 0.5;
+}
 .hint-drop {
   box-shadow: inset 0 0 0 calc(var(--board, 480px) / 8 * 0.06) rgba(255, 255, 255, 0.75);
   animation: hint-fade 0.12s ease-out;
@@ -1055,7 +1059,7 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
   will-change: transform;
 }
-/* Like on chess.com: an arrow over the board, an open hand over a piece you can move, a closed one while you hold it. */
+/* Like on chess.com: an arrow over the board, an open hand over a piece you can pick up, a closed one while you hold it. */
 .board.can-move.over-piece {
   cursor: grab;
 }
@@ -1154,7 +1158,6 @@ html.holding-piece * {
   height: 100%;
   border-radius: 8px;
   background: #24201a;
-  overflow: hidden;
   border: var(--line) solid var(--ink);
   box-shadow: var(--hard-sm);
   display: flex;
@@ -1165,6 +1168,47 @@ html.holding-piece * {
   background: var(--surface);
   border-style: dashed;
   box-shadow: none;
+}
+/* The bar's colours, clipped to its rounded corners (the exact value may stick out of the bar). */
+.eval-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+/* Under the pointer: the exact evaluation at the border between white and black, like on chess.com. */
+.eval-exact {
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: #f6eedd;
+  color: #15120d;
+  font: 700 12px var(--font-mono);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  box-shadow: var(--hard-sm);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    bottom 0.7s cubic-bezier(0.3, 1.25, 0.5, 1),
+    top 0.7s cubic-bezier(0.3, 1.25, 0.5, 1),
+    left 0.7s cubic-bezier(0.3, 1.25, 0.5, 1),
+    right 0.7s cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+.eval-exact.from-start {
+  bottom: clamp(12px, calc(var(--share) * 100%), calc(100% - 12px));
+  transform: translate(-50%, 50%);
+}
+.eval-exact.from-end {
+  top: clamp(12px, calc(var(--share) * 100%), calc(100% - 12px));
+  transform: translate(-50%, -50%);
+}
+.eval-bar:hover .eval-exact {
+  opacity: 1;
 }
 .eval-question {
   color: var(--muted);
@@ -1253,6 +1297,19 @@ html.holding-piece * {
 .eval-bar.horizontal .eval-label.at-start {
   left: 8px;
   right: auto;
+}
+.eval-bar.horizontal .eval-exact {
+  top: 50%;
+  bottom: auto;
+}
+.eval-bar.horizontal .eval-exact.from-start {
+  left: clamp(26px, calc(var(--share) * 100%), calc(100% - 26px));
+  transform: translate(-50%, -50%);
+}
+.eval-bar.horizontal .eval-exact.from-end {
+  left: auto;
+  right: clamp(26px, calc(var(--share) * 100%), calc(100% - 26px));
+  transform: translate(50%, -50%);
 }
 .eval-bar.horizontal .eval-label.at-end {
   right: 8px;

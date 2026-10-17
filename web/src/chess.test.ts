@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyMove, arrowPath, arrowPoints, fromView, parseFen, splitAlpha, squareIndex, squareName, toView, transition, turnOf } from "./chess";
-import { whiteShare } from "./components/EvalBar";
+import { exactLabel, whiteShare } from "./components/EvalBar";
 import { niceStep } from "./components/Charts";
 
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -152,6 +152,13 @@ describe("evaluation bar and charts", () => {
     expect(whiteShare({ cp: null, mate: 3, value: 99997, label: "M3" })).toBe(1);
     expect(whiteShare({ cp: null, mate: -2, value: -99998, label: "-M2" })).toBe(0);
     expect(whiteShare({ cp: 5000, mate: null, value: 5000, label: "+50.0" })).toBe(0.97);
+  });
+
+  it("shows the exact evaluation to two decimals under the pointer", () => {
+    expect(exactLabel({ cp: 37, mate: null, value: 37, label: "+0.4" })).toBe("+0.37");
+    expect(exactLabel({ cp: -120, mate: null, value: -120, label: "-1.2" })).toBe("-1.20");
+    expect(exactLabel({ cp: 0, mate: null, value: 0, label: "0.0" })).toBe("0.00");
+    expect(exactLabel({ cp: null, mate: -2, value: -31998, label: "-M2" })).toBe("-M2");
   });
 
   it("picks a \"nice\" axis step", () => {

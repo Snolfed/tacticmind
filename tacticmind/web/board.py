@@ -23,6 +23,16 @@ def legal_moves(fen: str) -> tuple[str, ...]:
     return tuple(move.uci() for move in chess.Board(fen).legal_moves)
 
 
+@lru_cache(maxsize=256)
+def opponent_moves(fen: str) -> tuple[str, ...]:
+    """Where the other side's pieces could go if it were their turn (UCI): the player may pick them up to look, like
+    on chess.com, but they go back to their square when let go."""
+    board = chess.Board(fen)
+    board.push(chess.Move.null())
+    moves = {move.uci()[:4] for move in board.pseudo_legal_moves if board.piece_type_at(move.to_square) != chess.KING and board.is_legal(move)}
+    return tuple(sorted(moves))
+
+
 def color_name(color: chess.Color) -> str:
     return "white" if color == chess.WHITE else "black"
 
@@ -113,6 +123,7 @@ class BoardModel:
             "player": color_name(self.player_color),
             "interactive": self.can_move(),
             "legal": list(legal_moves(fen)) if self.can_move() else [],
+            "peek": list(opponent_moves(fen)) if self.can_move() else [],
             "lastMove": self.last_move.uci() if self.last_move is not None else None,
             "check": chess.square_name(check) if check is not None else None,
             "hint": chess.square_name(self.hint_square) if self.hint_square is not None else None,
