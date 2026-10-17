@@ -14,8 +14,9 @@ The sheet has the black pieces in the top row and the white ones below, in the o
 background. A piece is what the background cannot reach when it is flooded from the edges (the dark outline stops
 it); grey areas closed in by the outline (the king's windows) are holes. Each piece is scaled up, split into its flat
 colours (outline, shade, fill and, on the black pieces, the highlight) and traced with vtracer. The paths are then
-moved into a 100×100 box, the piece standing on y = 91 and centred on its base, all with the same scale, so the
-pieces keep the sizes of the drawing.
+moved into a 100×100 box, the piece standing on y = 91 and centred on its width, all with the same scale, so the
+pieces keep the sizes of the drawing. The colours are a touch darker than the drawing's: on the board's light squares
+its near-white pieces looked washed out.
 """
 
 from __future__ import annotations
@@ -47,8 +48,8 @@ UNIT = 0.87
 GROUND = 91.0
 #: Flat colours of each side, darkest first: (upper luminance limit of the class, colour).
 PALETTE: dict[str, list[tuple[float, str]]] = {
-    "b": [(40, "#060507"), (75, "#444243"), (112, "#555355"), (256, "#929193")],
-    "w": [(150, "#040406"), (226, "#d0d1d3"), (256, "#f7f8f9")],
+    "b": [(40, "#060507"), (75, "#444243"), (112, "#555355"), (256, "#858486")],
+    "w": [(150, "#040406"), (226, "#c4c5c8"), (256, "#ebecee")],
 }
 #: The shade class: bands of it thinner than about one sheet pixel are just the blend between outline and fill.
 SHADE = 1
@@ -231,8 +232,7 @@ def main(argv: list[str] | None = None) -> None:
         cover = coverage(shape, image.mean(axis=2), float(background.mean()))
         mask = Image.fromarray(np.round(cover[y0:y1, x0:x1] * 255).astype(np.uint8))
         bottom = ys.max() + 1
-        base = xs[ys >= ys.max() - 6 * SHEET_SCALE].astype(float)
-        centre = (base.min() + base.max() + 1) / 2  # the middle of the base, not of the whole piece (the knight)
+        centre = (xs.min() + xs.max() + 1) / 2  # the middle of the whole piece (the knight's head sticks out left)
         unit = UNIT / SHEET_SCALE  # box units per pixel of the upscaled sheet
         paths = trace(classify(crop, mask, side), unit / UP, 50 + (x0 - centre) * unit, GROUND + (y0 - bottom) * unit)
         body = "".join(paths)
