@@ -25,7 +25,7 @@ from ...coach.advice import Comment, Phrase, San, book_comment, phrase, player_c
 from ...coach.archive import decode_plies, encode_plies, eval_curve, game_pgn, pgn_filename
 from ...coach.game import CoachGame, MoveRecord
 from ...coach.openings import Opening, book_moves, comment_key, is_book_move, move_comment, opening_name
-from ...coach.review import CLASSES, SERIOUS, WEAK, classify, move_accuracy, score_for, win_drop, win_percent
+from ...coach.review import CLASSES, SERIOUS, WEAK, classify, move_accuracy, move_loss, score_for, win_drop, win_percent
 from ...coach.strength import FULL_DEPTH, choose_move, describe_level, strength_for
 from ...engine.constants import WHITE
 from ...engine.process import DoneEvent, EngineEvent, ErrorEvent
@@ -385,7 +385,7 @@ class CoachGameScreen(WebScreen):
         is_best = best.move == move.uci()
         if is_best:
             played = best_value
-        drop = 0.0 if is_best else win_drop(best_value, played)
+        drop = 0.0 if is_best else move_loss(best_value, played)
         second = win_drop(best_value, score_for(info.multi_pv[1].score, me)) if len(info.multi_pv) > 1 else None
         last = board.peek() if board.move_stack else None
         # Recapturing, or taking a piece the opponent left hanging, is obvious: never a "great" move.
@@ -588,7 +588,7 @@ class CoachGameScreen(WebScreen):
         self.pending_grade = None
         value = score_for(info.score, after.turn) * -1  # evaluation from the coach's perspective
         is_best = record.uci == ref.best_uci
-        drop = 0.0 if is_best else win_drop(ref.value, value)
+        drop = 0.0 if is_best else move_loss(ref.value, value)
         record.classification = classify(drop, is_best=is_best)
         record.accuracy = move_accuracy(drop)
         record.score = info.score.value

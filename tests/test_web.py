@@ -456,6 +456,9 @@ def test_board_snapshot_offers_premoves_while_the_opponent_thinks(home: Path) ->
     # A pawn may pre-capture where a piece could arrive; promotions are listed once.
     moves = premove_targets("4k3/1P6/8/8/8/8/8/4K3 b - - 0 1")
     assert "b7b8" in moves and "b7a8" in moves and "b7c8" in moves and "b7b8q" not in moves
+    # Onto the player's own pieces too (a recapture once the opponent takes there), and through pieces in the way.
+    moves = premove_targets("4k3/8/8/8/8/8/3P4/3QK2R b K - 0 1")
+    assert "d1d2" in moves and "d1d8" in moves and "e1g1" in moves and "e1d1" in moves and "h1h8" in moves
     model.board.push_san("e5")  # the player's turn: a normal move, not a pre-move
     assert model.snapshot()["premoves"] == []
 

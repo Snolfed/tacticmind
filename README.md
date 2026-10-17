@@ -180,8 +180,9 @@ npm run build                      # new build into tacticmind/web/static
   inertia; the cursor is an open hand over a piece you can move and a closed one while you hold it, and the square it
   would land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
   it down. The coach's pieces can be picked up too; they always go back. **Pre-moves**: while the coach thinks, you can
-  queue a move (its squares turn red); it is played as soon as it is your turn if it is legal then, and a right click
-  or a click on an empty square cancels it.
+  queue a move (its squares turn red), also onto your own piece for a recapture; the piece stands on its target at
+  once. It is played as soon as it is your turn if it is legal then; otherwise it slides back and the pre-move is
+  dropped. A right click or a click on an empty square cancels it.
 - **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
   light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
   for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
@@ -577,7 +578,9 @@ The coach's Elo is **approximate** — exact calibration would require thousands
 among the top three, its score is already known; if not, the engine also searches the position after the move. The score is converted
 to a **win chance** (the Lichess formula): `W(cp) = 50 + 50 · (2 / (1 + e^(−0.00368208 · cp)) − 1)` — 0 cp is 50%,
 +3 pawns about 75%, mate 100%. The move class depends on how many percentage points the win chance **dropped**
-compared to the best move: up to 2 — excellent, up to 5 — good, up to 10 — inaccuracy, up to 20 — mistake, above that —
+compared to the best move, but at least 1 point per 40 centipawns thrown away (evaluations capped at ±50 pawns; a
+forced mate counts as 56), since past about +10 the win chance hardly moves and even a lost queen or a thrown-away
+mate would look "excellent": up to 2 — excellent, up to 5 — good, up to 10 — inaccuracy, up to 20 — mistake, above that —
 blunder. The engine's best move is "best", and if the second move was worse by ≥ 15 points — "great" (the only
 good move; does not apply to obvious captures: a recapture or taking a piece left hanging). "Brilliant" is the engine's
 move (or within 1 point of it) that really sacrifices a piece, in a position that was not already winning. A sacrifice is
@@ -741,7 +744,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 183 tests, including:
+`python -m pytest` — 184 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -908,6 +911,10 @@ and the player plays the side to move after it (the board flips to that side).
     evaluation under the pointer and the coach's pieces can be picked up to look.
 19. **Upscaled pieces and pre-moves** — the pieces are traced from a 4× Real-ESRGAN upscale of Juras's drawing
     (smooth lines, back at their original size); pre-moves like on chess.com.
+20. **Honest move classes and pre-recaptures** — in a won (or lost) game giving away nine pawns or a forced mate was
+    still "excellent" with 98–100% accuracy, since the win chance saturates; the loss is now also measured in
+    material, so such moves are inaccuracies, mistakes or blunders. Pre-moves can go onto your own pieces (to recapture
+    after a trade); the piece is shown on its target and goes back if the move is illegal when your turn comes.
 
 ## Sources and licenses
 

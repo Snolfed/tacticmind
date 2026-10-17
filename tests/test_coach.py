@@ -113,6 +113,20 @@ def test_win_percent_and_accuracy() -> None:
     assert review.win_drop(100, 300) == 0
 
 
+def test_a_decided_game_does_not_hide_a_blunder() -> None:
+    assert review.win_drop(3232, 2298) < 1  # the winning chance barely moves past +10...
+    assert review.classify(review.move_loss(3232, 2298), is_best=False) == "blunder"  # ...but nine pawns are gone
+    assert review.classify(review.move_loss(1500, 600), is_best=False) == "blunder"
+    assert review.classify(review.move_loss(-1000, -1900), is_best=False) == "blunder"
+    assert review.classify(review.move_loss(2080, 1735), is_best=False) == "inaccuracy"
+    assert review.classify(review.move_loss(MATE - 9, 5764), is_best=False) == "mistake"  # a forced mate thrown away
+    assert review.classify(review.move_loss(MATE - 9, 1200), is_best=False) == "blunder"
+    assert review.classify(review.move_loss(4741, -MATE + 6), is_best=False) == "blunder"  # walking into a mate
+    assert review.move_loss(MATE - 3, MATE - 11) == 0  # a slower mate is still a mate
+    assert review.classify(review.move_loss(40, 25), is_best=False) == "excellent"
+    assert review.move_loss(100, 300) == 0
+
+
 @pytest.mark.parametrize(
     ("drop", "expected"),
     [(0.0, "excellent"), (1.9, "excellent"), (4.0, "good"), (8.0, "inaccuracy"), (15.0, "mistake"), (35.0, "blunder")],
