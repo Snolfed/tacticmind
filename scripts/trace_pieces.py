@@ -53,8 +53,12 @@ PALETTE: dict[str, list[tuple[float, str]]] = {
 }
 #: The shade class: bands of it thinner than about one sheet pixel are just the blend between outline and fill.
 SHADE = 1
-#: Width of the outline around the piece, in traced pixels (a little over one pixel of the drawing, like the drawn line).
-OUTLINE = round(TRACE * 1.25)
+#: Width of the outline around the piece, in traced pixels (two pixels of the drawing: the drawn line is a little over
+#: one, but on a board of 76-pixel squares that is under a screen pixel and its curves turn into stair steps).
+OUTLINE = round(TRACE * 2)
+#: How much the lines inside the piece (the knight's eye and mane, the bishop's slit, the king's windows) are thickened,
+#: in traced pixels, for the same reason.
+INNER = round(TRACE * 0.5)
 
 
 def flood_background(image: np.ndarray, background: np.ndarray) -> np.ndarray:
@@ -167,6 +171,7 @@ def classify(crop: Image.Image, mask: Image.Image, side: str) -> np.ndarray:
     opened = Image.fromarray(shade.astype(np.uint8) * 255).filter(ImageFilter.MinFilter(size)).filter(ImageFilter.MaxFilter(size))
     classes[shade & ~(np.asarray(opened) > 127)] = SHADE + 1
     # The outline all around the piece, as even as in the drawing (along the edge the thin line blends into the fill).
+    classes[grow(classes == 0, INNER, within=alpha, round_=True)] = 0
     classes[grow(~alpha, OUTLINE, round_=True) & alpha] = 0
     colours = np.array([[int(colour[i : i + 2], 16) for i in (1, 3, 5)] for _, colour in palette], np.uint8)
     rgba = np.zeros((height * UP, width * UP, 4), np.uint8)
