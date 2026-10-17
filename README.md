@@ -915,6 +915,9 @@ and the player plays the side to move after it (the board flips to that side).
     still "excellent" with 98–100% accuracy, since the win chance saturates; the loss is now also measured in
     material, so such moves are inaccuracies, mistakes or blunders. Pre-moves can go onto your own pieces (to recapture
     after a trade); the piece is shown on its target and goes back if the move is illegal when your turn comes.
+21. **Calmer pieces** — square marks fill the whole square, capture rings reach its sides; the knights are centred on
+    their whole width (their heads stuck out to the left) and the pieces are a touch darker than the drawing, whose
+    near-white looked washed out on the light squares.
 
 ## Sources and licenses
 
