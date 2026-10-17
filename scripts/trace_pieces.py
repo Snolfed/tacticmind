@@ -43,6 +43,8 @@ PALETTE: dict[str, list[tuple[float, str]]] = {
 }
 #: The shade class: bands of it thinner than about one sheet pixel are just the blend between outline and fill.
 SHADE = 1
+#: Width of the outline around the piece, in traced pixels (a little over one sheet pixel, like the drawn line).
+OUTLINE = round(UP * 1.25)
 
 
 def flood_background(image: np.ndarray, background: np.ndarray) -> np.ndarray:
@@ -88,16 +90,33 @@ def components(mask: np.ndarray, min_size: int = 1) -> list[np.ndarray]:
     return parts
 
 
-def grow(mask: np.ndarray, steps: int = 1, within: np.ndarray | None = None) -> np.ndarray:
-    """The mask grown by ``steps`` pixels (4-neighbourhood), optionally only into ``within``."""
-    for _ in range(steps):
+def grow(mask: np.ndarray, steps: int = 1, within: np.ndarray | None = None, round_: bool = False) -> np.ndarray:
+    """The mask grown by ``steps`` pixels (4-neighbourhood), optionally only into ``within``.
+
+    ``round_`` adds the diagonals every other step: an octagon, close to a circle, so a band grown along a slanted edge
+    is about as wide as along a straight one.
+    """
+    for step in range(steps):
         grown = mask.copy()
         grown[1:, :] |= mask[:-1, :]
         grown[:-1, :] |= mask[1:, :]
         grown[:, 1:] |= mask[:, :-1]
         grown[:, :-1] |= mask[:, 1:]
+        if round_ and step % 2:
+            grown[1:, 1:] |= mask[:-1, :-1]
+            grown[1:, :-1] |= mask[:-1, 1:]
+            grown[:-1, 1:] |= mask[1:, :-1]
+            grown[:-1, :-1] |= mask[1:, 1:]
         mask = grown if within is None else grown & (within | mask)
     return mask
+
+
+def coverage(shape: np.ndarray, lum: np.ndarray, background: float) -> np.ndarray:
+    """How much of each sheet pixel the piece covers: all of its inner pixels, and those on its edge by how dark they
+    are, so the light blend between the outline and the background falls outside the piece."""
+    edge = shape & grow(~shape)
+    ink = np.clip((background - lum) / (background - 10), 0, 1)
+    return np.where(edge, ink, shape.astype(float))
 
 
 def holes(piece: np.ndarray, image: np.ndarray, background: np.ndarray) -> np.ndarray:
@@ -122,20 +141,20 @@ def smooth_classes(classes: np.ndarray, count: int, radius: float) -> np.ndarray
 
 
 def classify(crop: Image.Image, mask: Image.Image, side: str) -> np.ndarray:
-    """The scaled-up piece as RGBA in its flat colours (transparent outside)."""
+    """The scaled-up piece as RGBA in its flat colours (transparent outside); ``mask`` is its coverage."""
     width, height = crop.size
     palette = PALETTE[side]
     big = np.asarray(crop.resize((width * UP, height * UP), Image.Resampling.LANCZOS)).astype(float)
-    alpha = np.asarray(mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC)) > 127
+    edge = mask.resize((width * UP, height * UP), Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(UP * 0.45))
+    alpha = np.asarray(edge) > 127
     classes = smooth_classes(np.digitize(big.mean(axis=2), [limit for limit, _ in palette[:-1]]), len(palette), UP * 0.45)
     # A thin band of shade along the outline is only the blend between outline and fill.
     shade = classes == SHADE
     size = UP + 1
     opened = Image.fromarray(shade.astype(np.uint8) * 255).filter(ImageFilter.MinFilter(size)).filter(ImageFilter.MaxFilter(size))
     classes[shade & ~(np.asarray(opened) > 127)] = SHADE + 1
-    # The piece ends at the outer edge of its outline: the light rim outside it is the background's blend.
-    rim = grow(~alpha, int(UP * 1.5), within=classes != 0) & alpha
-    alpha &= ~rim
+    # The outline all around the piece, as even as in the drawing (along the edge the thin line blends into the fill).
+    classes[grow(~alpha, OUTLINE, round_=True) & alpha] = 0
     colours = np.array([[int(colour[i : i + 2], 16) for i in (1, 3, 5)] for _, colour in palette], np.uint8)
     rgba = np.zeros((height * UP, width * UP, 4), np.uint8)
     rgba[..., :3] = colours[classes]
@@ -197,7 +216,8 @@ def main(argv: list[str] | None = None) -> None:
         x0, y0, x1, y1 = xs.min() - pad, ys.min() - pad, xs.max() + pad + 1, ys.max() + pad + 1
         shape = piece & ~holes(piece, image, background)
         crop = sheet.crop((int(x0), int(y0), int(x1), int(y1)))
-        mask = Image.fromarray(shape[y0:y1, x0:x1].astype(np.uint8) * 255)
+        cover = coverage(shape, image.mean(axis=2), float(background.mean()))
+        mask = Image.fromarray(np.round(cover[y0:y1, x0:x1] * 255).astype(np.uint8))
         bottom = ys.max() + 1
         base = xs[ys >= ys.max() - 6].astype(float)
         centre = (base.min() + base.max() + 1) / 2  # the middle of the base, not of the whole piece (the knight)
