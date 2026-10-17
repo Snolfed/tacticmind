@@ -24,12 +24,16 @@ def legal_moves(fen: str) -> tuple[str, ...]:
 
 
 @lru_cache(maxsize=256)
-def opponent_moves(fen: str) -> tuple[str, ...]:
-    """Where the other side's pieces could go if it were their turn (UCI): the player may pick them up to look, like
-    on chess.com, but they go back to their square when let go."""
+def premove_targets(fen: str) -> tuple[str, ...]:
+    """Pre-moves (UCI, from + to) the player may queue while the opponent is to move, like on chess.com: where each of
+    their pieces could go if it were their turn, and a pawn's diagonals too (a piece may arrive there). Whether the
+    move is legal is checked once it is the player's turn."""
     board = chess.Board(fen)
     board.push(chess.Move.null())
-    moves = {move.uci()[:4] for move in board.pseudo_legal_moves if board.piece_type_at(move.to_square) != chess.KING and board.is_legal(move)}
+    moves = {move.uci()[:4] for move in board.pseudo_legal_moves}
+    for square in board.pieces(chess.PAWN, board.turn):
+        for target in board.attacks(square):
+            moves.add(chess.square_name(square) + chess.square_name(target))
     return tuple(sorted(moves))
 
 
@@ -45,6 +49,8 @@ class BoardModel:
         self.orientation: chess.Color = chess.WHITE
         self.player_color: chess.Color = chess.WHITE
         self.interactive = False
+        #: Pre-moves are allowed while the opponent thinks (a live game against the coach).
+        self.premoves = False
         self.on_move: Callable[[chess.Move], None] | None = None
         self.last_move: chess.Move | None = None
         self.hint_square: chess.Square | None = None
@@ -98,6 +104,10 @@ class BoardModel:
     def can_move(self) -> bool:
         return self.interactive and self.board.turn == self.player_color
 
+    def can_premove(self) -> bool:
+        """The opponent is to move in a live game: the player may queue a pre-move."""
+        return self.premoves and self.board.turn != self.player_color and not self.board.is_game_over()
+
     def play(self, uci: str) -> bool:
         """Player's move from the browser (UCI). We check that it is legal and that the player may move now."""
         try:
@@ -123,7 +133,7 @@ class BoardModel:
             "player": color_name(self.player_color),
             "interactive": self.can_move(),
             "legal": list(legal_moves(fen)) if self.can_move() else [],
-            "peek": list(opponent_moves(fen)) if self.can_move() else [],
+            "premoves": list(premove_targets(fen)) if self.can_premove() else [],
             "lastMove": self.last_move.uci() if self.last_move is not None else None,
             "check": chess.square_name(check) if check is not None else None,
             "hint": chess.square_name(self.hint_square) if self.hint_square is not None else None,

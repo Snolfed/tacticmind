@@ -179,11 +179,13 @@ npm run build                      # new build into tacticmind/web/static
 - **Dragging like on chess.com**: a grabbed piece jumps under the cursor at once and follows it with barely any
   inertia; the cursor is an open hand over a piece you can move and a closed one while you hold it, and the square it
   would land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
-  it down. The coach's pieces can be picked up too, to see (faint dots) where they could go; they always go back.
+  it down. The coach's pieces can be picked up too; they always go back. **Pre-moves**: while the coach thinks, you can
+  queue a move (its squares turn red); it is played as soon as it is your turn if it is legal then, and a right click
+  or a click on an empty square cancels it.
 - **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
   light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
   for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
-  and moves. The board is cream and green, with the pieces Juras drew for the game (traced into SVG by
+  and moves. The board is cream and green, with the pieces Juras drew for the game (traced into SVG from its 4× AI upscale by
   `scripts/trace_pieces.py`: a thin outline, a flat fill and a shaded right edge). A grabbed piece follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
   (a captured piece disappears), a popping ✓/✗ with a ripple, a board shake after a mistake, confetti after solving,
   a pulsing hint and check, a springy evaluation bar, screen cross-fades, sliding toggle indicators.
@@ -280,7 +282,7 @@ web/                        # TYPESCRIPT INTERFACE
                             #   ticker.ts (a single requestAnimationFrame loop with an FPS limit), effects.ts, sound.ts
   public/pieces/            #   the pieces (SVG, traced by scripts/trace_pieces.py)
 scripts/build_puzzles.py    # builds the puzzle set from the Lichess database
-scripts/trace_pieces.py     # cuts the pieces out of scripts/pieces_sheet.png into web/public/pieces/*.svg
+scripts/trace_pieces.py     # cuts the pieces out of scripts/pieces_sheet_4x.png into web/public/pieces/*.svg
 scripts/benchmark.py        # measurements for the table in the README
 scripts/build_engine.py     # compiles the C engine
 scripts/match.py            # engine-vs-engine matches (Elo measurement)
@@ -904,6 +906,8 @@ and the player plays the side to move after it (the board flips to that side).
     (from the time of the Python engine), weaker than the coach itself: good moves were called mistakes and the bar
     jumped around. It now searches as deep as its time allows. Also: larger pieces with a bolder outline, the exact
     evaluation under the pointer and the coach's pieces can be picked up to look.
+19. **Upscaled pieces and pre-moves** — the pieces are traced from a 4× Real-ESRGAN upscale of Juras's drawing
+    (smooth lines, back at their original size); pre-moves like on chess.com.
 
 ## Sources and licenses
 
@@ -919,6 +923,7 @@ and the player plays the side to move after it (the board flips to that side).
   extended with endgame values.
 - Fonts: Space Grotesk, Space Mono and Bricolage Grotesque (SIL Open Font License 1.1, files from Fontsource) and Noto
   (Google) — licenses in `tacticmind/assets/fonts/`.
-- Pieces: drawn for this project by Juras (`scripts/pieces_sheet.png`) and traced by `scripts/trace_pieces.py`.
+- Pieces: drawn for this project by Juras (`scripts/pieces_sheet.png`), upscaled 4× with
+  [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (BSD-3-Clause; `scripts/pieces_sheet_4x.png`) and traced by `scripts/trace_pieces.py`.
 - Libraries: [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
   [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [pywebview](https://pywebview.flowrl.com/) (BSD-3-Clause).
