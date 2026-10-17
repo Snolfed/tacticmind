@@ -74,6 +74,29 @@ interface View {
   orientation: Color;
   seq: number;
   anim: Anim | null;
+  /** A pre-move was shown on the board (when it is dropped, the piece slides back to its square). */
+  premove: boolean;
+}
+
+/** The position with a pre-move shown as made: just the piece moved (and the rook, when castling), a pawn on the last
+ * rank shown as a queen; nothing is taken en passant, as the square it would take from may hold anything by then. */
+function withPremove(placement: Placement, from: number, to: number): Placement {
+  const piece = placement.get(from);
+  if (!piece) return placement;
+  const next = new Map(placement);
+  next.delete(from);
+  if (piece[1] === "K" && Math.abs((to % 8) - (from % 8)) === 2) {
+    const rank = Math.floor(from / 8) * 8;
+    const kingside = to % 8 === 6;
+    const rook = next.get(rank + (kingside ? 7 : 0));
+    if (rook && rook[0] === piece[0]) {
+      next.delete(rank + (kingside ? 7 : 0));
+      next.set(rank + (kingside ? 5 : 3), rook);
+    }
+  }
+  const last = to < 8 || to >= 56;
+  next.set(to, piece[1] === "P" && last ? piece.charAt(0) + "Q" : piece);
+  return next;
 }
 
 interface Optimistic {
@@ -134,20 +157,29 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const orientation = board.orientation;
   const serverPlacement = useMemo(() => parseFen(board.fen), [board.fen]);
   const pending = optimistic && optimistic.seq === board.seq ? optimistic : null;
-  const placement = useMemo(() => (pending ? applyMove(serverPlacement, pending.uci) : serverPlacement), [serverPlacement, pending]);
+  // A queued pre-move is shown as made (the piece stands on its target, over a piece of the player's own there),
+  // as long as the piece is still on its square.
+  const shownPremove = !pending && premove && serverPlacement.get(premove.from)?.[0] === (board.player === "white" ? "w" : "b") ? premove : null;
+  const placement = useMemo(
+    () => (pending ? applyMove(serverPlacement, pending.uci) : shownPremove ? withPremove(serverPlacement, shownPremove.from, shownPremove.to) : serverPlacement),
+    [serverPlacement, pending, shownPremove],
+  );
   const sig = useMemo(() => signature(placement), [placement]);
 
   // --- animation: compare the new position with the one on screen (idempotent computation, no side effects)
-  const view = useRef<View>({ sig: "", placement, orientation, seq: board.seq, anim: null });
+  const view = useRef<View>({ sig: "", placement, orientation, seq: board.seq, anim: null, premove: false });
   const v = view.current;
   if (v.sig !== sig || v.orientation !== orientation) {
-    const animate = v.sig !== "" && v.orientation === orientation && (pending ? pending.animate : board.anim !== "none" && board.seq !== v.seq);
+    const dropped = v.premove && !shownPremove && !pending;
+    const animate =
+      v.sig !== "" && v.orientation === orientation && (pending ? pending.animate : dropped || (board.anim !== "none" && board.seq !== v.seq));
     v.anim = animate ? { start: performance.now(), ...transition(v.placement, placement) } : null;
     v.sig = sig;
     v.placement = placement;
     v.orientation = orientation;
     v.seq = board.seq;
   }
+  v.premove = !!shownPremove;
   const anim = v.anim;
 
   const legal = useMemo(() => targetsOf(board.legal), [board.legal]);

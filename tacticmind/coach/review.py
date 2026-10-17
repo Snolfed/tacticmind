@@ -74,6 +74,28 @@ def win_drop(best_value: int, played_value: int) -> float:
     return max(0.0, win_percent(best_value) - win_percent(played_value))
 
 
+#: Evaluation loss counted as one point of "drop" (see ``move_loss``), the cap on evaluations, and what a forced mate
+#: counts as: more than any evaluation, so throwing a mate away is at least a mistake even when the game stays won.
+CP_PER_POINT = 40
+CP_CAP = 5000
+MATE_CP = CP_CAP + 600
+
+
+def move_loss(best_value: int, played_value: int) -> float:
+    """How bad the move is compared with the best one, in percentage points: the winning-chance drop, but at least the
+    evaluation it threw away (``CP_PER_POINT`` centipawns a point). In a decided game the winning chance hardly moves,
+    so without this, giving away a queen at +10 (or at −10), or a forced mate, would be "excellent"."""
+
+    def centipawns(value: int) -> int:
+        if value > MATE_BOUND:
+            return MATE_CP
+        if value < -MATE_BOUND:
+            return -MATE_CP
+        return max(-CP_CAP, min(CP_CAP, value))
+
+    return max(win_drop(best_value, played_value), max(0, centipawns(best_value) - centipawns(played_value)) / CP_PER_POINT)
+
+
 def move_accuracy(drop: float) -> float:
     """Move accuracy in % (100 = no loss)."""
     return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * drop) - 3.1669))

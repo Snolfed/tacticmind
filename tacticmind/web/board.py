@@ -26,14 +26,31 @@ def legal_moves(fen: str) -> tuple[str, ...]:
 @lru_cache(maxsize=256)
 def premove_targets(fen: str) -> tuple[str, ...]:
     """Pre-moves (UCI, from + to) the player may queue while the opponent is to move, like on chess.com: where each of
-    their pieces could go if it were their turn, and a pawn's diagonals too (a piece may arrive there). Whether the
-    move is legal is checked once it is the player's turn."""
+    their pieces could go on an empty board (the opponent's move may clear the way), including squares their own
+    pieces stand on (a recapture once the opponent takes there), a pawn's pushes and diagonals, and castling. Whether
+    the move is legal is checked once it is the player's turn."""
     board = chess.Board(fen)
-    board.push(chess.Move.null())
-    moves = {move.uci()[:4] for move in board.pseudo_legal_moves}
-    for square in board.pieces(chess.PAWN, board.turn):
-        for target in board.attacks(square):
-            moves.add(chess.square_name(square) + chess.square_name(target))
+    color = not board.turn
+    moves: set[str] = set()
+    for square, piece in board.piece_map().items():
+        if piece.color != color:
+            continue
+        alone = chess.BaseBoard.empty()
+        alone.set_piece_at(square, piece)
+        targets = set(alone.attacks(square))
+        if piece.piece_type == chess.PAWN:
+            step = 8 if color == chess.WHITE else -8
+            if 0 <= square + step < 64:
+                targets.add(square + step)
+            if chess.square_rank(square) == (1 if color == chess.WHITE else 6):
+                targets.add(square + 2 * step)
+        elif piece.piece_type == chess.KING and square == (chess.E1 if color == chess.WHITE else chess.E8):
+            back = chess.square_rank(square)
+            if board.has_kingside_castling_rights(color):
+                targets.add(chess.square(6, back))
+            if board.has_queenside_castling_rights(color):
+                targets.add(chess.square(2, back))
+        moves.update(chess.square_name(square) + chess.square_name(target) for target in targets)
     return tuple(sorted(moves))
 
 
