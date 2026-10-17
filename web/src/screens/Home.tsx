@@ -24,6 +24,7 @@ export function Home({ view }: { view: HomeSnapshot }): ReactElement {
       player: "white",
       interactive: false,
       legal: [],
+      peek: [],
       lastMove: demo.last,
       check: null,
       hint: null,

@@ -179,7 +179,7 @@ npm run build                      # new build into tacticmind/web/static
 - **Dragging like on chess.com**: a grabbed piece jumps under the cursor at once and follows it with barely any
   inertia; the cursor is an open hand over a piece you can move and a closed one while you hold it, and the square it
   would land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
-  it down.
+  it down. The coach's pieces can be picked up too, to see (faint dots) where they could go; they always go back.
 - **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
   light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
   for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
@@ -212,7 +212,9 @@ is drawn in SVG (`web/src/components/CoachAvatar.tsx`), without image files.
 - **Player bars** above and below the board: the coach's portrait and your icon, whose turn it is, captured pieces
   (the same kind overlapping a little, like on chess.com) and material advantage.
 - **Evaluation bar** beside the board: the engine's evaluation of the position on the board (also when stepping
-  through the game). The button with the bar icon under the board shows or hides it; the choice is remembered.
+  through the game); under the pointer the exact value (e.g. +0.37) shows at the border between white and black, like
+  on chess.com. The button with the bar icon under the board shows or hides it; the choice is remembered. The bar and
+  the move classes come from an analysis as deep as its time allows (about depth 15–20 in 1.6 s with the C engine).
 - **After the game**: a summary with your and the coach's **accuracy** (%), the number of moves in each class and the level change.
   With the ◀ ▶ buttons (or by clicking a move in the list) you review the game — each move brings back the coach's comment,
   and for weaker moves an arrow shows what was better. "Rematch" starts a new game with the same settings.
@@ -737,7 +739,7 @@ extension) and confirms them within 2 s. The same comparison can be run interact
 
 ## Tests
 
-`python -m pytest` — 182 tests, including:
+`python -m pytest` — 183 tests, including:
 
 | File | What it checks |
 |---|---|
@@ -898,6 +900,10 @@ and the player plays the side to move after it (the board flips to that side).
     up to the engine's full strength (2900) and an evaluation bar in the coach game that can be hidden.
 17. **Juras's own pieces** — his drawing of the twelve pieces, traced into SVG; captured pieces of the same kind
     overlap a little; open and closed hand cursors and nearly no drag inertia, like on chess.com.
+18. **A deeper judge** — the analysis behind the evaluation bar and the move classes was still capped at depth 5
+    (from the time of the Python engine), weaker than the coach itself: good moves were called mistakes and the bar
+    jumped around. It now searches as deep as its time allows. Also: larger pieces with a bolder outline, the exact
+    evaluation under the pointer and the coach's pieces can be picked up to look.
 
 ## Sources and licenses
 

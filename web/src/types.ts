@@ -19,6 +19,8 @@ export interface BoardSnapshot {
   player: Color;
   interactive: boolean;
   legal: string[];
+  /** Where the other side's pieces could go (they can be picked up to look, not moved). */
+  peek: string[];
   lastMove: string | null;
   check: string | null;
   hint: string | null;

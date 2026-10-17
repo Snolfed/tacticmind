@@ -26,7 +26,7 @@ from ...coach.archive import decode_plies, encode_plies, eval_curve, game_pgn, p
 from ...coach.game import CoachGame, MoveRecord
 from ...coach.openings import Opening, book_moves, comment_key, is_book_move, move_comment, opening_name
 from ...coach.review import CLASSES, SERIOUS, WEAK, classify, move_accuracy, score_for, win_drop, win_percent
-from ...coach.strength import choose_move, describe_level, strength_for
+from ...coach.strength import FULL_DEPTH, choose_move, describe_level, strength_for
 from ...engine.constants import WHITE
 from ...engine.process import DoneEvent, EngineEvent, ErrorEvent
 from ...engine.types import MATE, SearchInfo, to_white_score
@@ -42,8 +42,9 @@ from .base import WebScreen
 if TYPE_CHECKING:
     from ..core import WebApp
 
-#: Analysis of the player's position (to judge their move and for hints).
-COACH_DEPTH = 5
+#: Analysis of the player's position (to judge their move, for hints and the evaluation bar): as deep as the time
+#: allows, like the strongest coach, so the bar and the move classes follow what the engine really thinks.
+COACH_DEPTH = FULL_DEPTH
 PRE_TIME = 1600
 POST_TIME = 1000
 #: The coach "thinks" at least this long (s), even when it computes faster — the game looks more natural.

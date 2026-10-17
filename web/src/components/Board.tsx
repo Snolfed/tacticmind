@@ -41,6 +41,18 @@ export function pieceUrl(piece: string): string {
   return `/pieces/${piece}.svg`;
 }
 
+/** Target squares of each piece's moves (UCI list → from → set of to). */
+function targetsOf(moves: string[]): Map<number, Set<number>> {
+  const targets = new Map<number, Set<number>>();
+  for (const uci of moves) {
+    const from = squareIndex(uci.slice(0, 2));
+    const set = targets.get(from) ?? new Set<number>();
+    set.add(squareIndex(uci.slice(2, 4)));
+    targets.set(from, set);
+  }
+  return targets;
+}
+
 function signature(placement: Placement): string {
   let sig = "";
   for (let square = 0; square < 64; square++) sig += placement.get(square) ?? "--";
@@ -136,16 +148,9 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   }
   const anim = v.anim;
 
-  const legal = useMemo(() => {
-    const targets = new Map<number, Set<number>>();
-    for (const uci of board.legal) {
-      const from = squareIndex(uci.slice(0, 2));
-      const set = targets.get(from) ?? new Set<number>();
-      set.add(squareIndex(uci.slice(2, 4)));
-      targets.set(from, set);
-    }
-    return targets;
-  }, [board.legal]);
+  const legal = useMemo(() => targetsOf(board.legal), [board.legal]);
+  // The other side's pieces can be picked up to see where they could go (like on chess.com); they always go back.
+  const peek = useMemo(() => targetsOf(board.peek), [board.peek]);
   const canMove = board.interactive && !pending && !!onMove;
   const playerPrefix = board.player === "white" ? "w" : "b";
 
@@ -327,7 +332,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       return;
     }
     const piece = placement.get(square);
-    if (canMove && piece && piece[0] === playerPrefix) {
+    if (canMove && piece) {
       setSelected(square);
       const rect = event.currentTarget.getBoundingClientRect();
       dragInfo.current = {
@@ -360,8 +365,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const info = dragInfo.current;
     if (!info) {
       const square = squareAt(event.clientX, event.clientY);
-      const own = canMove && square >= 0 && placement.get(square)?.[0] === playerPrefix;
-      if (own !== overPiece) setOverPiece(own);
+      const pickable = canMove && square >= 0 && placement.has(square);
+      if (pickable !== overPiece) setOverPiece(pickable);
       return;
     }
     info.lastX = event.clientX;
@@ -495,11 +500,12 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const dots: ReactElement[] = [];
   if (selected !== null && canMove) {
     const from = squareRect(selected);
-    for (const target of legal.get(selected) ?? []) {
+    const own = legal.get(selected);
+    for (const target of own ?? peek.get(selected) ?? []) {
       const { x, y } = squareRect(target);
       const delay = Math.min(110, Math.hypot(x - from.x, y - from.y) * 16);
       const kind = placement.has(target) ? "hint-capture" : "hint-dot";
-      dots.push(<div key={`${selected}-${target}`} className={`hint ${kind}`} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%`, animationDelay: `${delay.toFixed(0)}ms` }} />);
+      dots.push(<div key={`${selected}-${target}`} className={`hint ${kind}${own ? "" : " hint-peek"}`} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%`, animationDelay: `${delay.toFixed(0)}ms` }} />);
     }
     if (dragFrom !== null && hover !== null && hover !== selected && legal.get(selected)?.has(hover)) {
       const { x, y } = squareRect(hover);
