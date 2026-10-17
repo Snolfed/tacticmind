@@ -176,15 +176,15 @@ npm run build                      # new build into tacticmind/web/static
 - **Settings** (gear in the top bar): an FPS counter in the bottom-left corner (F3 toggles it), an animation
   frame limit (60, 120, 144, 170, 240 or unlimited, as fast as the monitor refreshes), a dark or light theme and the
   board colours (green, terracotta or slate).
-- **Dragging like on chess.com**: a grabbed piece jumps under the cursor at once and then chases it with a little
-  inertia, leaning into the motion; the cursor turns into an open hand while you hold a piece, and the square it would
-  land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
+- **Dragging like on chess.com**: a grabbed piece jumps under the cursor at once and follows it with barely any
+  inertia; the cursor is an open hand over a piece you can move and a closed one while you hold it, and the square it
+  would land on gets a light frame. Letting go on the same square just selects the piece (click-click); a second click puts
   it down.
 - **Look and animations**: a "chess club poster" style: a warm dark background with a dot grid (or warm paper in the
   light theme), cards and buttons with thick ink outlines and hard offset shadows, acid lime for the player and hot pink
   for the AI, the Bricolage Grotesque display font for headings, Space Grotesk for text and Space Mono for numbers
-  and moves. The board is cream and green, with slim pieces of our own (`scripts/make_pieces.py`: a thin outline, a flat
-  fill and a shaded right edge). A grabbed piece follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
+  and moves. The board is cream and green, with the pieces Juras drew for the game (traced into SVG by
+  `scripts/trace_pieces.py`: a thin outline, a flat fill and a shaded right edge). A grabbed piece follows the pointer on its own compositor layer, so dragging stays smooth. Animations: smooth piece movement
   (a captured piece disappears), a popping ✓/✗ with a ripple, a board shake after a mistake, confetti after solving,
   a pulsing hint and check, a springy evaluation bar, screen cross-fades, sliding toggle indicators.
 
@@ -210,7 +210,7 @@ is drawn in SVG (`web/src/components/CoachAvatar.tsx`), without image files.
 - **Opening name** shown live (e.g. "Sicilian Defence — Najdorf Variation"), recognized from the position, so
   it also works with transpositions.
 - **Player bars** above and below the board: the coach's portrait and your icon, whose turn it is, captured pieces
-  and material advantage.
+  (the same kind overlapping a little, like on chess.com) and material advantage.
 - **Evaluation bar** beside the board: the engine's evaluation of the position on the board (also when stepping
   through the game). The button with the bar icon under the board shows or hides it; the choice is remembered.
 - **After the game**: a summary with your and the coach's **accuracy** (%), the number of moves in each class and the level change.
@@ -276,9 +276,9 @@ web/                        # TYPESCRIPT INTERFACE
   src/                      #   React 19: App.tsx, screens/, components/ (Board.tsx — SVG board, BrainPanel,
                             #   EvalBar, TopBar with settings, CoachAvatar…), chess.ts (FEN, animations, arrows),
                             #   ticker.ts (a single requestAnimationFrame loop with an FPS limit), effects.ts, sound.ts
-  public/pieces/            #   our own pieces (SVG, drawn by scripts/make_pieces.py)
+  public/pieces/            #   the pieces (SVG, traced by scripts/trace_pieces.py)
 scripts/build_puzzles.py    # builds the puzzle set from the Lichess database
-scripts/make_pieces.py      # draws the piece set (web/public/pieces/*.svg)
+scripts/trace_pieces.py     # cuts the pieces out of scripts/pieces_sheet.png into web/public/pieces/*.svg
 scripts/benchmark.py        # measurements for the table in the README
 scripts/build_engine.py     # compiles the C engine
 scripts/match.py            # engine-vs-engine matches (Elo measurement)
@@ -829,8 +829,8 @@ and the player plays the side to move after it (the board flips to that side).
 13. **Time penalty** computed from the average time of the last 20 solved puzzles (at least 3), linearly from
     3× to 6× the average (max. −0.2).
 14. **Our own SVG pieces and sounds synthesized in code** — in the chess.com style, but drawn and tuned here rather than
-    copied: the pieces come from a script (`scripts/make_pieces.py`: slim silhouettes, a thin outline, a flat fill
-    with a shaded right edge), and the sounds from Web Audio (`web/src/sound.ts`), so there are no files under someone else's license. The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
+    copied: the pieces are Juras's drawing (`scripts/pieces_sheet.png`), cut out and traced into SVG by
+    `scripts/trace_pieces.py` (so they stay sharp at any size), and the sounds from Web Audio (`web/src/sound.ts`), so there are no files under someone else's license. The volume slider uses a quadratic curve (volume = value²), because the ear perceives loudness
     logarithmically — so half the slider is noticeably quieter, not almost as loud.
 15. **Notation in the interface language** (in English K, Q, R, B, N; in the Polish locale K, H, W, G, S) in the panel and messages;
     the engine and the protocol use UCI.
@@ -896,6 +896,8 @@ and the player plays the side to move after it (the board flips to that side).
 16. **Slimmer pieces, wooden sounds, a stronger coach** — neo-style pieces, resonator-based wooden and marimba sounds,
     chess.com-style dragging (the piece jumps to the cursor and follows it with inertia), popping move dots, a coach
     up to the engine's full strength (2900) and an evaluation bar in the coach game that can be hidden.
+17. **Juras's own pieces** — his drawing of the twelve pieces, traced into SVG; captured pieces of the same kind
+    overlap a little; open and closed hand cursors and nearly no drag inertia, like on chess.com.
 
 ## Sources and licenses
 
@@ -911,6 +913,6 @@ and the player plays the side to move after it (the board flips to that side).
   extended with endgame values.
 - Fonts: Space Grotesk, Space Mono and Bricolage Grotesque (SIL Open Font License 1.1, files from Fontsource) and Noto
   (Google) — licenses in `tacticmind/assets/fonts/`.
-- Pieces: drawn for this project by `scripts/make_pieces.py`.
+- Pieces: drawn for this project by Juras (`scripts/pieces_sheet.png`) and traced by `scripts/trace_pieces.py`.
 - Libraries: [python-chess](https://python-chess.readthedocs.io/) (GPL-3.0, interface layer only),
   [React](https://react.dev/) and [Vite](https://vite.dev/) (MIT), [pywebview](https://pywebview.flowrl.com/) (BSD-3-Clause).

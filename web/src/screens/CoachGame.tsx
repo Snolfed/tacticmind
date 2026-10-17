@@ -34,6 +34,13 @@ function PlayerIcon(): ReactElement {
 
 function StripRow({ strip, expression }: { strip: Strip; expression: string }): ReactElement {
   const prefix = strip.capturedColor === "white" ? "w" : "b";
+  // The same pieces overlap a little, like on chess.com; each kind keeps its own little stack.
+  const groups: string[][] = [];
+  for (const symbol of strip.captured) {
+    const last = groups[groups.length - 1];
+    if (last && last[0] === symbol) last.push(symbol);
+    else groups.push([symbol]);
+  }
   return (
     <div className={`strip${strip.toMove ? " to-move" : ""}`}>
       <span className={`strip-avatar${strip.player ? "" : " coach"}`}>{strip.player ? <PlayerIcon /> : <CoachAvatar expression={expression} size={32} />}</span>
@@ -41,8 +48,12 @@ function StripRow({ strip, expression }: { strip: Strip; expression: string }): 
       <span className="strip-detail">{strip.detail}</span>
       {strip.toMove && <span className="strip-turn" />}
       <span className="strip-captured">
-        {strip.captured.map((symbol, i) => (
-          <img key={i} src={pieceUrl(prefix + symbol.toUpperCase())} alt="" draggable={false} />
+        {groups.map((group, g) => (
+          <span key={g} className="captured-group">
+            {group.map((symbol, i) => (
+              <img key={i} src={pieceUrl(prefix + symbol.toUpperCase())} alt="" draggable={false} />
+            ))}
+          </span>
         ))}
         {strip.diff > 0 && <span className="strip-diff">+{strip.diff}</span>}
       </span>

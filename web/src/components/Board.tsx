@@ -27,10 +27,8 @@ import { BADGE_COLORS, Badge } from "./Badge";
 
 /** Move animation duration. */
 const MOVE_TIME = 200;
-/** How quickly a dragged piece catches up with the cursor (time constant, ms): a little inertia, not a lag. */
-const DRAG_FOLLOW = 38;
-/** The dragged piece swings toward its motion by up to this many degrees. */
-const DRAG_TILT = 9;
+/** How quickly a dragged piece catches up with the cursor (time constant, ms): barely any inertia, like on chess.com. */
+const DRAG_FOLLOW = 12;
 const PROMOTION_PIECES = ["q", "n", "r", "b"];
 const USER_COLORS = {
   plain: "rgba(251,191,36,0.8)",
@@ -88,7 +86,6 @@ interface DragInfo {
   /** Where the dragged piece is drawn (relative to the board): it chases the cursor. */
   gx: number;
   gy: number;
-  tilt: number;
 }
 
 export interface BoardProps {
@@ -117,6 +114,8 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   const [drawing, setDrawing] = useState<{ from: number; to: number; color: string } | null>(null);
   /** The square under a dragged piece (framed when the piece may land there). */
   const [hover, setHover] = useState<number | null>(null);
+  /** The pointer is over a piece the player can pick up (an open-hand cursor). */
+  const [overPiece, setOverPiece] = useState(false);
 
   const orientation = board.orientation;
   const serverPlacement = useMemo(() => parseFen(board.fen), [board.fen]);
@@ -281,7 +280,7 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     const ghost = dragEl.current;
     const info = dragInfo.current;
     if (!ghost || !info) return;
-    ghost.style.transform = `translate3d(${info.gx.toFixed(1)}px, ${info.gy.toFixed(1)}px, 0) translate(-50%, -50%) rotate(${info.tilt.toFixed(2)}deg)`;
+    ghost.style.transform = `translate3d(${info.gx.toFixed(1)}px, ${info.gy.toFixed(1)}px, 0) translate(-50%, -50%)`;
   }
 
   // A grabbed piece jumps to the cursor at once (like on chess.com), before the next mouse move arrives.
@@ -289,17 +288,13 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
     if (dragFrom !== null) placeGhost();
   }, [dragFrom]);
 
-  // ... and then chases it: each frame it covers part of the remaining way and leans into the motion.
+  // ... and then follows it: each frame it covers most of the remaining way.
   useFrame((_now, dt) => {
     const info = dragInfo.current;
     if (!info) return;
-    const ms = dt * 1000;
-    const pull = 1 - Math.exp(-ms / DRAG_FOLLOW);
-    const step = (info.lastX - info.left - info.gx) * pull;
-    info.gx += step;
+    const pull = 1 - Math.exp((-dt * 1000) / DRAG_FOLLOW);
+    info.gx += (info.lastX - info.left - info.gx) * pull;
     info.gy += (info.lastY - info.top - info.gy) * pull;
-    const lean = Math.max(-DRAG_TILT, Math.min(DRAG_TILT, ((step / Math.max(ms, 1)) * 6 * 100) / info.size));
-    info.tilt += (lean - info.tilt) * (1 - Math.exp(-ms / 70));
     placeGhost();
   }, dragFrom !== null);
 
@@ -348,7 +343,6 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
         size: rect.width / 8,
         gx: event.clientX - rect.left,
         gy: event.clientY - rect.top,
-        tilt: 0,
       };
       setDragFrom(square);
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -364,7 +358,12 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
       return;
     }
     const info = dragInfo.current;
-    if (!info) return;
+    if (!info) {
+      const square = squareAt(event.clientX, event.clientY);
+      const own = canMove && square >= 0 && placement.get(square)?.[0] === playerPrefix;
+      if (own !== overPiece) setOverPiece(own);
+      return;
+    }
     info.lastX = event.clientX;
     info.lastY = event.clientY;
     if (!info.moved && Math.hypot(event.clientX - info.x, event.clientY - info.y) > Math.max(6, info.size * 0.12)) info.moved = true;
@@ -620,11 +619,12 @@ export function Board({ board, name, onMove, pulseArrows = false, className }: B
   return (
     <div
       ref={wrap}
-      className={`board${canMove ? " can-move" : ""}${dragFrom !== null ? " dragging" : ""}${className ? " " + className : ""}`}
+      className={`board${canMove ? " can-move" : ""}${overPiece ? " over-piece" : ""}${dragFrom !== null ? " dragging" : ""}${className ? " " + className : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
+      onPointerLeave={() => setOverPiece(false)}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="board-clip">

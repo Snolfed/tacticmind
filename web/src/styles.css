@@ -1055,13 +1055,13 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
   will-change: transform;
 }
-.board.can-move {
-  cursor: pointer;
+/* Like on chess.com: an arrow over the board, an open hand over a piece you can move, a closed one while you hold it. */
+.board.can-move.over-piece {
+  cursor: grab;
 }
-/* Holding a piece: an open hand, like moving a window on the desktop. */
 html.holding-piece,
 html.holding-piece * {
-  cursor: grab !important;
+  cursor: grabbing !important;
 }
 /* Its own compositor layer: moving it only shifts the layer, the shadow is not repainted on every mouse move.
    It is in the page (hidden) from the moment a piece is picked, so its image is decoded before the drag starts. */
@@ -2599,13 +2599,19 @@ button.candidate:hover {
   min-width: 0;
   overflow: hidden;
 }
+.captured-group {
+  display: flex;
+  flex: none;
+}
+.captured-group + .captured-group {
+  margin-left: 3px;
+}
 .strip-captured img {
   width: 22px;
   height: 22px;
-  margin-left: -8px;
 }
-.strip-captured img:first-child {
-  margin-left: 0;
+.captured-group img + img {
+  margin-left: -12px;
 }
 .strip-diff {
   margin-left: 6px;
