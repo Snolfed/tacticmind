@@ -29,7 +29,8 @@ SIZE = (1360, 860)
 MIN_SIZE = (720, 520)
 #: The page background, shown before the interface loads (no white flash).
 BACKGROUND = "#0f111a"
-ICON = Path(__file__).resolve().parent / "static" / "icon.png"
+#: Windows' window (WinForms) takes only a real .ico (``scripts/make_icon.py``); with a PNG it does not open at all.
+ICON = Path(__file__).resolve().parent / "static" / ("icon.ico" if sys.platform == "win32" else "icon.png")
 #: Window class on X11 and app id on Wayland (taskbar grouping, ``StartupWMClass`` of a .desktop shortcut).
 APP_ID = "tacticmind"
 #: Present when the proprietary NVIDIA driver is loaded.
