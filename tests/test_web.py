@@ -484,3 +484,22 @@ def test_board_snapshot_promotion_and_legality(home: Path) -> None:
     model.shake()
     model.celebrate(chess.E4)
     assert events == [{"type": "shake", "board": "test"}, {"type": "celebrate", "board": "test", "square": "e4"}]
+
+
+def test_windows_window_icon_is_a_real_ico() -> None:
+    """Windows' window loads its icon with System.Drawing.Icon, which refuses anything but an .ico (a PNG crashes it)."""
+    import struct
+
+    from tacticmind.web import window
+
+    ico = window.ICON.with_name("icon.ico")
+    data = ico.read_bytes()
+    reserved, kind, count = struct.unpack_from("<HHH", data)
+    assert (reserved, kind) == (0, 1) and count > 0
+    sizes = set()
+    for i in range(count):
+        width, height, _, _, _, bits, length, offset = struct.unpack_from("<BBBBHHII", data, 6 + 16 * i)
+        assert bits == 32 and offset + length <= len(data)
+        sizes.add(width or 256)
+    assert {16, 32, 48, 256} <= sizes
+    assert ico.read_bytes() == (Path(__file__).resolve().parents[1] / "web" / "public" / "icon.ico").read_bytes()

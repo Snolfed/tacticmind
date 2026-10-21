@@ -163,7 +163,8 @@ npm run build                      # new build into tacticmind/web/static
   In a wide window the board has the panel beside it and a vertical evaluation bar; in a narrow one (like a phone) there is a
   two-row top bar, a horizontal evaluation bar above the board, the panel below it, and the whole page scrolls with the mouse wheel.
 - **Icon**: the window has its own icon (a white pawn on a tile): `web/public/icon.png`
-  (on Linux the window uses its built copy, `tacticmind/web/static/icon.png`).
+  (on Linux the window uses its built copy, `tacticmind/web/static/icon.png`). Windows needs a real .ico,
+  `web/public/icon.ico`, made from the PNG with `python scripts/make_icon.py`.
 - **Sounds (chess.com style)**: a warm wooden "thock" on a move (a piece set down on a wooden board), a sharper
   piece-on-piece click followed by the thock on a capture, a thock with a short marimba note on check, two quick thocks
   on castling, rising marimba notes on promotion and after solving a puzzle (an arpeggio with a bell for a brilliant
