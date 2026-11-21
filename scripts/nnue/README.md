@@ -50,7 +50,7 @@ only as an opponent in `scripts/match.py` for measuring strength).
 | 3 | network 3 | 7.3 M | **network 4** (gen. 0–3, buckets, +30 vs. network 3) — current |
 
 Each generation: 4 `datagen` processes at 5000 nodes per move, about 700 positions/s combined. Training network 4
-(27.3 M positions, 20 epochs, 2 threads): about 70 minutes. Match results and the comparison with Stockfish are in the main README.
+(27.3 M positions, 20 epochs, 2 threads): about 70 minutes. Match results and the comparison with Stockfish are in [docs/algorithms.md](../../docs/algorithms.md).
 A network with 512 neurons (same data as network 3) had a lower loss, but in a timed match it came out even
 (−10 ± 40 Elo) — it is twice as slow. With much more data it is worth trying again.
 
